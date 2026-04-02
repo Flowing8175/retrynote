@@ -19,3 +19,16 @@ htmlcov/
 .ruff_cache/
 *.log
 .DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+
+# Internal/Planning
+.sisyphus/
