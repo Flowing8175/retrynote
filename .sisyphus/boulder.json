@@ -1,0 +1,48 @@
+{
+  "active_plan": "/home/oh/dev/quiz-manager/.sisyphus/plans/frontend-remake.md",
+  "started_at": "2026-04-02T01:45:26.094Z",
+  "session_ids": [
+    "ses_2b43be542ffean5rqKF2qZ4dpA",
+    "ses_2b4208521ffe563lwrQTPlbAl7",
+    "ses_2b41c4174ffejrROr5wzd4axiN",
+    "ses_2b41bc2f0ffep06R7p9Y2Wgz9W",
+    "ses_2b414de0cffePfmoRwiBLN4UI2",
+    "ses_2b412291cffeSfjoTEEwYWLnV5",
+    "ses_2b40f067effexYC4A4IF6i9q7A",
+    "ses_2b40b6e65ffeSf0xjtrMFOlBj3",
+    "ses_2b4071213ffeC1c8DtpTFvF3Gc",
+    "ses_2b3a2d6bcffedfzRLH4vRu1Pjx",
+    "ses_2b3a28d2affeHJrNHeHAELKxMI",
+    "ses_2b3a2b52affe3k8K7F288VsHrc"
+  ],
+  "plan_name": "frontend-remake",
+  "agent": "atlas",
+  "task_sessions": {
+    "todo:1": {
+      "task_key": "todo:1",
+      "task_label": "1",
+      "task_title": "Foundation — shadcn/ui install, tailwind config, index.css overhaul, index.html",
+      "session_id": "ses_2b4208521ffe563lwrQTPlbAl7",
+      "agent": "Sisyphus-Junior",
+      "category": "deep",
+      "updated_at": "2026-04-02T01:49:42.564Z"
+    },
+    "todo:2": {
+      "task_key": "todo:2",
+      "task_label": "2",
+      "task_title": "Remake Navbar",
+      "session_id": "ses_2b41c4174ffejrROr5wzd4axiN",
+      "agent": "Sisyphus-Junior",
+      "category": "visual-engineering",
+      "updated_at": "2026-04-02T01:52:41.498Z"
+    },
+    "final-wave:f1": {
+      "task_key": "final-wave:f1",
+      "task_label": "F1",
+      "task_title": "**Plan Compliance Audit** — `oracle`",
+      "session_id": "ses_2b3a2d6bcffedfzRLH4vRu1Pjx",
+      "agent": "oracle",
+      "updated_at": "2026-04-02T04:05:23.277Z"
+    }
+  }
+}

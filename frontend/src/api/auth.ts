@@ -1,0 +1,47 @@
+import apiClient from './client';
+import type {
+  SignupRequest,
+  SignupResponse,
+  LoginRequest,
+  LoginResponse,
+  PasswordResetRequest,
+  PasswordResetConfirm,
+  RefreshTokenRequest,
+  UserProfile,
+} from '@/types';
+
+export const authApi = {
+  signup: async (data: SignupRequest): Promise<SignupResponse> => {
+    const response = await apiClient.post<SignupResponse>('/auth/signup', data);
+    return response.data;
+  },
+
+  login: async (data: LoginRequest): Promise<LoginResponse> => {
+    const response = await apiClient.post<LoginResponse>('/auth/login', data);
+    return response.data;
+  },
+
+  logout: async (): Promise<void> => {
+    await apiClient.post('/auth/logout');
+  },
+
+  passwordResetRequest: async (data: PasswordResetRequest): Promise<{ status: string; detail?: string }> => {
+    const response = await apiClient.post<{ status: string; detail?: string }>('/auth/password/reset/request', data);
+    return response.data;
+  },
+
+  passwordResetConfirm: async (data: PasswordResetConfirm): Promise<{ status: string }> => {
+    const response = await apiClient.post<{ status: string }>('/auth/password/reset/confirm', data);
+    return response.data;
+  },
+
+  refreshToken: async (data: RefreshTokenRequest): Promise<{ access_token: string; refresh_token: string; token_type: string }> => {
+    const response = await apiClient.post<{ access_token: string; refresh_token: string; token_type: string }>('/auth/refresh', data);
+    return response.data;
+  },
+
+  getMe: async (): Promise<UserProfile> => {
+    const response = await apiClient.get<UserProfile>('/auth/me');
+    return response.data;
+  },
+};

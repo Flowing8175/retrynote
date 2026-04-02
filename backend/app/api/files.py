@@ -1,0 +1,423 @@
+import os
+import uuid
+from datetime import datetime, timezone
+
+from fastapi.responses import FileResponse
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Request,
+    UploadFile,
+    File as FastAPIFile,
+    Form,
+    Query,
+)
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.config import settings
+from app.models.file import File, FileSourceType, FileStatus, Folder
+from app.models.user import User
+from app.models.search import Job
+from app.schemas.file import (
+    FileUploadResponse,
+    FileDetail,
+    FileListResponse,
+    FileRetryResponse,
+    FolderDetail,
+)
+from app.middleware.auth import get_current_user, get_impersonation_context
+from app.workers.celery_app import celery_app
+
+router = APIRouter()
+
+
+class RenameFileRequest(BaseModel):
+    original_filename: str
+
+
+class MoveFileRequest(BaseModel):
+    folder_id: str | None = None
+
+
+class CreateFolderRequest(BaseModel):
+    name: str
+
+
+class RenameFolderRequest(BaseModel):
+    name: str
+
+
+class FolderListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    folders: list[FolderDetail]
+
+
+async def get_owned_file(file_id: str, db: AsyncSession, user: User) -> File:
+    result = await db.execute(
+        select(File).where(File.id == file_id, File.deleted_at.is_(None))
+    )
+    file = result.scalar_one_or_none()
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    if file.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return file
+
+
+async def get_owned_folder(folder_id: str, db: AsyncSession, user: User) -> Folder:
+    result = await db.execute(
+        select(Folder).where(Folder.id == folder_id, Folder.user_id == user.id)
+    )
+    folder = result.scalar_one_or_none()
+    if not folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    return folder
+
+
+@router.post("", response_model=FileUploadResponse)
+async def upload_file(
+    request: Request,
+    file: UploadFile | None = FastAPIFile(default=None),
+    manual_text: str | None = Form(default=None),
+    source_url: str | None = Form(default=None),
+    folder_id: str | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    effective_user, _ = await get_impersonation_context(request, user, db)
+    effective_user = user
+
+    source_type = FileSourceType.upload
+    original_filename = None
+    stored_path = None
+    file_size = 0
+    file_type = None
+
+    if file:
+        source_type = FileSourceType.upload
+        original_filename = file.filename
+        ext = os.path.splitext(file.filename or "")[1].lstrip(".").lower()
+        file_type = ext
+
+        if ext not in settings.allowed_file_types.split(","):
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+        content = await file.read()
+        file_size = len(content)
+
+        if file_size > settings.max_upload_size_mb * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large")
+
+        save_dir = os.path.join(settings.upload_dir, str(user.id))
+        os.makedirs(save_dir, exist_ok=True)
+        stored_name = f"{uuid.uuid4().hex}.{ext}"
+        stored_path = os.path.join(save_dir, stored_name)
+        with open(stored_path, "wb") as f:
+            f.write(content)
+
+    elif manual_text:
+        source_type = FileSourceType.manual_text
+        file_size = len(manual_text.encode("utf-8"))
+        file_type = "txt"
+    elif source_url:
+        source_type = FileSourceType.url
+        file_type = "url"
+    else:
+        raise HTTPException(
+            status_code=400, detail="Must provide file, manual_text, or source_url"
+        )
+
+    file_record = File(
+        user_id=effective_user.id,
+        folder_id=folder_id,
+        original_filename=original_filename,
+        stored_path=stored_path,
+        file_type=file_type,
+        file_size_bytes=file_size,
+        source_type=source_type,
+        source_url=source_url,
+        status=FileStatus.uploaded,
+    )
+    db.add(file_record)
+    await db.flush()
+
+    job = Job(
+        id=str(uuid.uuid4()),
+        job_type="file_processing",
+        status="pending",
+        target_type="file",
+        target_id=file_record.id,
+        payload_json={"manual_text": manual_text} if manual_text else {},
+    )
+    db.add(job)
+
+    effective_user.storage_used_bytes += file_size
+    await db.commit()
+    await db.refresh(file_record)
+
+    celery_app.send_task("process_file", args=[job.id])
+
+    return FileUploadResponse(
+        file_id=file_record.id,
+        status=file_record.status.value,
+        job_id=job.id,
+    )
+
+
+@router.get("", response_model=FileListResponse)
+async def list_files(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    folder_id: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    query = select(File).where(File.user_id == user.id, File.deleted_at.is_(None))
+    if folder_id:
+        query = query.where(File.folder_id == folder_id)
+    if status_filter:
+        query = query.where(File.status == status_filter)
+
+    total_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    total = total_result.scalar() or 0
+
+    query = query.order_by(File.created_at.desc()).offset((page - 1) * size).limit(size)
+    result = await db.execute(query)
+    files = result.scalars().all()
+
+    return FileListResponse(
+        files=[FileDetail.model_validate(f) for f in files],
+        total=total,
+        page=page,
+        size=size,
+    )
+
+
+@router.get("/folders", response_model=list[FolderDetail])
+async def list_folders(
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Folder)
+        .where(Folder.user_id == user.id, Folder.status == "active")
+        .order_by(Folder.sort_order.asc(), Folder.created_at.asc())
+    )
+    folders = result.scalars().all()
+    return [FolderDetail.model_validate(folder) for folder in folders]
+
+
+@router.post("/folders", response_model=FolderDetail)
+async def create_folder(
+    req: CreateFolderRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    folder = Folder(
+        user_id=user.id,
+        name=req.name.strip(),
+        sort_order=0,
+        status="active",
+    )
+    db.add(folder)
+    await db.commit()
+    await db.refresh(folder)
+    return FolderDetail.model_validate(folder)
+
+
+@router.patch("/folders/{folder_id}", response_model=FolderDetail)
+async def rename_folder(
+    folder_id: str,
+    req: RenameFolderRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    folder = await get_owned_folder(folder_id, db, user)
+    folder.name = req.name.strip()
+    folder.updated_by = user.id
+    folder.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(folder)
+    return FolderDetail.model_validate(folder)
+
+
+@router.delete("/folders/{folder_id}")
+async def delete_folder(
+    folder_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    folder = await get_owned_folder(folder_id, db, user)
+
+    files_result = await db.execute(
+        select(File).where(File.folder_id == folder.id, File.user_id == user.id)
+    )
+    files = files_result.scalars().all()
+    for file in files:
+        file.folder_id = None
+        file.updated_by = user.id
+        file.updated_at = datetime.now(timezone.utc)
+
+    children_result = await db.execute(
+        select(Folder).where(
+            Folder.parent_folder_id == folder.id, Folder.user_id == user.id
+        )
+    )
+    children = children_result.scalars().all()
+    for child in children:
+        child.parent_folder_id = None
+        child.updated_by = user.id
+        child.updated_at = datetime.now(timezone.utc)
+
+    await db.delete(folder)
+    await db.commit()
+    return {"status": "success"}
+
+
+@router.get("/{file_id}", response_model=FileDetail)
+async def get_file(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(File).where(File.id == file_id, File.deleted_at.is_(None))
+    )
+    file = result.scalar_one_or_none()
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    if file.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    return FileDetail.model_validate(file)
+
+
+@router.post("/{file_id}/retry", response_model=FileRetryResponse)
+async def retry_file(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(File).where(File.id == file_id, File.deleted_at.is_(None))
+    )
+    file = result.scalar_one_or_none()
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    if file.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    if file.status not in (FileStatus.failed_partial, FileStatus.failed_terminal):
+        raise HTTPException(status_code=400, detail="File is not in a retryable state")
+    if file.retry_count >= settings.max_retry_count:
+        raise HTTPException(status_code=400, detail="Max retry count exceeded")
+
+    file.retry_count += 1
+    file.status = FileStatus.uploaded
+
+    job = Job(
+        id=str(uuid.uuid4()),
+        job_type="file_processing",
+        status="pending",
+        target_type="file",
+        target_id=file.id,
+    )
+    db.add(job)
+    await db.commit()
+
+    celery_app.send_task("process_file", args=[job.id])
+
+    return FileRetryResponse(job_id=job.id, status=file.status.value)
+
+
+@router.delete("/{file_id}")
+async def delete_file(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(File).where(File.id == file_id, File.deleted_at.is_(None))
+    )
+    file = result.scalar_one_or_none()
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found")
+    if file.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    from datetime import datetime, timezone
+
+    file.status = FileStatus.deleted
+    file.deleted_at = datetime.now(timezone.utc)
+    file.is_searchable = False
+    file.is_quiz_eligible = False
+
+    job = Job(
+        id=str(uuid.uuid4()),
+        job_type="file_cleanup",
+        status="pending",
+        target_type="file",
+        target_id=file.id,
+    )
+    db.add(job)
+    await db.commit()
+
+    celery_app.send_task("file_cleanup", args=[job.id])
+
+    return {"status": "success"}
+
+
+@router.patch("/{file_id}", response_model=FileDetail)
+async def rename_file(
+    file_id: str,
+    req: RenameFileRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    file = await get_owned_file(file_id, db, user)
+    file.original_filename = req.original_filename
+    file.updated_by = user.id
+    file.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(file)
+    return FileDetail.model_validate(file)
+
+
+@router.post("/{file_id}/move", response_model=FileDetail)
+async def move_file(
+    file_id: str,
+    req: MoveFileRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    file = await get_owned_file(file_id, db, user)
+
+    if req.folder_id is not None:
+        await get_owned_folder(req.folder_id, db, user)
+
+    file.folder_id = req.folder_id
+    file.updated_by = user.id
+    file.updated_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(file)
+    return FileDetail.model_validate(file)
+
+
+@router.get("/{file_id}/download")
+async def download_file(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    file = await get_owned_file(file_id, db, user)
+    if not file.stored_path or not os.path.exists(file.stored_path):
+        raise HTTPException(status_code=404, detail="File not available")
+
+    return FileResponse(
+        file.stored_path,
+        filename=file.original_filename or os.path.basename(file.stored_path),
+    )
