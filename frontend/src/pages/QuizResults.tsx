@@ -506,7 +506,7 @@ export default function QuizResults() {
             {performanceTier.primaryAction.description && (
               <p className="mt-2 text-sm leading-6 text-content-secondary">{performanceTier.primaryAction.description}</p>
             )}
-            <span className="mt-6 inline-flex items-center rounded-2xl bg-brand-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-brand-600 hover:-translate-y-px">
+            <span className="mt-6 inline-flex items-center rounded-2xl bg-brand-500 px-4 py-2 text-sm font-bold text-content-inverse transition-colors hover:bg-brand-600 hover:-translate-y-px">
               {performanceTier.primaryAction.buttonLabel}
             </span>
           </button>
