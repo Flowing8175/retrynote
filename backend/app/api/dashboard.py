@@ -10,6 +10,11 @@ from app.models.file import File
 from app.models.user import User
 from app.schemas.dashboard import DashboardResponse, DashboardQuery
 from app.middleware.auth import get_current_user
+from app.utils.ai_client import call_ai_with_fallback
+from app.utils.ai_client import COACHING_SCHEMA
+from app.config import settings as cfg
+from app.prompts import SYSTEM_PROMPT_DASHBOARD_COACHING
+import json
 
 router = APIRouter()
 
@@ -54,6 +59,14 @@ async def get_dashboard(
     result = await db.execute(base_query)
     answers = result.scalars().all()
 
+    quiz_item_ids = list({a.quiz_item_id for a in answers})
+    items_result = await db.execute(
+        select(QuizItem).where(QuizItem.id.in_(quiz_item_ids))
+    )
+    quiz_items_by_id: dict[str, QuizItem] = {
+        item.id: item for item in items_result.scalars().all()
+    }
+
     total_count = len(answers)
     correct_count = sum(1 for a in answers if a.judgement == Judgement.correct)
     partial_count = sum(1 for a in answers if a.judgement == Judgement.partial)
@@ -89,10 +102,7 @@ async def get_dashboard(
 
     type_accuracy = {}
     for a in answers:
-        item_result = await db.execute(
-            select(QuizItem).where(QuizItem.id == a.quiz_item_id)
-        )
-        item = item_result.scalar_one_or_none()
+        item = quiz_items_by_id.get(a.quiz_item_id)
         if item:
             qt = item.question_type.value
             if qt not in type_accuracy:
@@ -112,10 +122,7 @@ async def get_dashboard(
 
     subject_accuracy = {}
     for a in answers:
-        item_result = await db.execute(
-            select(QuizItem).where(QuizItem.id == a.quiz_item_id)
-        )
-        item = item_result.scalar_one_or_none()
+        item = quiz_items_by_id.get(a.quiz_item_id)
         if item and item.category_tag:
             cat = item.category_tag
             if cat not in subject_accuracy:
@@ -178,10 +185,7 @@ async def get_dashboard(
     )
     recent_wrong_notes = []
     for a in recent_wrong.scalars().all():
-        item_result = await db.execute(
-            select(QuizItem).where(QuizItem.id == a.quiz_item_id)
-        )
-        item = item_result.scalar_one_or_none()
+        item = quiz_items_by_id.get(a.quiz_item_id)
         if item:
             recent_wrong_notes.append(
                 {
@@ -195,16 +199,73 @@ async def get_dashboard(
 
     coaching_summary = None
     if total_count > 0:
-        if overall_accuracy >= 0.8:
-            coaching_summary = (
-                f"정답률 {overall_accuracy:.0%}로 우수한 학습 성과를 보이고 있습니다."
+        weak_concepts_data = []
+        for w in weak_concepts[:5]:
+            total_for_concept = 0
+            correct_for_concept = 0
+            for a in answers:
+                item = quiz_items_by_id.get(a.quiz_item_id)
+                if item and item.concept_key == w["concept_key"]:
+                    total_for_concept += 1
+                    if a.judgement == Judgement.correct:
+                        correct_for_concept += 1
+            accuracy = (
+                correct_for_concept / total_for_concept
+                if total_for_concept > 0
+                else 0.0
             )
-        elif overall_accuracy >= 0.5:
+            weak_concepts_data.append(
+                {
+                    "concept_key": w["concept_key"],
+                    "concept_label": w["concept_label"],
+                    "wrong_count": w["wrong_count"],
+                    "accuracy": accuracy,
+                }
+            )
+
+        weak_types = [
+            {
+                "question_type": qt,
+                "accuracy": data["correct"] / data["total"]
+                if data["total"] > 0
+                else 0.0,
+            }
+            for qt, data in type_accuracy.items()
+        ]
+
+        coaching_prompt = f"""사용자의 최근 학습 기록을 분석하고 코칭 요약을 생성하세요.
+
+학습 통계:
+- 총 문제 수: {total_count}
+- 정답 수: {correct_count}
+- 부분정답 수: {partial_count}
+- 정답률: {overall_accuracy:.0%}
+- 점수율: {score_rate:.0%}
+
+취약 개념 TOP 5:
+{json.dumps(weak_concepts_data, ensure_ascii=False, indent=2)}
+
+문제 유형별 정답률:
+{json.dumps(weak_types, ensure_ascii=False, indent=2)}
+
+JSON 형식으로 응답하세요:
+{{"summary": "...", "weak_concepts_top": [...], "weak_question_types": [...], "recommended_next_actions": [...], "coaching_message": "..."}}"""
+
+        try:
+            coaching_result = await call_ai_with_fallback(
+                coaching_prompt,
+                COACHING_SCHEMA,
+                primary_model=cfg.openai_grading_model,
+                fallback_model=cfg.openai_fallback_grading_model,
+                system_message=SYSTEM_PROMPT_DASHBOARD_COACHING,
+            )
+            coaching_summary = coaching_result.get(
+                "coaching_message", "학습을 계속해보세요."
+            )
+        except Exception:
             coaching_summary = (
                 f"정답률 {overall_accuracy:.0%}입니다. 취약 개념 위주로 복습해보세요."
             )
-        else:
-            coaching_summary = f"정답률 {overall_accuracy:.0%}로 개선이 필요합니다. 기초 개념부터 다시 학습을 권장합니다."
 
     return DashboardResponse(
         overall_accuracy=overall_accuracy,

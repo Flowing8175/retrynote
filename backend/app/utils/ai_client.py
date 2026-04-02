@@ -3,6 +3,16 @@ from openai import AsyncOpenAI
 from app.config import settings
 from typing import Any
 
+__all__ = [
+    "GENERATION_SCHEMA",
+    "RETRY_GENERATION_SCHEMA",
+    "GRADING_SCHEMA",
+    "OBJECTION_REVIEW_SCHEMA",
+    "COACHING_SCHEMA",
+    "call_ai_structured",
+    "call_ai_with_fallback",
+]
+
 client = AsyncOpenAI(api_key=settings.openai_api_key)
 
 
@@ -60,6 +70,34 @@ GENERATION_SCHEMA = {
 }
 
 
+RETRY_GENERATION_SCHEMA = {
+    "type": "object",
+    "required": [
+        "question_type",
+        "question_text",
+        "correct_answer",
+        "explanation",
+        "concept_key",
+        "targeted_error_type",
+    ],
+    "properties": {
+        "question_type": {
+            "type": "string",
+            "enum": ["multiple_choice", "ox", "short_answer", "fill_blank", "essay"],
+        },
+        "question_text": {"type": "string"},
+        "options": {"type": ["object", "null"]},
+        "correct_answer": {"type": "object"},
+        "explanation": {"type": "string"},
+        "concept_key": {"type": "string"},
+        "targeted_error_type": {"type": "string"},
+        "hint": {"type": ["string", "null"]},
+        "similarity_safety_note": {"type": ["string", "null"]},
+    },
+    "additionalProperties": False,
+}
+
+
 GRADING_SCHEMA = {
     "type": "object",
     "required": [
@@ -97,7 +135,6 @@ GRADING_SCHEMA = {
                 "insufficient_source",
                 "reasoning_error",
                 "no_response",
-                None,
             ],
         },
         "suggested_feedback": {"type": "string"},
@@ -134,23 +171,76 @@ OBJECTION_REVIEW_SCHEMA = {
 }
 
 
+COACHING_SCHEMA = {
+    "type": "object",
+    "required": [
+        "summary",
+        "weak_concepts_top",
+        "weak_question_types",
+        "recommended_next_actions",
+        "coaching_message",
+    ],
+    "properties": {
+        "summary": {"type": "string"},
+        "weak_concepts_top": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["concept_key", "concept_label", "wrong_count", "accuracy"],
+                "properties": {
+                    "concept_key": {"type": "string"},
+                    "concept_label": {"type": "string"},
+                    "wrong_count": {"type": "integer"},
+                    "accuracy": {"type": "number"},
+                },
+            },
+        },
+        "weak_question_types": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["question_type", "accuracy"],
+                "properties": {
+                    "question_type": {"type": "string"},
+                    "accuracy": {"type": "number"},
+                },
+            },
+        },
+        "recommended_next_actions": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "coaching_message": {"type": "string"},
+    },
+    "additionalProperties": False,
+}
+
+
 async def call_ai_structured(
     prompt: str,
     schema: dict,
+    system_message: str,
     model: str | None = None,
-    system_message: str = "You are a helpful educational AI assistant. Always respond with valid JSON.",
     temperature: float = 0.3,
     max_tokens: int = 4096,
 ) -> dict[str, Any]:
     model = model or settings.openai_generation_model
+    system = system_message
     completion_kwargs: dict[str, Any] = {
         "model": model,
         "messages": [
-            {"role": "system", "content": system_message},
+            {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ],
         "temperature": temperature,
-        "response_format": {"type": "json_object"},
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "structured_response",
+                "schema": schema,
+                "strict": False,
+            },
+        },
     }
 
     if model.startswith("gpt-5"):

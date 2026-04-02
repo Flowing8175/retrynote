@@ -29,10 +29,10 @@ class Settings(BaseSettings):
     admin_master_password_hash: str = ""
 
     openai_api_key: str = ""
-    openai_generation_model: str = "gpt-4o"
-    openai_grading_model: str = "gpt-4o-mini"
-    openai_fallback_generation_model: str = "gpt-4o-mini"
-    openai_fallback_grading_model: str = "gpt-3.5-turbo"
+    openai_generation_model: str = "gpt-5.4-mini"
+    openai_grading_model: str = "gpt-5.4-mini"
+    openai_fallback_generation_model: str = "gpt-4.1-mini"
+    openai_fallback_grading_model: str = "gpt-4.1-mini"
 
     upload_dir: str = "./storage/uploads"
     max_upload_size_mb: int = 100

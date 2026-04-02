@@ -302,6 +302,8 @@ async def submit_answer(
     from app.utils.normalize import normalize_answer
     from app.utils.ai_client import call_ai_with_fallback, GRADING_SCHEMA
     from app.config import settings as cfg
+    from app.prompts.grading_short import SYSTEM_PROMPT_GRADING_SHORT
+    from app.prompts.grading_essay import SYSTEM_PROMPT_GRADING_ESSAY
     import json
 
     raw_correct_answer = item.correct_answer_json
@@ -352,14 +354,14 @@ async def submit_answer(
             score_awarded = 1.0
         else:
             try:
-                prompt = f"""Grade this answer.
+                prompt = f"""채점할 답안:
+문제: {item.question_text}
+정답: {json.dumps(correct_answer, ensure_ascii=False)}
+사용자 답: {req.user_answer}
+정규화된 답: {normalized}
 
-Question: {item.question_text}
-Correct answer: {json.dumps(correct_answer, ensure_ascii=False)}
-User answer: {req.user_answer}
-Normalized user answer: {normalized}
-
-Respond as JSON with: judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, grading_confidence, grading_rationale, missing_points, error_type, suggested_feedback"""
+다음 필드를 포함한 JSON으로 응답하세요:
+judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, grading_confidence, grading_rationale, missing_points, error_type, suggested_feedback"""
 
                 ai_result = await call_ai_with_fallback(
                     prompt,
@@ -367,6 +369,7 @@ Respond as JSON with: judgement, score_awarded, max_score, normalized_user_answe
                     primary_model=session.grading_model_name
                     or cfg.openai_grading_model,
                     fallback_model=cfg.openai_fallback_grading_model,
+                    system_message=SYSTEM_PROMPT_GRADING_SHORT,
                 )
                 judgement = Judgement(ai_result["judgement"])
                 score_awarded = ai_result["score_awarded"]
@@ -384,20 +387,21 @@ Respond as JSON with: judgement, score_awarded, max_score, normalized_user_answe
 
     elif item.question_type == QuestionType.essay:
         try:
-            prompt = f"""Grade this essay answer.
+            prompt = f"""채점할 서술형 답안:
+문제: {item.question_text}
+모범 답안: {json.dumps(correct_answer, ensure_ascii=False)}
+사용자 답: {req.user_answer}
+출처 참조: {json.dumps(item.source_refs_json or {}, ensure_ascii=False)}
 
-Question: {item.question_text}
-Model answer: {json.dumps(correct_answer, ensure_ascii=False)}
-User answer: {req.user_answer}
-Source references: {json.dumps(item.source_refs_json or {}, ensure_ascii=False)}
-
-Evaluate and respond as JSON with: judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, grading_confidence, grading_rationale, missing_points, error_type, suggested_feedback"""
+다음 필드를 포함한 JSON으로 응답하세요:
+judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, grading_confidence, grading_rationale, missing_points, error_type, suggested_feedback"""
 
             ai_result = await call_ai_with_fallback(
                 prompt,
                 GRADING_SCHEMA,
                 primary_model=session.grading_model_name or cfg.openai_grading_model,
                 fallback_model=cfg.openai_fallback_grading_model,
+                system_message=SYSTEM_PROMPT_GRADING_ESSAY,
             )
             judgement = Judgement(ai_result["judgement"])
             score_awarded = ai_result["score_awarded"]

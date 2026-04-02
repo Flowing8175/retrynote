@@ -21,6 +21,16 @@ from app.models.quiz import (
 from app.models.objection import Objection, ObjectionStatus, WeakPoint
 from app.models.search import Job, DraftAnswer
 from app.utils.normalize import normalize_answer, normalize_concept_key
+from app.prompts import (
+    SYSTEM_PROMPT_QUIZ_GENERATION,
+    SYSTEM_PROMPT_GRADING_SHORT,
+    SYSTEM_PROMPT_OBJECTION_REVIEW,
+)
+from app.prompts.generation import build_generation_prompt
+from app.prompts.retry_generation import (
+    SYSTEM_PROMPT_RETRY_GENERATION,
+    build_retry_prompt,
+)
 
 
 async def process_file(job_id: str):
@@ -255,9 +265,118 @@ async def generate_quiz(job_id: str):
             session.status = QuizSessionStatus.generating
             await db.commit()
 
-            from app.utils.ai_client import call_ai_with_fallback, GENERATION_SCHEMA
+            from app.utils.ai_client import (
+                call_ai_with_fallback,
+                GENERATION_SCHEMA,
+                RETRY_GENERATION_SCHEMA,
+            )
             from app.config import settings as cfg
 
+            payload = job.payload_json or {}
+
+            # Handle retry generation
+            if job.job_type == "retry_generation":
+                concept_keys = payload.get("concept_keys", [])
+                question_count = payload.get("size", session.question_count)
+
+                if not concept_keys:
+                    session.status = QuizSessionStatus.generation_failed
+                    job.status = "failed"
+                    job.error_message = "No concept keys provided for retry"
+                    await db.commit()
+                    return
+
+                items_created = 0
+                for idx, concept_key in enumerate(concept_keys):
+                    if idx >= question_count:
+                        break
+
+                    wrong_result = await db.execute(
+                        select(AnswerLog, QuizItem)
+                        .join(QuizItem, QuizItem.id == AnswerLog.quiz_item_id)
+                        .where(
+                            AnswerLog.user_id == session.user_id,
+                            QuizItem.concept_key == concept_key,
+                            AnswerLog.judgement.in_(
+                                [Judgement.incorrect, Judgement.partial]
+                            ),
+                        )
+                        .order_by(AnswerLog.created_at.desc())
+                        .limit(1)
+                    )
+                    row = wrong_result.first()
+                    if not row:
+                        continue
+
+                    answer_log, quiz_item = row
+
+                    retry_prompt = build_retry_prompt(
+                        previous_question=quiz_item.question_text,
+                        previous_question_type=quiz_item.question_type.value,
+                        concept_key=concept_key,
+                        concept_label=quiz_item.concept_label or concept_key,
+                        error_type=answer_log.error_type.value
+                        if answer_log.error_type
+                        else "unknown",
+                        user_answer=answer_log.user_answer_raw or "",
+                        correct_answer=str(
+                            quiz_item.correct_answer_json.get("answer", "")
+                            if isinstance(quiz_item.correct_answer_json, dict)
+                            else quiz_item.correct_answer_json
+                        ),
+                        previous_explanation=quiz_item.explanation_text or "",
+                        retry_count=1,
+                    )
+
+                    try:
+                        ai_result = await call_ai_with_fallback(
+                            retry_prompt,
+                            RETRY_GENERATION_SCHEMA,
+                            primary_model=session.generation_model_name
+                            or cfg.openai_generation_model,
+                            fallback_model=cfg.openai_fallback_generation_model,
+                            system_message=SYSTEM_PROMPT_RETRY_GENERATION,
+                        )
+
+                        if ai_result and ai_result.get("question_text"):
+                            new_item = QuizItem(
+                                quiz_session_id=session.id,
+                                item_order=idx + 1,
+                                question_type=QuestionType(
+                                    ai_result.get("question_type", "multiple_choice")
+                                ),
+                                question_text=ai_result.get("question_text", ""),
+                                correct_answer_json=ai_result.get(
+                                    "correct_answer", {"answer": ""}
+                                ),
+                                explanation_text=ai_result.get("explanation", ""),
+                                concept_key=concept_key,
+                                concept_label=quiz_item.concept_label,
+                                category_tag=quiz_item.category_tag,
+                                difficulty=quiz_item.difficulty or "medium",
+                                source_refs_json=None,
+                                options_json=ai_result.get("options"),
+                            )
+                            db.add(new_item)
+                            items_created += 1
+                    except Exception:
+                        continue
+
+                if items_created == 0:
+                    session.status = QuizSessionStatus.generation_failed
+                    job.status = "failed"
+                    job.error_message = "No retry questions could be generated"
+                    await db.commit()
+                    return
+
+                await db.commit()
+                session.status = QuizSessionStatus.ready
+                job.status = "completed"
+                job.finished_at = datetime.now(timezone.utc)
+                await db.commit()
+                return
+
+            # Normal generation flow continues below
             source_texts = []
             if session.source_mode.value == "document_based":
                 file_results = await db.execute(
@@ -269,7 +388,6 @@ async def generate_quiz(job_id: str):
                     if f.parsed_document:
                         source_texts.append(f.parsed_document.normalized_text or "")
 
-            payload = job.payload_json or {}
             question_count = payload.get("question_count", session.question_count)
             difficulty = payload.get("difficulty", session.difficulty)
             question_types = payload.get(
@@ -300,28 +418,15 @@ async def generate_quiz(job_id: str):
                 await db.commit()
                 return
 
-            low_confidence_note = ""
-            if session.source_mode.value == "no_source":
-                low_confidence_note = "- IMPORTANT: This is a no_source quiz. Set low_confidence_source to true for all questions."
-
-            prompt = f"""Based on the following source material, generate {question_count} quiz questions.
-
-Source material:
-{source_context}
-
-Requirements:
-- Question types to generate: {question_types}
-- Difficulty level: {difficulty}
-- Each question must have a concept_key, concept_label, and category_tag
-- source_refs must reference the source material
-- low_confidence_source should be true if source material is insufficient
-{low_confidence_note}
-
-Recent concepts to avoid repeating (concept: count):
-{concept_counts}
-
-Generate questions as JSON with structure: {{"questions": [...]}}
-Each question must include: question_type, question_text, options (for multiple_choice), correct_answer, explanation, concept_key, concept_label, category_tag, difficulty, source_refs, low_confidence_source"""
+            is_no_source = session.source_mode.value == "no_source"
+            prompt = build_generation_prompt(
+                source_context=source_context,
+                question_count=question_count,
+                difficulty=difficulty,
+                question_types=question_types,
+                concept_counts=concept_counts,
+                is_no_source=is_no_source,
+            )
 
             ai_result = await call_ai_with_fallback(
                 prompt,
@@ -329,6 +434,7 @@ Each question must include: question_type, question_text, options (for multiple_
                 primary_model=session.generation_model_name
                 or cfg.openai_generation_model,
                 fallback_model=cfg.openai_fallback_generation_model,
+                system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
             )
 
             questions = ai_result.get("questions", [])
@@ -447,19 +553,21 @@ async def grade_exam(job_id: str):
                         try:
                             import json as json_mod
 
-                            prompt = f"""Grade this answer.
-Question: {item.question_text}
-Correct answer: {json_mod.dumps(item.correct_answer_json or {}, ensure_ascii=False)}
-User answer: {user_answer}
-Normalized user answer: {normalized}
+                            prompt = f"""채점할 답안:
+문제: {item.question_text}
+정답: {json_mod.dumps(item.correct_answer_json or {}, ensure_ascii=False)}
+사용자 답: {user_answer}
+정규화된 답: {normalized}
 
-Respond as JSON with: judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, grading_confidence, grading_rationale, missing_points, error_type, suggested_feedback"""
+다음 필드를 포함한 JSON으로 응답하세요:
+judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, grading_confidence, grading_rationale, missing_points, error_type, suggested_feedback"""
                             ai_result = await call_ai_with_fallback(
                                 prompt,
                                 GRADING_SCHEMA,
                                 primary_model=session.grading_model_name
                                 or cfg.openai_grading_model,
                                 fallback_model=cfg.openai_fallback_grading_model,
+                                system_message=SYSTEM_PROMPT_GRADING_SHORT,
                             )
                             judgement = Judgement(ai_result["judgement"])
                             score_awarded = ai_result["score_awarded"]
@@ -564,23 +672,24 @@ async def review_objection(job_id: str):
             from app.config import settings as cfg
             import json as json_mod
 
-            prompt = f"""Review this objection.
+            prompt = f"""이의제기를 검토하세요.
 
-Original question: {quiz_item.question_text}
-Correct answer: {json_mod.dumps(quiz_item.correct_answer_json or {}, ensure_ascii=False)}
-User answer: {answer_log.user_answer_raw}
-Original judgement: {answer_log.judgement.value}
-Original score: {answer_log.score_awarded}
-Objection reason: {objection.objection_reason}
+원문 문제: {quiz_item.question_text}
+정답: {json_mod.dumps(quiz_item.correct_answer_json or {}, ensure_ascii=False)}
+사용자 답: {answer_log.user_answer_raw}
+원래 판정: {answer_log.judgement.value}
+원래 점수: {answer_log.score_awarded}
+이의 사유: {objection.objection_reason}
 
-Review conservatively. If unsure, maintain the original judgement.
-Respond as JSON with: decision, reasoning, updated_judgement, updated_score_awarded, updated_error_type, should_apply"""
+다음 필드를 포함한 JSON으로 응답하세요:
+decision, reasoning, updated_judgement, updated_score_awarded, updated_error_type, should_apply"""
 
             ai_result = await call_ai_with_fallback(
                 prompt,
                 OBJECTION_REVIEW_SCHEMA,
                 primary_model=cfg.openai_grading_model,
                 fallback_model=cfg.openai_fallback_grading_model,
+                system_message=SYSTEM_PROMPT_OBJECTION_REVIEW,
             )
 
             objection.review_result_json = ai_result
