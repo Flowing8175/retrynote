@@ -1,5 +1,5 @@
 """
-System prompts for AI functions in quiz manager.
+System prompts for AI functions in RetryNote.
 
 This module separates system prompts by function to enable:
 - Version control (git history)

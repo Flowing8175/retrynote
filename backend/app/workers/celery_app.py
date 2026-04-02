@@ -23,7 +23,7 @@ def _run_async_task(coroutine):
 
 
 celery_app = Celery(
-    "quiz_manager",
+    "retrynote",
     broker=settings.redis_url,
     backend=settings.redis_url,
 )

@@ -1,6 +1,6 @@
-# 오답DB 기반 AI 퀴즈 웹앱 - Frontend
+# RetryNote - Frontend
 
-React + TypeScript + Vite로 구축된 퀴즈 웹앱 프론트엔드입니다.
+React + TypeScript + Vite로 구축된 RetryNote 프론트엔드입니다.
 
 ## 기술 스택
 

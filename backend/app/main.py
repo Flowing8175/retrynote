@@ -1,7 +1,7 @@
 from app.config import settings
 
 app_metadata = {
-    "title": "Quiz Manager API",
+    "title": "RetryNote API",
     "version": "1.0.0",
 }
 
