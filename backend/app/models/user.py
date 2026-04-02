@@ -69,6 +69,7 @@ class AdminSettings(Base):
     daily_ocr_page_limit: Mapped[int] = mapped_column(Integer, default=100)
     banner_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     banner_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    master_password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

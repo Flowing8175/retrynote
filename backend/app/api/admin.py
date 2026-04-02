@@ -81,13 +81,13 @@ async def verify_master_password(
         db.add(admin_settings)
         await db.flush()
 
-    if not admin_settings.updated_by:
-        admin_settings.updated_by = hash_password(req.master_password)
+    if not admin_settings.master_password_hash:
+        admin_settings.master_password_hash = hash_password(req.master_password)
         await db.commit()
         token = create_admin_token(user.id)
         return {"verified": True, "admin_token": token}
 
-    if verify_password(req.master_password, admin_settings.updated_by):
+    if verify_password(req.master_password, admin_settings.master_password_hash):
         token = create_admin_token(user.id)
         return {"verified": True, "admin_token": token}
 
