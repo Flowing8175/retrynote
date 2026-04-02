@@ -1,0 +1,18 @@
+[Unit]
+Description=RetryNote API (uvicorn)
+After=network.target postgresql.service redis-server.service
+Requires=postgresql.service redis-server.service
+
+[Service]
+Type=exec
+User=retrynote
+Group=retrynote
+WorkingDirectory=/home/retrynote/app/backend
+EnvironmentFile=/home/retrynote/app/.env
+Environment=PYTHONPATH=/home/retrynote/app/backend
+ExecStart=/home/retrynote/app/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 2
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
