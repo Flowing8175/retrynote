@@ -13,7 +13,7 @@ export default function Navbar() {
         <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex min-w-0 items-center gap-4">
             <Link to="/" className="flex min-w-0 items-center gap-3 text-content-primary transition-opacity hover:opacity-80">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-500/20 bg-brand-500/10 text-brand-300">
+              <div aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-2xl border border-brand-500/20 bg-brand-500/10 text-brand-300">
                 <GraduationCap className="w-6 h-6" />
               </div>
               <div className="min-w-0">

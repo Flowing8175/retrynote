@@ -57,8 +57,8 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
       <div className="mx-auto flex w-full max-w-[1600px]">
         {showSidebar && (
           <aside
-            className={`${
-              sidebarOpen ? 'w-[18rem]' : 'w-[5.5rem]'
+            className={`w-[5.5rem] ${
+              sidebarOpen ? 'sm:w-[18rem]' : 'sm:w-[5.5rem]'
             } sticky top-16 min-h-[calc(100vh-4rem)] border-r border-white/[0.05] bg-surface-deep/95 backdrop-blur-sm transition-all duration-200`}
           >
             <div className="border-b border-white/[0.05] px-4 py-4">
@@ -93,7 +93,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
                           : 'text-content-secondary hover:bg-surface-hover hover:text-content-primary'
                       }`}
                     >
-                      <span className={`shrink-0 ${isActive ? 'text-brand-300' : ''}`}>{item.icon}</span>
+                      <span aria-hidden="true" className={`shrink-0 ${isActive ? 'text-brand-300' : ''}`}>{item.icon}</span>
                       {sidebarOpen && <span className="block font-medium">{item.label}</span>}
                     </Link>
                   );

@@ -208,7 +208,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <aside className="rounded-3xl border border-white/[0.07] border-l-4 border-l-brand-500 bg-surface-raised px-6 py-7">
+        <aside className="rounded-3xl border border-brand-500/20 bg-surface-raised px-6 py-7">
           <p className="text-xs font-semibold uppercase tracking-widest text-brand-300">{primaryAction.eyebrow}</p>
           <h2 className="mt-3 text-2xl font-semibold text-content-primary">{primaryAction.title}</h2>
           {primaryAction.description && (
@@ -321,7 +321,9 @@ export default function Dashboard() {
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-2xl font-semibold text-content-primary">세부 지표</h2>
           <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="category-tag-filter" className="sr-only">과목별 필터</label>
             <select
+              id="category-tag-filter"
               value={selectedCategoryTag ?? ''}
               onChange={(e) => setSelectedCategoryTag(e.target.value || null)}
               className="rounded-xl border border-white/[0.07] bg-surface-deep px-3 py-2 text-sm text-content-primary transition-colors hover:bg-surface-hover focus:outline-none"
@@ -331,7 +333,9 @@ export default function Dashboard() {
                 <option key={tag} value={tag}>{tag}</option>
               ))}
             </select>
+            <label htmlFor="file-filter" className="sr-only">자료별 필터</label>
             <select
+              id="file-filter"
               value={selectedFileId ?? ''}
               onChange={(e) => setSelectedFileId(e.target.value || null)}
               className="rounded-xl border border-white/[0.07] bg-surface-deep px-3 py-2 text-sm text-content-primary transition-colors hover:bg-surface-hover focus:outline-none"
@@ -355,6 +359,11 @@ export default function Dashboard() {
                 </div>
                 <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-surface-deep">
                   <div
+                    role="progressbar"
+                    aria-valuenow={Math.round(dashboardData.overall_accuracy * 100)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="전체 정답률"
                     className="h-full rounded-full bg-brand-500 animate-progress-fill"
                     style={{ width: `${Math.min(dashboardData.overall_accuracy * 100, 100)}%` }}
                   />
@@ -367,6 +376,11 @@ export default function Dashboard() {
                 </div>
                 <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-surface-deep">
                   <div
+                    role="progressbar"
+                    aria-valuenow={Math.round(dashboardData.score_rate * 100)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="점수율"
                     className="h-full rounded-full bg-brand-400 animate-progress-fill"
                     style={{ width: `${Math.min(dashboardData.score_rate * 100, 100)}%` }}
                   />

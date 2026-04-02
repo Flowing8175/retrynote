@@ -135,11 +135,8 @@ export default function Files() {
   });
 
   const deleteSelectedMutation = useMutation({
-    mutationFn: async (fileIds: string[]) => {
-      for (const fileId of fileIds) {
-        await filesApi.deleteFile(fileId);
-      }
-    },
+    mutationFn: (fileIds: string[]) =>
+      Promise.all(fileIds.map((fileId) => filesApi.deleteFile(fileId))),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
       setSelectedFileIds([]);
@@ -344,7 +341,7 @@ export default function Files() {
                     type="button"
                     onClick={createFolder}
                     disabled={createFolderMutation.isPending}
-                    className="flex-1 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="flex-1 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {createFolderMutation.isPending ? '생성 중…' : '생성'}
                   </button>
@@ -410,7 +407,7 @@ export default function Files() {
 
               <label
                 htmlFor="file-upload"
-                className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+                className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600"
               >
                 파일 선택
               </label>
@@ -448,7 +445,7 @@ export default function Files() {
 
                 <Link
                   to="/quiz/new"
-                  className="inline-flex items-center justify-center rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+                  className="inline-flex items-center justify-center rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600"
                 >
                   새 퀴즈 만들기
                 </Link>
@@ -467,7 +464,7 @@ export default function Files() {
               actions={
                 <label
                   htmlFor="file-upload"
-                  className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+                  className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600"
                 >
                   파일 업로드
                 </label>
@@ -574,7 +571,7 @@ export default function Files() {
                                         type="button"
                                         onClick={saveRename}
                                         disabled={renameMutation.isPending}
-                                        className="rounded-xl bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                        className="rounded-xl bg-brand-500 px-3 py-2 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
                                       >
                                         {renameMutation.isPending ? '저장 중…' : '저장'}
                                       </button>
@@ -706,7 +703,7 @@ export default function Files() {
                 setMoveTargetFolderId(null);
                 setMoveDialogOpen(true);
               }}
-              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600"
             >
               폴더 이동
             </button>
@@ -749,7 +746,7 @@ export default function Files() {
                   },
                 });
               }}
-              className="rounded-xl bg-semantic-error px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl bg-semantic-error px-4 py-2.5 text-sm font-medium text-content-inverse transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {deleteMutation.isPending ? '삭제 중…' : '삭제하기'}
             </button>
@@ -775,7 +772,7 @@ export default function Files() {
               type="button"
               disabled={deleteSelectedMutation.isPending}
               onClick={deleteSelectedFiles}
-              className="rounded-xl bg-semantic-error px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl bg-semantic-error px-4 py-2.5 text-sm font-medium text-content-inverse transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {deleteSelectedMutation.isPending ? '삭제 중…' : '삭제하기'}
             </button>
@@ -813,7 +810,7 @@ export default function Files() {
               type="button"
               disabled={moveMutation.isPending}
               onClick={moveSelectedFiles}
-              className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+              className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {moveMutation.isPending ? '이동 중…' : '이동하기'}
             </button>

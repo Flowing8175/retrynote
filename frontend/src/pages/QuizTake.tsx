@@ -415,6 +415,11 @@ export default function QuizTake() {
           </div>
           <div className="h-2 overflow-hidden rounded-full bg-surface-deep">
             <div
+              role="progressbar"
+              aria-valuenow={Math.round(progressPercent)}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="퀴즈 진행률"
               className="h-full rounded-full bg-brand-500 transition-all duration-200"
               style={{ width: `${progressPercent}%` }}
             />
@@ -431,9 +436,9 @@ export default function QuizTake() {
                   const isCompleted = Boolean(submittedAnswers[item.id]);
                   const isAvailable = index <= furthestAvailableIndex;
 
-                  const pillClass = isCurrentQuestion
-                    ? 'border-brand-500 bg-brand-500 text-white'
-                    : isCompleted
+                   const pillClass = isCurrentQuestion
+                     ? 'border-brand-500 bg-brand-500 text-content-inverse'
+                     : isCompleted
                     ? 'border-semantic-success-border bg-semantic-success-bg text-semantic-success'
                     : isAvailable
                     ? 'border-semantic-warning-border bg-semantic-warning-bg text-semantic-warning'
@@ -455,7 +460,7 @@ export default function QuizTake() {
                       disabled={!isAvailable || isAnyMutationPending}
                       aria-current={isCurrentQuestion ? 'page' : undefined}
                       aria-label={`${index + 1}번 문제 (${stateLabel})`}
-                      className={`flex h-10 min-w-10 items-center justify-center rounded-full border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${pillClass}`}
+                      className={`flex h-11 min-w-11 items-center justify-center rounded-full border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${pillClass}`}
                     >
                       {index + 1}
                     </button>
@@ -636,7 +641,7 @@ export default function QuizTake() {
             <button
               type="submit"
               disabled={isAnyMutationPending || !userAnswer.trim()}
-              className="rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-600 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-content-inverse transition hover:bg-brand-600 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             >
               {isAnyMutationPending ? '처리 중...' : isExamMode ? '임시 저장' : '제출'}
             </button>
@@ -644,7 +649,7 @@ export default function QuizTake() {
             <button
               type="button"
               onClick={handleNext}
-              className="rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-600 hover:-translate-y-px"
+              className="rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-content-inverse transition hover:bg-brand-600 hover:-translate-y-px"
             >
               {currentItemIndex < itemsData.length - 1 ? '다음 문제' : '결과 보기'}
             </button>
@@ -662,7 +667,7 @@ export default function QuizTake() {
               type="button"
               onClick={() => submitExamMutation.mutate()}
               disabled={submitExamMutation.isPending || completedCount !== itemsData.length}
-              className="rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-white transition hover:bg-brand-600 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-content-inverse transition hover:bg-brand-600 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitExamMutation.isPending ? '제출 중...' : '전체 제출'}
             </button>

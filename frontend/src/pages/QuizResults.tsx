@@ -5,6 +5,7 @@ import { quizApi } from '@/api';
 import { objectionsApi } from '@/api/objections';
 import { wrongNotesApi } from '@/api/wrongNotes';
 import { StatusBadge } from '@/components';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import type { QuizItemResponse, WrongNoteItem } from '@/types';
 
 function formatMode(mode: string) {
@@ -167,7 +168,7 @@ function getProgressRingStyle(scorePercentage: number) {
   const clampedScorePercentage = Math.max(0, Math.min(scorePercentage, 100));
 
   return {
-    background: `conic-gradient(from 180deg, oklch(var(--color-brand-500)) ${clampedScorePercentage}%, oklch(var(--color-surface-hover)) ${clampedScorePercentage}% 100%)`,
+    background: `conic-gradient(from 180deg, oklch(0.65 0.15 175) ${clampedScorePercentage}%, oklch(0.28 0.01 250) ${clampedScorePercentage}% 100%)`,
   };
 }
 
@@ -260,11 +261,7 @@ export default function QuizResults() {
   const objectionSectionLoading = quizItemsLoading || wrongNotesLoading;
 
   if (sessionLoading) {
-    return (
-      <div className="flex h-64 items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-brand-500"></div>
-      </div>
-    );
+    return <LoadingSpinner message="퀴즈 결과 불러오는 중" />;
   }
 
   if (!sessionData) {
