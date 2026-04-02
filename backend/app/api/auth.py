@@ -23,6 +23,7 @@ from app.middleware.auth import (
     create_refresh_token,
     get_current_user,
 )
+from app.utils.email import send_password_reset_email
 
 router = APIRouter()
 
@@ -104,10 +105,9 @@ async def password_reset_request(
     db.add(reset_token)
     await db.commit()
 
-    return {
-        "status": "accepted",
-        "detail": "Reset token generated. In production, send via email.",
-    }
+    await send_password_reset_email(user.email, token)
+
+    return {"status": "accepted"}
 
 
 @router.post("/password/reset/confirm")

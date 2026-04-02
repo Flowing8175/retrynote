@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg5" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#0a0a1e"/>
+      <stop offset="100%" stop-color="#151530"/>
+    </linearGradient>
+    <linearGradient id="red5" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff3b3b"/>
+      <stop offset="100%" stop-color="#d40000"/>
+    </linearGradient>
+    <filter id="glow5">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="80" fill="url(#bg5)"/>
+  <!-- Stacked N layers (ghost copies behind = retries) -->
+  <g transform="translate(256, 235)">
+    <!-- Layer 3 (furthest back) -->
+    <g opacity="0.12" transform="translate(16, -16)">
+      <line x1="-80" y1="100" x2="-80" y2="-80" stroke="#ff3b3b" stroke-width="32" stroke-linecap="round"/>
+      <line x1="80" y1="-80" x2="80" y2="100" stroke="#ff3b3b" stroke-width="32" stroke-linecap="round"/>
+      <line x1="-80" y1="-80" x2="80" y2="100" stroke="#ff3b3b" stroke-width="24" stroke-linecap="round"/>
+    </g>
+    <!-- Layer 2 -->
+    <g opacity="0.25" transform="translate(8, -8)">
+      <line x1="-80" y1="100" x2="-80" y2="-80" stroke="#ff3b3b" stroke-width="32" stroke-linecap="round"/>
+      <line x1="80" y1="-80" x2="80" y2="100" stroke="#ff3b3b" stroke-width="32" stroke-linecap="round"/>
+      <line x1="-80" y1="-80" x2="80" y2="100" stroke="#ff3b3b" stroke-width="24" stroke-linecap="round"/>
+    </g>
+    <!-- Layer 1 (front - full opacity) -->
+    <g filter="url(#glow5)">
+      <line x1="-80" y1="100" x2="-80" y2="-80" stroke="url(#red5)" stroke-width="34" stroke-linecap="round"/>
+      <line x1="80" y1="-80" x2="80" y2="100" stroke="url(#red5)" stroke-width="34" stroke-linecap="round"/>
+      <line x1="-80" y1="-80" x2="80" y2="100" stroke="url(#red5)" stroke-width="26" stroke-linecap="round"/>
+    </g>
+    <!-- Circular retry arrow wrapping the whole N -->
+    <path d="M-120,-100 A155,155 0 1,1 -100,110" 
+          fill="none" stroke="#ff5555" stroke-width="6" stroke-linecap="round" opacity="0.5" 
+          stroke-dasharray="12 8"/>
+    <polygon points="-108,108 -92,120 -88,100" fill="#ff5555" opacity="0.5"/>
+  </g>
+  <!-- Text with subtle gradient -->
+  <text x="256" y="442" text-anchor="middle" font-family="'SF Pro Display', 'Inter', sans-serif" 
+        font-size="34" font-weight="800" fill="#ffffff" letter-spacing="6" opacity="0.9">RETRYNOTE</text>
+  <!-- Subtle tagline -->
+  <text x="256" y="472" text-anchor="middle" font-family="'SF Pro Display', 'Inter', sans-serif" 
+        font-size="13" font-weight="400" fill="#ff5555" letter-spacing="8" opacity="0.5">LEARN · RETRY · MASTER</text>
+</svg>

@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: quiz
       POSTGRES_DB: quizmanager
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -16,23 +16,25 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
 
   api:
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8001:8000"
     env_file: .env
     depends_on:
       db:
@@ -40,8 +42,8 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app
       - ./storage:/app/storage
+    restart: unless-stopped
 
   worker:
     build:
@@ -55,22 +57,8 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app
       - ./storage:/app/storage
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://api:8000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    depends_on:
-      - api
+    restart: unless-stopped
 
 volumes:
   pgdata:

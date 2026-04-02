@@ -496,6 +496,8 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
         max_score=max_score,
         grading_confidence=grading_confidence,
         grading_rationale=grading_rationale,
+        explanation=item.explanation_text,
+        tips=item.tips_text,
         missing_points=missing_points,
         error_type=error_type.value if error_type else None,
         normalized_user_answer=normalized,

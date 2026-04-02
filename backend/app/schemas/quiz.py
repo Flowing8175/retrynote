@@ -77,6 +77,7 @@ class QuizItemResponse(BaseModel):
 class QuizItemDetail(QuizItemResponse):
     correct_answer: dict | None = None
     explanation: str | None = None
+    tips: str | None = None
     source_refs: dict | None = None
 
 
@@ -91,6 +92,8 @@ class AnswerResponse(BaseModel):
     max_score: float
     grading_confidence: float | None
     grading_rationale: str | None
+    explanation: str | None = None
+    tips: str | None = None
     missing_points: dict | None = None
     error_type: str | None = None
     normalized_user_answer: str | None

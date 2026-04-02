@@ -60,6 +60,7 @@ export interface QuizItemResponse {
 export interface QuizItemDetail extends QuizItemResponse {
   correct_answer: Record<string, unknown> | null;
   explanation: string | null;
+  tips: string | null;
   source_refs: Record<string, unknown> | null;
 }
 
@@ -74,6 +75,8 @@ export interface AnswerResponse {
   max_score: number;
   grading_confidence: number | null;
   grading_rationale: string | null;
+  explanation: string | null;
+  tips: string | null;
   missing_points: Record<string, unknown> | null;
   error_type: string | null;
   normalized_user_answer: string | null;

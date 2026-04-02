@@ -141,6 +141,7 @@ class QuizItem(CommonMixin, Base):
     options_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     correct_answer_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     explanation_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tips_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     source_refs_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     concept_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
     concept_label: Mapped[str | None] = mapped_column(String(255), nullable=True)

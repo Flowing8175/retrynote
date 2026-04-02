@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,17 +53,8 @@ def build_coaching_summary_cache_key(
     range_value: str,
     file_id: str | None,
     category_tag: str | None,
-    cache_payload: dict,
 ) -> str:
-    payload_hash = sha256(
-        json.dumps(
-            cache_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-        ).encode("utf-8")
-    ).hexdigest()
-    return (
-        "dashboard:coaching:"
-        f"{user_id}:{range_value}:{file_id or 'none'}:{category_tag or 'none'}:{payload_hash}"
-    )
+    return f"dashboard:coaching:{user_id}:{range_value}:{file_id or 'none'}:{category_tag or 'none'}"
 
 
 async def get_redis_client() -> redis.Redis:
@@ -305,22 +295,11 @@ async def get_dashboard(
 
         weak_types = sorted(weak_types, key=lambda item: item["question_type"])
 
-        coaching_cache_payload = {
-            "total_count": total_count,
-            "correct_count": correct_count,
-            "partial_count": partial_count,
-            "overall_accuracy": round(overall_accuracy, 6),
-            "score_rate": round(score_rate, 6),
-            "weak_concepts_data": weak_concepts_data,
-            "weak_types": weak_types,
-        }
-
         coaching_cache_key = build_coaching_summary_cache_key(
             user.id,
             range,
             file_id,
             category_tag,
-            coaching_cache_payload,
         )
 
         coaching_prompt = f"""사용자의 최근 학습 기록을 분석하고 코칭 요약을 생성하세요.

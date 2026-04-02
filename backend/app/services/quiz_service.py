@@ -437,7 +437,7 @@ async def generate_quiz(job_id: str):
                 system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
             )
 
-            questions = ai_result.get("questions", [])
+            questions = ai_result.get("questions", [])[:question_count]
             if not questions:
                 session.status = QuizSessionStatus.generation_failed
                 job.status = "failed"
