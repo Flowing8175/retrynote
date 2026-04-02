@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: pgvector/pgvector:pg15
@@ -30,6 +28,7 @@ services:
     restart: unless-stopped
 
   api:
+    image: ghcr.io/flowing8175/quiz-manager-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -46,6 +45,7 @@ services:
     restart: unless-stopped
 
   worker:
+    image: ghcr.io/flowing8175/quiz-manager-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
