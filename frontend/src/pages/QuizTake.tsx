@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { quizApi } from '@/api';
@@ -22,6 +22,10 @@ export default function QuizTake() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const { currentSession, currentAnswerMap, setCurrentSession, setCurrentItems, setCurrentAnswer } = useQuizStore();
+  const currentAnswerMapRef = useRef(currentAnswerMap);
+  useEffect(() => {
+    currentAnswerMapRef.current = currentAnswerMap;
+  }, [currentAnswerMap]);
 
   const [currentItemIndex, setCurrentItemIndex] = useState(0);
   const [userAnswer, setUserAnswer] = useState('');
@@ -116,10 +120,11 @@ export default function QuizTake() {
 
   useEffect(() => {
     if (sessionData && itemsData) {
+      const snapshot = currentAnswerMapRef.current;
       const restoredAnswerMap = Object.fromEntries(
         itemsData
-          .filter((item) => currentAnswerMap[item.id] != null)
-          .map((item) => [item.id, currentAnswerMap[item.id]])
+          .filter((item) => snapshot[item.id] != null)
+          .map((item) => [item.id, snapshot[item.id]])
       );
       const restoredIndexes = itemsData
         .map((item, index) => (restoredAnswerMap[item.id] ? index : -1))
@@ -140,7 +145,7 @@ export default function QuizTake() {
         itemsData.length === 0 ? 0 : Math.min(itemsData.length - 1, Math.max(0, highestRestoredIndex + 1))
       );
     }
-  }, [sessionData, itemsData, currentAnswerMap, setCurrentItems, setCurrentSession]);
+  }, [sessionData, itemsData, setCurrentItems, setCurrentSession]);
 
   useEffect(() => {
     if (itemsData && itemsData.length > 0) {
@@ -480,9 +485,9 @@ export default function QuizTake() {
           </h2>
 
           {/* Options for multiple choice / OX */}
-          {activeItem.question_type === 'multiple_choice' && activeItem.options != null && 'options' in activeItem.options && Array.isArray(activeItem.options.options) && (
+          {activeItem.question_type === 'multiple_choice' && activeItem.options != null && (
             <div className="space-y-3">
-              {(activeItem.options.options as string[]).map((option, index) => (
+              {Object.values(activeItem.options as Record<string, string>).map((option, index) => (
                 <label
                   key={index}
                   className={`flex items-center rounded-2xl border px-5 py-4 transition-colors ${
