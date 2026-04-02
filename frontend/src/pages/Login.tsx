@@ -21,8 +21,19 @@ export default function Login() {
       setTokens(response.access_token, response.refresh_token);
       navigate('/');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      setError(axiosError.response?.data?.detail || '로그인에 실패했습니다.');
+      const axiosError = err as { response?: { status?: number; data?: { detail?: string } } };
+      const status = axiosError.response?.status;
+      if (status === 401) {
+        setError('사용자명 또는 비밀번호가 올바르지 않습니다.');
+      } else if (status === 403) {
+        setError('계정이 비활성화되었습니다. 관리자에게 문의하세요.');
+      } else if (status === 429) {
+        setError('로그인 시도 횟수를 초과했습니다. 잠시 후 다시 시도해주세요.');
+      } else if (!status || status >= 500) {
+        setError('내부 오류가 발생하였습니다. 잠시 후 다시 시도해주세요.');
+      } else {
+        setError('로그인에 실패했습니다.');
+      }
     } finally {
       setLoading(false);
     }

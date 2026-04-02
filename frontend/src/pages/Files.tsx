@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Upload } from 'lucide-react';
+import type { AxiosError } from 'axios';
 import { filesApi } from '@/api';
 import { EmptyState, LoadingSpinner, Modal, Pagination, StatusBadge } from '@/components';
 import { isFileProcessingStatus } from '@/types';
@@ -76,6 +77,7 @@ export default function Files() {
   const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [filePendingDelete, setFilePendingDelete] = useState<FileDetail | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: folderData } = useQuery({
@@ -94,7 +96,12 @@ export default function Files() {
   const uploadMutation = useMutation({
     mutationFn: (file: File) => filesApi.uploadFile(file, null, null, null),
     onSuccess: () => {
+      setUploadError(null);
       queryClient.invalidateQueries({ queryKey: ['files'] });
+    },
+    onError: (error: AxiosError<{ detail: string }>) => {
+      const detail = error.response?.data?.detail;
+      setUploadError(detail ?? '업로드 중 오류가 발생했습니다.');
     },
   });
 
@@ -416,6 +423,19 @@ export default function Files() {
             {uploadMutation.isPending && (
               <div className="mt-5 flex items-center gap-2 text-sm text-content-secondary">
                 <span className="rounded-full border border-white/[0.07] bg-surface-deep px-3 py-1.5">업로드 중…</span>
+              </div>
+            )}
+            {uploadError && (
+              <div className="mt-4 flex items-center justify-between rounded-xl border border-semantic-error-border bg-semantic-error-bg px-4 py-3 text-sm text-semantic-error">
+                <span>{uploadError}</span>
+                <button
+                  type="button"
+                  onClick={() => setUploadError(null)}
+                  className="ml-4 shrink-0 text-semantic-error/70 hover:text-semantic-error"
+                  aria-label="오류 닫기"
+                >
+                  ✕
+                </button>
               </div>
             )}
           </div>

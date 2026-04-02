@@ -159,9 +159,10 @@ async def upload_file(
         )
         duplicate = duplicate_result.scalar_one_or_none()
         if duplicate:
+            name = duplicate.original_filename or "알 수 없는 파일"
             raise HTTPException(
                 status_code=409,
-                detail=f"이미 동일한 파일이 존재합니다. (file_id={duplicate.id})",
+                detail=f"동일한 파일이 이미 존재합니다: '{name}'",
             )
 
         save_dir = os.path.join(settings.upload_dir, str(user.id))
