@@ -5,10 +5,12 @@ interface LoadingSpinnerProps {
 }
 
 const loadingPhrases = [
-  '자료 읽는 중',
-  '개념 정리 중',
+  '퀴즈 로딩 중',
+  '자료 꼼꼼히 읽는 중',
+  '핵심 개념 정리 중',
   '문제 만드는 중',
-  '검토 중',
+  '정답 검토 중',
+  '거의 다 됐어요!',
 ];
 
 export default function LoadingSpinner({ message }: LoadingSpinnerProps) {
@@ -17,7 +19,7 @@ export default function LoadingSpinner({ message }: LoadingSpinnerProps) {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentPhrase((prev) => (prev + 1) % loadingPhrases.length);
-    }, 2000);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, []);

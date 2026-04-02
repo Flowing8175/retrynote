@@ -327,7 +327,7 @@ export default function QuizTake() {
   }, [currentItemIndex, goToQuestion, handleExit, handleSubmit, isAnyMutationPending, itemsData]);
 
   if (sessionLoading || itemsLoading || isGeneratingQuiz) {
-    return <LoadingSpinner message="퀴즈 로딩 중" />;
+    return <LoadingSpinner />;
   }
 
   if (sessionData?.status === 'generation_failed') {
