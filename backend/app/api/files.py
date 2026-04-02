@@ -1,7 +1,9 @@
+import hashlib
 import os
 import uuid
 from datetime import datetime, timezone
 
+import magic
 from fastapi.responses import FileResponse
 from fastapi import (
     APIRouter,
@@ -30,7 +32,7 @@ from app.schemas.file import (
     FolderDetail,
 )
 from app.middleware.auth import get_current_user, get_impersonation_context
-from app.workers.celery_app import celery_app
+from app.workers.celery_app import dispatch_task
 
 router = APIRouter()
 
@@ -90,13 +92,13 @@ async def upload_file(
     user: User = Depends(get_current_user),
 ):
     effective_user, _ = await get_impersonation_context(request, user, db)
-    effective_user = user
 
     source_type = FileSourceType.upload
     original_filename = None
     stored_path = None
     file_size = 0
     file_type = None
+    content_hash = None
 
     if file:
         source_type = FileSourceType.upload
@@ -107,11 +109,60 @@ async def upload_file(
         if ext not in settings.allowed_file_types.split(","):
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
-        content = await file.read()
-        file_size = len(content)
+        # Check size incrementally
+        max_size = settings.max_upload_size_mb * 1024 * 1024
+        chunks = []
+        total_size = 0
+        while True:
+            chunk = await file.read(8192)
+            if not chunk:
+                break
+            total_size += len(chunk)
+            if total_size > max_size:
+                raise HTTPException(status_code=400, detail="File too large")
+            chunks.append(chunk)
+        content = b"".join(chunks)
+        file_size = total_size
 
-        if file_size > settings.max_upload_size_mb * 1024 * 1024:
-            raise HTTPException(status_code=400, detail="File too large")
+        # Validate MIME type matches extension
+        detected_mime = magic.from_buffer(content[:2048], mime=True)
+        allowed_mimes = {
+            "pdf": ["application/pdf"],
+            "docx": [
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "application/zip",
+            ],
+            "pptx": [
+                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                "application/zip",
+            ],
+            "txt": ["text/plain"],
+            "md": ["text/plain", "text/markdown"],
+            "png": ["image/png"],
+            "jpg": ["image/jpeg"],
+            "jpeg": ["image/jpeg"],
+        }
+        expected_mimes = allowed_mimes.get(ext, [])
+        if expected_mimes and detected_mime not in expected_mimes:
+            raise HTTPException(
+                status_code=400, detail=f"File content does not match extension .{ext}"
+            )
+
+        content_hash = hashlib.sha256(content).hexdigest()
+
+        duplicate_result = await db.execute(
+            select(File).where(
+                File.user_id == effective_user.id,
+                File.content_hash == content_hash,
+                File.deleted_at.is_(None),
+            )
+        )
+        duplicate = duplicate_result.scalar_one_or_none()
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail=f"이미 동일한 파일이 존재합니다. (file_id={duplicate.id})",
+            )
 
         save_dir = os.path.join(settings.upload_dir, str(user.id))
         os.makedirs(save_dir, exist_ok=True)
@@ -142,6 +193,7 @@ async def upload_file(
         source_type=source_type,
         source_url=source_url,
         status=FileStatus.uploaded,
+        content_hash=content_hash,
     )
     db.add(file_record)
     await db.flush()
@@ -160,7 +212,7 @@ async def upload_file(
     await db.commit()
     await db.refresh(file_record)
 
-    celery_app.send_task("process_file", args=[job.id])
+    await dispatch_task("process_file", [job.id])
 
     return FileUploadResponse(
         file_id=file_record.id,
@@ -329,7 +381,7 @@ async def retry_file(
     db.add(job)
     await db.commit()
 
-    celery_app.send_task("process_file", args=[job.id])
+    await dispatch_task("process_file", [job.id])
 
     return FileRetryResponse(job_id=job.id, status=file.status.value)
 
@@ -366,7 +418,7 @@ async def delete_file(
     db.add(job)
     await db.commit()
 
-    celery_app.send_task("file_cleanup", args=[job.id])
+    await dispatch_task("file_cleanup", [job.id])
 
     return {"status": "success"}
 
@@ -417,7 +469,10 @@ async def download_file(
     if not file.stored_path or not os.path.exists(file.stored_path):
         raise HTTPException(status_code=404, detail="File not available")
 
+    filename = file.original_filename or os.path.basename(file.stored_path)
     return FileResponse(
         file.stored_path,
-        filename=file.original_filename or os.path.basename(file.stored_path),
+        filename=filename,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

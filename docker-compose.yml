@@ -15,9 +15,20 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
   redis:
     image: redis:7-alpine
+    command: >
+      sh -c "if [ -n \"$$REDIS_PASSWORD\" ]; then
+        redis-server --requirepass \"$$REDIS_PASSWORD\";
+      else
+        redis-server;
+      fi"
+    env_file: .env
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
@@ -26,6 +37,10 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
 
   api:
     image: ghcr.io/flowing8175/quiz-manager-backend:latest
@@ -43,6 +58,12 @@ services:
     volumes:
       - ./storage:/app/storage
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
   worker:
     image: ghcr.io/flowing8175/quiz-manager-backend:latest
@@ -59,6 +80,12 @@ services:
     volumes:
       - ./storage:/app/storage
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    deploy:
+      resources:
+        limits:
+          memory: 1G
 
 volumes:
   pgdata:

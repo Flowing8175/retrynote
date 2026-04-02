@@ -183,12 +183,68 @@ def _extract_pptx(path: str) -> str:
         return ""
 
 
+def _is_safe_url(url: str) -> bool:
+    """Validate URL is safe for server-side requests (SSRF prevention)."""
+    try:
+        from urllib.parse import urlparse
+        import ipaddress
+        import socket
+
+        parsed = urlparse(url)
+    except Exception:
+        return False
+
+    if parsed.scheme not in ("http", "https"):
+        return False
+
+    hostname = parsed.hostname
+    if not hostname:
+        return False
+
+    # Block obvious internal hostnames
+    blocked_hosts = {
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "::1",
+        "metadata.google.internal",
+        "169.254.169.254",
+    }
+    if hostname.lower() in blocked_hosts:
+        return False
+
+    # Block private/reserved IP ranges
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            return False
+    except ValueError:
+        # hostname is a domain name, not IP — resolve and check
+        try:
+            for info in socket.getaddrinfo(hostname, None):
+                addr = info[4][0]
+                ip = ipaddress.ip_address(addr)
+                if (
+                    ip.is_private
+                    or ip.is_loopback
+                    or ip.is_link_local
+                    or ip.is_reserved
+                ):
+                    return False
+        except socket.gaierror:
+            return False
+
+    return True
+
+
 async def _fetch_url_text(url: str) -> str:
+    if not _is_safe_url(url):
+        return ""
     try:
         import httpx
 
         async with httpx.AsyncClient() as client:
-            resp = await client.get(url, follow_redirects=True, timeout=30)
+            resp = await client.get(url, follow_redirects=False, timeout=30)
             if resp.status_code != 200:
                 return ""
             from bs4 import BeautifulSoup

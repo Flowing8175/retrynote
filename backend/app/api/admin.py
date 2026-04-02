@@ -28,6 +28,7 @@ from app.schemas.admin import (
 )
 from app.middleware.auth import (
     require_admin,
+    require_admin_verified,
     require_super_admin,
     get_current_user,
     hash_password,
@@ -35,7 +36,7 @@ from app.middleware.auth import (
     create_admin_token,
     get_client_ip,
 )
-from app.workers.celery_app import celery_app
+from app.workers.celery_app import dispatch_task
 
 router = APIRouter()
 
@@ -206,7 +207,7 @@ async def start_impersonation(
     req: ImpersonationStart,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     target_result = await db.execute(select(User).where(User.id == req.target_user_id))
     target = target_result.scalar_one_or_none()
@@ -243,7 +244,7 @@ async def end_impersonation(
     impersonation_id: str,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     result = await db.execute(
         select(ImpersonationSession).where(ImpersonationSession.id == impersonation_id)
@@ -274,7 +275,7 @@ async def regrade_item(
     req: RegradeRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     item_result = await db.execute(select(QuizItem).where(QuizItem.id == item_id))
     item = item_result.scalar_one_or_none()
@@ -302,7 +303,7 @@ async def regrade_item(
     )
     await db.commit()
 
-    celery_app.send_task("admin_regrade", args=[job.id])
+    await dispatch_task("admin_regrade", [job.id])
 
     return RegradeResponse(regrade_job_id=job.id)
 
@@ -312,7 +313,7 @@ async def update_model_settings(
     req: ModelSettingsUpdate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_super_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     settings_result = await db.execute(select(AdminSettings).limit(1))
     admin_settings = settings_result.scalar_one_or_none()
@@ -369,7 +370,7 @@ async def create_announcement(
     req: AnnouncementCreate,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_super_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     announcement = Announcement(
         title=req.title,

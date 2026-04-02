@@ -1,19 +1,20 @@
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
+from typing import Literal
 
 from app.schemas._normalizers import normalize_options_payload
 
 
 class QuizSessionCreate(BaseModel):
-    mode: str  # normal | exam
-    selected_file_ids: list[str] = []
-    manual_text: str | None = None
-    question_count: int = 5
-    difficulty: str | None = None
-    question_types: list[str] = []
-    generation_priority: str | None = None
-    source_mode: str  # document_based | no_source
-    idempotency_key: str | None = None
+    mode: Literal["normal", "exam"]
+    selected_file_ids: list[str] = Field(default=[], max_length=50)
+    manual_text: str | None = Field(default=None, max_length=50000)
+    question_count: int = Field(default=5, ge=1, le=50)
+    difficulty: str | None = Field(default=None, max_length=50)
+    question_types: list[str] = Field(default=[], max_length=10)
+    generation_priority: str | None = Field(default=None, max_length=50)
+    source_mode: Literal["document_based", "no_source"]
+    idempotency_key: str | None = Field(default=None, max_length=255)
 
 
 class QuizSessionResponse(BaseModel):
@@ -82,7 +83,7 @@ class QuizItemDetail(QuizItemResponse):
 
 
 class AnswerSubmit(BaseModel):
-    user_answer: str
+    user_answer: str = Field(max_length=10000)
 
 
 class AnswerResponse(BaseModel):
@@ -102,8 +103,8 @@ class AnswerResponse(BaseModel):
 
 
 class DraftAnswerSubmit(BaseModel):
-    item_id: str
-    user_answer: str
+    item_id: str = Field(max_length=36)
+    user_answer: str = Field(max_length=10000)
 
 
 class DraftAnswerResponse(BaseModel):
@@ -111,7 +112,7 @@ class DraftAnswerResponse(BaseModel):
 
 
 class ExamSubmit(BaseModel):
-    idempotency_key: str
+    idempotency_key: str = Field(max_length=255)
 
 
 class ExamSubmitResponse(BaseModel):

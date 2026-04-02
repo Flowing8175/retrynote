@@ -35,7 +35,7 @@ from app.schemas.quiz import (
     ExamSubmitResponse,
 )
 from app.middleware.auth import get_current_user
-from app.workers.celery_app import celery_app
+from app.workers.celery_app import dispatch_task
 
 router = APIRouter()
 
@@ -166,7 +166,7 @@ async def create_quiz_session(
     await db.commit()
     await db.refresh(session)
 
-    celery_app.send_task("generate_quiz", args=[job_id])
+    await dispatch_task("generate_quiz", [job_id])
 
     return QuizSessionResponse(
         quiz_session_id=session.id,
@@ -595,6 +595,6 @@ async def submit_exam(
     session.status = QuizSessionStatus.grading
     await db.commit()
 
-    celery_app.send_task("grade_exam", args=[job.id])
+    await dispatch_task("grade_exam", [job.id])
 
     return ExamSubmitResponse(status=session.status.value, job_id=job.id)

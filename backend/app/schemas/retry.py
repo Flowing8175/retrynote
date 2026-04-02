@@ -1,11 +1,12 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Literal
 from datetime import datetime
 
 
 class RetrySetCreate(BaseModel):
-    source: str  # wrong_notes | dashboard_recommendation | concept_manual
-    concept_keys: list[str] | None = None
-    size: int = 5
+    source: Literal["wrong_notes", "dashboard_recommendation", "concept_manual"]
+    concept_keys: list[str] | None = Field(default=None, max_length=50)
+    size: int = Field(default=5, ge=1, le=50)
 
 
 class RetrySetResponse(BaseModel):

@@ -17,7 +17,7 @@ from app.models.user import User
 from app.models.search import Job
 from app.schemas.objection import ObjectionCreate, ObjectionResponse, ObjectionDetail
 from app.middleware.auth import get_current_user
-from app.workers.celery_app import celery_app
+from app.workers.celery_app import dispatch_task
 
 router = APIRouter()
 
@@ -91,7 +91,7 @@ async def create_objection(
     await db.commit()
     await db.refresh(objection)
 
-    celery_app.send_task("review_objection", args=[job.id])
+    await dispatch_task("review_objection", [job.id])
 
     return ObjectionResponse(objection_id=objection.id, status=objection.status.value)
 

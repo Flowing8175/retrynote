@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from functools import partial
 from celery import Celery
 from app.config import settings
 
@@ -40,6 +41,11 @@ celery_app.conf.update(
 )
 
 logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
+
+
+async def dispatch_task(task_name: str, args: list) -> None:
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, partial(celery_app.send_task, task_name, args))
 
 
 @celery_app.task(bind=True, name="process_file", max_retries=3)

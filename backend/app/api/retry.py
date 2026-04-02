@@ -19,7 +19,7 @@ from app.models.user import User
 from app.models.search import Job
 from app.schemas.retry import RetrySetCreate, RetrySetResponse
 from app.middleware.auth import get_current_user
-from app.workers.celery_app import celery_app
+from app.workers.celery_app import dispatch_task
 
 router = APIRouter()
 
@@ -89,6 +89,6 @@ async def create_retry_set(
     await db.commit()
     await db.refresh(session)
 
-    celery_app.send_task("generate_quiz", args=[job.id])
+    await dispatch_task("generate_quiz", [job.id])
 
     return RetrySetResponse(quiz_session_id=session.id, job_id=job.id)

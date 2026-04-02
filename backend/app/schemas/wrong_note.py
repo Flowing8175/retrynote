@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 
 from app.schemas._normalizers import (
@@ -50,4 +50,4 @@ class WrongNoteListResponse(BaseModel):
 
 
 class WrongNoteErrorTypeUpdate(BaseModel):
-    error_type: str
+    error_type: str = Field(max_length=100)

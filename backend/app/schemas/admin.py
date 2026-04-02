@@ -1,9 +1,9 @@
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from datetime import datetime
 
 
 class MasterPasswordVerify(BaseModel):
-    master_password: str
+    master_password: str = Field(min_length=1, max_length=255)
 
 
 class AdminUserItem(BaseModel):
@@ -61,8 +61,8 @@ class ModelUsageResponse(BaseModel):
 
 
 class ImpersonationStart(BaseModel):
-    target_user_id: str
-    reason: str
+    target_user_id: str = Field(max_length=36)
+    reason: str = Field(min_length=1, max_length=1000)
 
 
 class ImpersonationResponse(BaseModel):
@@ -72,7 +72,7 @@ class ImpersonationResponse(BaseModel):
 
 
 class RegradeRequest(BaseModel):
-    reason: str
+    reason: str = Field(min_length=1, max_length=1000)
 
 
 class RegradeResponse(BaseModel):
@@ -80,15 +80,15 @@ class RegradeResponse(BaseModel):
 
 
 class ModelSettingsUpdate(BaseModel):
-    active_generation_model: str | None = None
-    active_grading_model: str | None = None
-    fallback_generation_model: str | None = None
-    fallback_grading_model: str | None = None
+    active_generation_model: str | None = Field(default=None, max_length=100)
+    active_grading_model: str | None = Field(default=None, max_length=100)
+    fallback_generation_model: str | None = Field(default=None, max_length=100)
+    fallback_grading_model: str | None = Field(default=None, max_length=100)
 
 
 class AnnouncementCreate(BaseModel):
-    title: str
-    body: str
+    title: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=5000)
     is_active: bool = False
     starts_at: datetime | None = None
     ends_at: datetime | None = None

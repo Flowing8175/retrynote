@@ -1,10 +1,10 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
 
 
 class ObjectionCreate(BaseModel):
-    answer_log_id: str
-    objection_reason: str
+    answer_log_id: str = Field(max_length=36)
+    objection_reason: str = Field(min_length=1, max_length=5000)
 
 
 class ObjectionResponse(BaseModel):

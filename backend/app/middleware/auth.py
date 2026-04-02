@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from jose import JWTError, jwt
@@ -37,8 +38,24 @@ def create_access_token(
     )
 
 
-def create_refresh_token(user_id: str, role: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
+def create_refresh_token(user_id: str, role: str, jti: str | None = None) -> str:
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.refresh_token_expire_days
+    )
+    if jti is None:
+        jti = str(uuid.uuid4())
+    payload = {
+        "sub": user_id,
+        "role": role,
+        "exp": expire,
+        "type": "refresh",
+        "jti": jti,
+    }
+    return jwt.encode(
+        payload,
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
     return jwt.encode(
         {"sub": user_id, "role": role, "exp": expire, "type": "refresh"},
         settings.jwt_secret_key,
@@ -111,6 +128,35 @@ async def require_super_admin(
     if user.role != UserRole.super_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Super admin access required"
+        )
+    return user
+
+
+async def require_admin_verified(
+    request: Request,
+    user: User = Depends(require_admin),
+) -> User:
+    admin_token = request.headers.get("X-Admin-Token")
+    if not admin_token:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin verification required",
+        )
+    try:
+        payload = jwt.decode(
+            admin_token,
+            settings.jwt_secret_key,
+            algorithms=[settings.jwt_algorithm],
+        )
+        if payload.get("type") != "admin" or payload.get("sub") != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid or expired admin token",
+            )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid or expired admin token",
         )
     return user
 

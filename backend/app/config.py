@@ -1,9 +1,12 @@
+import logging
 import os
 import socket
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
+
+logger = logging.getLogger(__name__)
 
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -19,6 +22,7 @@ class Settings(BaseSettings):
     database_url_sync: str = "postgresql://quiz:quiz@localhost:5432/quizmanager"
     app_env: str = "development"
     redis_url: str = "redis://localhost:6379/0"
+    redis_password: str = ""
 
     jwt_secret_key: str = "change-me-to-a-secure-random-string"
     jwt_algorithm: str = "HS256"
@@ -91,5 +95,55 @@ def _normalize_database_url(database_url: str) -> str:
     )
 
 
+def _normalize_redis_url(redis_url: str) -> str:
+    parsed = urlsplit(redis_url)
+    in_docker = Path("/.dockerenv").exists()
+
+    if in_docker and parsed.hostname in {"localhost", "127.0.0.1"}:
+        target_host = "redis"
+    elif not in_docker and parsed.hostname == "redis":
+        target_host = "localhost"
+    else:
+        return redis_url
+
+    auth = ""
+    if parsed.username:
+        auth = parsed.username
+        if parsed.password:
+            auth += f":{parsed.password}"
+        auth += "@"
+
+    port = f":{parsed.port}" if parsed.port else ""
+    netloc = f"{auth}{target_host}{port}"
+    return urlunsplit(
+        (parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment)
+    )
+
+
 settings.database_url = _normalize_database_url(settings.database_url)
 settings.database_url_sync = _normalize_database_url(settings.database_url_sync)
+settings.redis_url = _normalize_redis_url(settings.redis_url)
+
+_INSECURE_JWT_DEFAULTS = {
+    "change-me-to-a-secure-random-string",
+    "randonshit0987",
+}
+
+if settings.app_env != "development":
+    if (
+        settings.jwt_secret_key in _INSECURE_JWT_DEFAULTS
+        or len(settings.jwt_secret_key) < 32
+    ):
+        raise RuntimeError(
+            "JWT_SECRET_KEY is insecure. Use a random string of at least 32 characters "
+            "in non-development environments."
+        )
+else:
+    if (
+        settings.jwt_secret_key in _INSECURE_JWT_DEFAULTS
+        or len(settings.jwt_secret_key) < 32
+    ):
+        logger.warning(
+            "JWT_SECRET_KEY is insecure. This is acceptable in development but MUST be "
+            "changed before deploying to production."
+        )
