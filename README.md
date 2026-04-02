@@ -94,15 +94,6 @@ npm run dev
 npm run build
 ```
 
-### Database Setup (Local)
-
-PostgreSQL에 pgvector extension 설치 필요:
-
-```sql
--- PostgreSQL 접속 후
-CREATE EXTENSION IF NOT EXISTS vector;
-```
-
 ### Redis Setup (Local)
 
 ```bash
@@ -264,8 +255,8 @@ quiz-manager/
    - 낮은 confidence 결과에 대해 경고 표시하지만 퀴즈 품질에 영향 가능
 
 3. **Vector Search 의존성**
-   - PostgreSQL pgvector extension 설치 필요
-   - extension 없이는 자료 기반 검색/생성 기능 동작하지 않음
+    - PostgreSQL pgvector extension은 마이그레이션 시 자동 설치됨
+    - pgvector extension이 설치되지 않은 환경에서는 자료 기반 검색/생성 기능이 동작하지 않음
 
 4. **백업 시스템**
    - 수동 백업 기능만 구현되어 있음
