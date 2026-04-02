@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
+from hashlib import sha256
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
+import redis.asyncio as redis
 
 from app.database import get_db
 from app.models.quiz import AnswerLog, QuizItem, QuizSession, Judgement, QuestionType
@@ -17,6 +19,74 @@ from app.prompts import SYSTEM_PROMPT_DASHBOARD_COACHING
 import json
 
 router = APIRouter()
+COACHING_SUMMARY_CACHE_TTL_SECONDS = 60 * 60
+_redis_client: redis.Redis | None = None
+
+
+def format_question_type_label(question_type: str) -> str:
+    return {
+        "multiple_choice": "객관식",
+        "ox": "OX",
+        "short_answer": "단답형",
+        "fill_blank": "빈칸형",
+        "essay": "서술형",
+    }.get(question_type, question_type)
+
+
+def sanitize_coaching_summary(message: str | None) -> str | None:
+    if message is None:
+        return None
+
+    for raw_type, label in {
+        "multiple_choice": "객관식",
+        "ox": "OX",
+        "short_answer": "단답형",
+        "fill_blank": "빈칸형",
+        "essay": "서술형",
+    }.items():
+        message = message.replace(raw_type, label)
+
+    return message
+
+
+def build_coaching_summary_cache_key(
+    user_id: str,
+    range_value: str,
+    file_id: str | None,
+    category_tag: str | None,
+    cache_payload: dict,
+) -> str:
+    payload_hash = sha256(
+        json.dumps(
+            cache_payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+    ).hexdigest()
+    return (
+        "dashboard:coaching:"
+        f"{user_id}:{range_value}:{file_id or 'none'}:{category_tag or 'none'}:{payload_hash}"
+    )
+
+
+async def get_redis_client() -> redis.Redis:
+    global _redis_client
+
+    if _redis_client is None:
+        _redis_client = redis.from_url(cfg.redis_url, decode_responses=True)
+
+    return _redis_client
+
+
+def apply_coaching_tone(message: str, accuracy: float) -> str:
+    if accuracy >= 0.8 and "우수" not in message:
+        return f"현재 성과가 우수합니다. {message}"
+
+    if accuracy < 0.5 and "개선" not in message:
+        return f"현재 결과는 개선이 필요합니다. {message}"
+
+    if 0.5 <= accuracy < 0.8 and "취약" not in message:
+        return f"현재 취약한 부분이 보입니다. {message}"
+
+    return message
 
 
 @router.get("", response_model=DashboardResponse)
@@ -225,13 +295,33 @@ async def get_dashboard(
 
         weak_types = [
             {
-                "question_type": qt,
+                "question_type": format_question_type_label(qt),
                 "accuracy": data["correct"] / data["total"]
                 if data["total"] > 0
                 else 0.0,
             }
             for qt, data in type_accuracy.items()
         ]
+
+        weak_types = sorted(weak_types, key=lambda item: item["question_type"])
+
+        coaching_cache_payload = {
+            "total_count": total_count,
+            "correct_count": correct_count,
+            "partial_count": partial_count,
+            "overall_accuracy": round(overall_accuracy, 6),
+            "score_rate": round(score_rate, 6),
+            "weak_concepts_data": weak_concepts_data,
+            "weak_types": weak_types,
+        }
+
+        coaching_cache_key = build_coaching_summary_cache_key(
+            user.id,
+            range,
+            file_id,
+            category_tag,
+            coaching_cache_payload,
+        )
 
         coaching_prompt = f"""사용자의 최근 학습 기록을 분석하고 코칭 요약을 생성하세요.
 
@@ -251,21 +341,46 @@ async def get_dashboard(
 JSON 형식으로 응답하세요:
 {{"summary": "...", "weak_concepts_top": [...], "weak_question_types": [...], "recommended_next_actions": [...], "coaching_message": "..."}}"""
 
+        redis_client = None
         try:
-            coaching_result = await call_ai_with_fallback(
-                coaching_prompt,
-                COACHING_SCHEMA,
-                primary_model=cfg.openai_grading_model,
-                fallback_model=cfg.openai_fallback_grading_model,
-                system_message=SYSTEM_PROMPT_DASHBOARD_COACHING,
-            )
-            coaching_summary = coaching_result.get(
-                "coaching_message", "학습을 계속해보세요."
-            )
+            redis_client = await get_redis_client()
+            cached_summary = await redis_client.get(coaching_cache_key)
+            if cached_summary is not None:
+                coaching_summary = apply_coaching_tone(cached_summary, overall_accuracy)
         except Exception:
-            coaching_summary = (
-                f"정답률 {overall_accuracy:.0%}입니다. 취약 개념 위주로 복습해보세요."
-            )
+            redis_client = None
+
+        if coaching_summary is None:
+            try:
+                coaching_result = await call_ai_with_fallback(
+                    coaching_prompt,
+                    COACHING_SCHEMA,
+                    primary_model=cfg.openai_grading_model,
+                    fallback_model=cfg.openai_fallback_grading_model,
+                    system_message=SYSTEM_PROMPT_DASHBOARD_COACHING,
+                )
+                sanitized_summary = sanitize_coaching_summary(
+                    coaching_result.get("coaching_message", "학습을 계속해보세요.")
+                )
+                coaching_summary = apply_coaching_tone(
+                    sanitized_summary or "학습을 계속해보세요.",
+                    overall_accuracy,
+                )
+            except Exception:
+                coaching_summary = apply_coaching_tone(
+                    f"정답률 {overall_accuracy:.0%}입니다. 취약 개념 위주로 복습해보세요.",
+                    overall_accuracy,
+                )
+
+            if redis_client is not None and coaching_summary is not None:
+                try:
+                    await redis_client.setex(
+                        coaching_cache_key,
+                        COACHING_SUMMARY_CACHE_TTL_SECONDS,
+                        coaching_summary,
+                    )
+                except Exception:
+                    pass
 
     return DashboardResponse(
         overall_accuracy=overall_accuracy,

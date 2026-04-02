@@ -203,7 +203,7 @@ export default function QuizNew() {
             </h1>
           </div>
 
-          <aside className="rounded-3xl border border-white/[0.07] border-l-4 border-l-brand-500/40 bg-surface-raised px-6 py-7">
+          <aside className="rounded-3xl border border-brand-500/20 bg-surface-raised px-6 py-7">
             <p className="text-sm font-medium text-content-secondary">현재 선택</p>
             <div className="mt-4 space-y-4">
               <div>
@@ -245,9 +245,6 @@ export default function QuizNew() {
                       : 'border-white/[0.07] bg-surface-deep hover:bg-surface-hover'
                   }`}
                 >
-                  {sourceMode === 'document_based' && (
-                    <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-[10px] text-white">✓</span>
-                  )}
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-lg font-semibold text-content-primary">자료 기반</div>
@@ -269,9 +266,6 @@ export default function QuizNew() {
                       : 'border-white/[0.07] bg-surface-deep hover:bg-surface-hover'
                   }`}
                 >
-                  {sourceMode === 'no_source' && (
-                    <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-semantic-warning text-[10px] text-content-inverse">✓</span>
-                  )}
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <div className="text-lg font-semibold text-content-primary">자료 없이 생성</div>
