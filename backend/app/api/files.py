@@ -7,6 +7,7 @@ import magic
 from fastapi.responses import FileResponse
 from fastapi import (
     APIRouter,
+    BackgroundTasks,
     Depends,
     HTTPException,
     Request,
@@ -84,6 +85,7 @@ async def get_owned_folder(folder_id: str, db: AsyncSession, user: User) -> Fold
 @router.post("", response_model=FileUploadResponse)
 async def upload_file(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile | None = FastAPIFile(default=None),
     manual_text: str | None = Form(default=None),
     source_url: str | None = Form(default=None),
@@ -213,7 +215,7 @@ async def upload_file(
     await db.commit()
     await db.refresh(file_record)
 
-    await dispatch_task("process_file", [job.id])
+    background_tasks.add_task(dispatch_task, "process_file", [job.id])
 
     return FileUploadResponse(
         file_id=file_record.id,
@@ -353,6 +355,7 @@ async def get_file(
 @router.post("/{file_id}/retry", response_model=FileRetryResponse)
 async def retry_file(
     file_id: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -382,7 +385,7 @@ async def retry_file(
     db.add(job)
     await db.commit()
 
-    await dispatch_task("process_file", [job.id])
+    background_tasks.add_task(dispatch_task, "process_file", [job.id])
 
     return FileRetryResponse(job_id=job.id, status=file.status.value)
 
