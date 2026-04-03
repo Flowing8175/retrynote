@@ -440,10 +440,18 @@ export default function QuizTake() {
                   const isCurrentQuestion = index === currentItemIndex;
                   const isCompleted = Boolean(submittedAnswers[item.id]);
                   const isAvailable = index <= furthestAvailableIndex;
+                  const itemResult = answerResultsByItemId[item.id];
+                  const judgement = itemResult?.judgement;
 
-                   const pillClass = isCurrentQuestion
-                     ? 'border-brand-500 bg-brand-500 text-content-inverse'
-                     : isCompleted
+                  const pillClass = isCurrentQuestion
+                    ? 'border-brand-500 bg-brand-500 text-content-inverse'
+                    : !isExamMode && judgement === 'correct'
+                    ? 'border-semantic-success-border bg-semantic-success-bg text-semantic-success'
+                    : !isExamMode && judgement === 'wrong'
+                    ? 'border-semantic-error-border bg-semantic-error-bg text-semantic-error'
+                    : !isExamMode && judgement === 'partial'
+                    ? 'border-semantic-warning-border bg-semantic-warning-bg text-semantic-warning'
+                    : isCompleted
                     ? 'border-semantic-success-border bg-semantic-success-bg text-semantic-success'
                     : isAvailable
                     ? 'border-semantic-warning-border bg-semantic-warning-bg text-semantic-warning'
@@ -451,6 +459,12 @@ export default function QuizTake() {
 
                   const stateLabel = isCurrentQuestion
                     ? '현재 문제'
+                    : !isExamMode && judgement === 'correct'
+                    ? '정답'
+                    : !isExamMode && judgement === 'wrong'
+                    ? '오답'
+                    : !isExamMode && judgement === 'partial'
+                    ? '부분정답'
                     : isCompleted
                     ? '제출 완료'
                     : isAvailable

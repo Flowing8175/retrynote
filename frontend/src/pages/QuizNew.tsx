@@ -77,6 +77,7 @@ export default function QuizNew() {
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [showNoSourceModal, setShowNoSourceModal] = useState(false);
   const [noSourceConfirmed, setNoSourceConfirmed] = useState(false);
+  const [topic, setTopic] = useState('');
   const [formMessage, setFormMessage] = useState<string | null>(null);
 
   const { data: filesData, isLoading: filesLoading } = useQuery({
@@ -97,6 +98,7 @@ export default function QuizNew() {
         question_types: selectedQuestionTypes,
         generation_priority: null,
         source_mode: sourceMode,
+        topic: sourceMode === 'no_source' ? (topic.trim() || null) : null,
         idempotency_key: crypto.randomUUID(),
       }),
     onSuccess: (response) => {
@@ -327,8 +329,31 @@ export default function QuizNew() {
               </div>
             )}
 
+            {sourceMode === 'no_source' && (
+              <div>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">2. 주제 입력 (선택)</p>
+                <div className="mt-4 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
+                  <label htmlFor="topic-input" className="text-sm font-medium text-content-primary">
+                    어떤 주제로 출제할까요?
+                  </label>
+                  <input
+                    id="topic-input"
+                    type="text"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="예: 한국사, 운영체제, 광합성, 미적분…"
+                    maxLength={200}
+                    className="mt-3 w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-3 text-base text-content-primary placeholder:text-content-muted focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none"
+                  />
+                  <p className="mt-2 text-xs text-content-muted leading-relaxed">
+                    입력하지 않으면 AI가 자유롭게 주제를 정해 출제합니다.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">{sourceMode === 'document_based' ? '3. 풀이 방식 고르기' : '2. 풀이 방식 고르기'}</p>
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">{sourceMode === 'document_based' ? '3. 풀이 방식 고르기' : '3. 풀이 방식 고르기'}</p>
               <div className="mt-4 inline-flex rounded-2xl bg-surface-deep p-1 gap-1">
                 <button
                   type="button"
@@ -360,7 +385,7 @@ export default function QuizNew() {
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">{sourceMode === 'document_based' ? '4. 세트 크기 정하기' : '3. 세트 크기 정하기'}</p>
+                <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">{sourceMode === 'document_based' ? '4. 세트 크기 정하기' : '4. 세트 크기 정하기'}</p>
 
                 <div className="mt-4 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
                   <label htmlFor="question-count" className="text-sm font-medium text-content-primary">

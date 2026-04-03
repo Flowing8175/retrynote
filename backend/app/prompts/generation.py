@@ -72,6 +72,7 @@ def build_generation_prompt(
     question_types: list[str],
     concept_counts: dict[str, int],
     is_no_source: bool = False,
+    topic: str | None = None,
 ) -> str:
     low_confidence_note = ""
     if is_no_source:
@@ -95,6 +96,8 @@ def build_generation_prompt(
         else f"{question_count}개의 퀴즈 문제를 생성하세요."
     )
 
+    topic_line = f"- 주제: {topic}" if topic else ""
+
     return f"""아래 자료를 기반으로 {count_instruction}
 
 자료:
@@ -103,6 +106,7 @@ def build_generation_prompt(
 요구사항:
 - 생성할 문제 유형: {", ".join(question_types)}
 - 난이도: {difficulty}
+{topic_line}
 - 각 문제는 반드시 concept_key, concept_label, category_tag를 포함해야 합니다
 - source_refs는 자료의 내용을 참조해야 합니다
 - low_confidence_source는 자료 근거가 불충분하면 true로 설정합니다

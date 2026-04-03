@@ -508,6 +508,7 @@ async def generate_quiz(job_id: str):
                 return
 
             is_no_source = session.source_mode.value == "no_source"
+            topic = payload.get("topic") or None
             prompt = build_generation_prompt(
                 source_context=source_context,
                 question_count=question_count,
@@ -515,6 +516,7 @@ async def generate_quiz(job_id: str):
                 question_types=question_types,
                 concept_counts=concept_counts,
                 is_no_source=is_no_source,
+                topic=topic,
             )
 
             ai_result = await call_ai_with_fallback(

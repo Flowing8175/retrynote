@@ -157,6 +157,7 @@ async def create_quiz_session(
             "difficulty": req.difficulty,
             "question_types": req.question_types,
             "source_mode": req.source_mode,
+            "topic": req.topic,
         },
     )
     db.add(job)
