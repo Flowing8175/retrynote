@@ -42,6 +42,27 @@ async def create_retry_set(
             )
             concept_keys = [w.concept_key for w in weak_result.scalars().all()]
 
+        # Fallback: derive concept keys directly from AnswerLog when WeakPoint is empty
+        if not concept_keys:
+            from sqlalchemy import distinct
+            log_result = await db.execute(
+                select(distinct(QuizItem.concept_key))
+                .join(AnswerLog, AnswerLog.quiz_item_id == QuizItem.id)
+                .where(
+                    AnswerLog.user_id == user.id,
+                    AnswerLog.is_active_result == True,
+                    AnswerLog.deleted_at.is_(None),
+                    AnswerLog.judgement.in_(
+                        [Judgement.incorrect, Judgement.partial, Judgement.skipped]
+                    ),
+                    QuizItem.concept_key.isnot(None),
+                    QuizItem.concept_key != "",
+                )
+                .order_by(QuizItem.concept_key)
+                .limit(5)
+            )
+            concept_keys = [k for k in log_result.scalars().all() if k]
+
     elif req.source == "dashboard_recommendation":
         weak_result = await db.execute(
             select(WeakPoint)
