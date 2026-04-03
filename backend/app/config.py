@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8",
+        extra="ignore",
     )
 
     database_url: str = "postgresql+asyncpg://quiz:quiz@localhost:5432/quizmanager"
