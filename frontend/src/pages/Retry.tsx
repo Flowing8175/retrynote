@@ -80,19 +80,19 @@ export default function Retry() {
         <div className="space-y-8">
 
           {/* 개념 선택 현황 + 자동 체크박스 */}
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1">
               {hasSelectedConcepts ? (
                 <div>
-                  <div className="mb-3 text-sm text-content-secondary">
+                  <div className="mb-4 text-base text-content-secondary">
                     선택된 오답노트{' '}
-                    <span className="font-semibold text-content-primary">{selectedCount}건</span>
+                    <span className="text-xl font-bold text-content-primary">{selectedCount}건</span>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {selectedConceptKeys.map((key) => (
                       <span
                         key={key}
-                        className="rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-sm text-brand-300"
+                        className="rounded-full border border-brand-500/20 bg-brand-500/10 px-4 py-1.5 text-base text-brand-300"
                       >
                         {selectedConceptLabels[key] || key}
                       </span>
@@ -100,9 +100,9 @@ export default function Retry() {
                   </div>
                 </div>
               ) : (
-                <div className="text-sm text-content-secondary">
+                <div className="text-base text-content-secondary">
                   오답노트 전체{' '}
-                  <span className="font-semibold text-content-primary">
+                  <span className="text-xl font-bold text-content-primary">
                     {wrongNotesTotal !== undefined ? `${wrongNotesTotal}건` : '?건'}
                   </span>{' '}
                   기준
@@ -110,7 +110,7 @@ export default function Retry() {
               )}
             </div>
 
-            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-2.5 text-sm text-content-primary transition-colors hover:bg-surface-hover">
+            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-white/[0.07] bg-surface-deep px-5 py-3 text-base text-content-primary transition-colors hover:bg-surface-hover">
               <input
                 type="checkbox"
                 checked={autoMode}
@@ -118,15 +118,15 @@ export default function Retry() {
                 className="h-4 w-4 accent-brand-500"
               />
               자동
-              <span className="text-xs text-content-muted">(AI 추천 기준)</span>
+              <span className="text-sm text-content-muted">(AI 추천 기준)</span>
             </label>
           </div>
 
           {/* 문제 수 정하기 */}
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">문제 수 정하기</p>
-            <div className="mt-4 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
-              <label htmlFor="retry-question-count" className="text-sm font-medium text-content-primary">
+            <div className="mt-4 rounded-2xl border border-white/[0.07] bg-surface-deep px-6 py-6">
+              <label htmlFor="retry-question-count" className="text-base font-semibold text-content-primary">
                 문제 수
               </label>
               <input
@@ -137,16 +137,16 @@ export default function Retry() {
                 value={questionCount}
                 disabled={autoCount}
                 onChange={(e) => handleQuestionCountChange(e.target.value)}
-                className={`mt-3 w-32 rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-3 text-base text-content-primary focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-opacity ${autoCount ? 'opacity-30 cursor-not-allowed' : ''}`}
+                className={`mt-3 w-36 rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-3 text-lg text-content-primary focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-opacity ${autoCount ? 'opacity-30 cursor-not-allowed' : ''}`}
               />
-              <div className="mt-4 flex flex-wrap gap-2">
+              <div className="mt-5 flex flex-wrap gap-3">
                 {QUESTION_COUNT_PRESETS.map((preset) => (
                   <button
                     key={preset}
                     type="button"
                     disabled={autoCount}
                     onClick={() => setQuestionCount(preset)}
-                    className={`rounded-full px-4 py-2 text-sm transition-colors ${
+                    className={`rounded-full px-5 py-2.5 text-base font-medium transition-colors ${
                       autoCount
                         ? 'bg-surface text-content-muted opacity-30 cursor-not-allowed'
                         : questionCount === preset
@@ -160,7 +160,7 @@ export default function Retry() {
                 <button
                   type="button"
                   onClick={() => setAutoCount((prev) => !prev)}
-                  className={`rounded-full px-4 py-2 text-sm transition-colors ${
+                  className={`rounded-full px-5 py-2.5 text-base font-medium transition-colors ${
                     autoCount
                       ? 'bg-brand-500/15 text-brand-300 ring-1 ring-brand-500/30'
                       : 'bg-surface text-content-secondary hover:bg-surface-hover'
@@ -170,7 +170,7 @@ export default function Retry() {
                 </button>
               </div>
               {autoCount && (
-                <p className="mt-3 text-xs text-content-muted leading-relaxed">
+                <p className="mt-4 text-sm text-content-muted leading-relaxed">
                   틀린 개념의 수와 오답 패턴을 고려해 AI가 적합한 문제 수를 결정합니다.
                 </p>
               )}
