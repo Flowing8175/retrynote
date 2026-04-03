@@ -121,7 +121,7 @@ async def upload_file(
                 break
             total_size += len(chunk)
             if total_size > max_size:
-                raise HTTPException(status_code=400, detail="File too large")
+                raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {settings.max_upload_size_mb}MB.")
             chunks.append(chunk)
         content = b"".join(chunks)
         file_size = total_size

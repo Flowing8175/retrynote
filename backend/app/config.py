@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     openai_fallback_grading_model: str = "gpt-4.1-mini"
 
     upload_dir: str = "./storage/uploads"
-    max_upload_size_mb: int = 100
+    max_upload_size_mb: int = 5
     allowed_file_types: str = "pdf,docx,pptx,txt,md,png,jpg,jpeg"
 
     app_url: str = "http://localhost:5173"
