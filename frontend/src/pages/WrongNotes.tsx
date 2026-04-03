@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { wrongNotesApi } from '@/api';
 import { EmptyState, LoadingSpinner, Pagination, StatusBadge } from '@/components';
+import type { WrongNoteItem } from '@/types';
 
 function formatQuestionType(type: string) {
   switch (type) {
@@ -44,11 +45,24 @@ function formatErrorType(type: string) {
   }
 }
 
+function resolveAnswer(
+  answer: string | null,
+  options: Record<string, unknown> | null,
+  questionType: string
+): string {
+  if (!answer) return '없음';
+  if (questionType !== 'multiple_choice' || !options) return answer;
+  const optionText = options[answer];
+  if (typeof optionText === 'string') return `${answer.toUpperCase()}. ${optionText}`;
+  return answer;
+}
+
 export default function WrongNotes() {
   const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState('concept');
   const [judgementFilter, setJudgementFilter] = useState<string[]>([]);
+  const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery({
     queryKey: ['wrongNotes', page, sort, judgementFilter],
@@ -63,9 +77,42 @@ export default function WrongNotes() {
       ),
   });
 
-  const handleRetry = () => {
-    navigate('/retry');
+  const handleNoteToggle = (noteId: string) => {
+    setSelectedNoteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(noteId)) {
+        next.delete(noteId);
+      } else {
+        next.add(noteId);
+      }
+      return next;
+    });
   };
+
+  const handleRetry = () => {
+    if (selectedNoteIds.size === 0) {
+      navigate('/retry');
+      return;
+    }
+
+    const selectedNotes = (data?.items ?? []).filter((item) => selectedNoteIds.has(item.id));
+    const conceptMap = new Map<string, string>();
+    for (const note of selectedNotes) {
+      if (note.concept_key) {
+        conceptMap.set(note.concept_key, note.concept_label || note.concept_key);
+      }
+    }
+
+    navigate('/retry', {
+      state: {
+        conceptKeys: Array.from(conceptMap.keys()),
+        conceptLabels: Object.fromEntries(conceptMap.entries()),
+        selectedCount: selectedNoteIds.size,
+      },
+    });
+  };
+
+  const selectedCount = selectedNoteIds.size;
 
   if (isLoading) {
     return <LoadingSpinner message="오답 기록 불러오는 중" />;
@@ -120,18 +167,33 @@ export default function WrongNotes() {
         />
       ) : (
         <div className="space-y-4">
-          {data.items.map((item) => (
-            <article key={item.id} className="rounded-2xl border border-white/[0.07] bg-surface px-6 py-6">
+          {data.items.map((item: WrongNoteItem) => (
+            <article
+              key={item.id}
+              className={`rounded-2xl border bg-surface px-6 py-6 transition-colors ${
+                selectedNoteIds.has(item.id)
+                  ? 'border-brand-500/30 bg-brand-500/5'
+                  : 'border-white/[0.07]'
+              }`}
+            >
               <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-content-secondary">
-                    <span className="rounded-full border border-white/[0.07] bg-surface-deep px-3 py-1">
-                      {formatQuestionType(item.question_type)}
-                    </span>
-                    <span>{item.concept_label || '개념 분류 없음'}</span>
-                  </div>
-                  <div className="mt-3 text-xl font-semibold leading-8 text-content-primary">
-                    {item.question_text}
+                <div className="flex flex-1 items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={selectedNoteIds.has(item.id)}
+                    onChange={() => handleNoteToggle(item.id)}
+                    className="mt-1.5 h-4 w-4 shrink-0 accent-brand-500"
+                  />
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-2 text-xs text-content-secondary">
+                      <span className="rounded-full border border-white/[0.07] bg-surface-deep px-3 py-1">
+                        {formatQuestionType(item.question_type)}
+                      </span>
+                      <span>{item.concept_label || '개념 분류 없음'}</span>
+                    </div>
+                    <div className="mt-3 text-xl font-semibold leading-8 text-content-primary">
+                      {item.question_text}
+                    </div>
                   </div>
                 </div>
                 <StatusBadge status={item.judgement} />
@@ -140,13 +202,19 @@ export default function WrongNotes() {
                 <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-4 text-sm leading-7">
                   <span className="text-content-secondary">내 답: </span>
                   <span className="font-medium text-content-primary">
-                    {item.user_answer_raw || '없음'}
+                    {resolveAnswer(item.user_answer_raw, item.options as Record<string, unknown> | null, item.question_type)}
                   </span>
                 </div>
                 <div className="rounded-2xl border border-semantic-success-border bg-semantic-success-bg px-4 py-4 text-sm leading-7">
                   <span className="text-content-secondary">정답: </span>
                   <span className="font-medium text-semantic-success">
-                    {item.correct_answer?.answer ? String(item.correct_answer.answer) : '-'}
+                    {item.correct_answer?.answer != null
+                      ? resolveAnswer(
+                          String(item.correct_answer.answer),
+                          item.options as Record<string, unknown> | null,
+                          item.question_type
+                        )
+                      : '-'}
                   </span>
                 </div>
               </div>
@@ -164,15 +232,6 @@ export default function WrongNotes() {
                   </div>
                 )}
               </div>
-
-              <div className="mt-5">
-                <button
-                  onClick={handleRetry}
-                  className="inline-flex items-center justify-center rounded-xl border border-brand-500/20 bg-brand-500/10 px-4 py-2.5 text-sm font-medium text-brand-300 transition-colors hover:bg-brand-500/10 hover:text-brand-300"
-                >
-                  이 개념으로 재도전
-                </button>
-              </div>
             </article>
           ))}
 
@@ -183,6 +242,30 @@ export default function WrongNotes() {
               onPageChange={setPage}
             />
           )}
+        </div>
+      )}
+
+      {selectedCount > 0 && (
+        <div className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-3xl flex-col items-stretch gap-3 rounded-2xl border border-white/[0.07] bg-surface px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-content-primary">
+            <span className="font-semibold">{selectedCount}개</span> 선택됨
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedNoteIds(new Set())}
+              className="rounded-xl border border-white/[0.07] px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover"
+            >
+              선택 해제
+            </button>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600"
+            >
+              재도전
+            </button>
+          </div>
         </div>
       )}
     </div>

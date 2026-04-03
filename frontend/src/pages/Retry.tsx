@@ -1,14 +1,33 @@
 import { useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { retryApi, wrongNotesApi } from '@/api';
 
-const sizePresets = [5, 8, 12];
+const QUESTION_COUNT_PRESETS = [5, 10, 15];
+
+interface RetryLocationState {
+  conceptKeys: string[];
+  conceptLabels: Record<string, string>;
+  selectedCount: number;
+}
 
 export default function Retry() {
   const navigate = useNavigate();
-  const [source, setSource] = useState<'wrong_notes' | 'dashboard_recommendation'>('wrong_notes');
-  const [size, setSize] = useState(5);
+  const location = useLocation();
+  const locationState = location.state as RetryLocationState | null;
+
+  const hasSelectedConcepts =
+    locationState != null &&
+    Array.isArray(locationState.conceptKeys) &&
+    locationState.conceptKeys.length > 0;
+
+  const selectedConceptKeys = hasSelectedConcepts ? locationState!.conceptKeys : [];
+  const selectedConceptLabels = hasSelectedConcepts ? locationState!.conceptLabels : {};
+  const selectedCount = hasSelectedConcepts ? locationState!.selectedCount : 0;
+
+  const [autoMode, setAutoMode] = useState(false);
+  const [questionCount, setQuestionCount] = useState(5);
+  const [autoCount, setAutoCount] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const { data: wrongNotesData } = useQuery({
@@ -16,13 +35,22 @@ export default function Retry() {
     queryFn: () => wrongNotesApi.listWrongNotes('date', undefined, undefined, undefined, undefined, 1),
   });
 
+  const wrongNotesTotal = wrongNotesData?.total;
+
   const createRetryMutation = useMutation({
-    mutationFn: () =>
-      retryApi.createRetrySet({
+    mutationFn: () => {
+      const source = autoMode
+        ? 'dashboard_recommendation'
+        : hasSelectedConcepts
+          ? 'concept_manual'
+          : 'wrong_notes';
+
+      return retryApi.createRetrySet({
         source,
-        concept_keys: null,
-        size,
-      }),
+        concept_keys: !autoMode && hasSelectedConcepts ? selectedConceptKeys : null,
+        size: autoCount ? null : Math.max(1, Math.min(questionCount, 20)),
+      });
+    },
     onSuccess: (response) => {
       navigate(`/quiz/${response.quiz_session_id}`);
     },
@@ -32,8 +60,10 @@ export default function Retry() {
     },
   });
 
-  const wrongNotesTotal = wrongNotesData?.total;
-  const hasNoWrongNotes = wrongNotesTotal === 0;
+  const handleQuestionCountChange = (value: string) => {
+    const parsed = Number.parseInt(value, 10);
+    setQuestionCount(Number.isNaN(parsed) ? 1 : parsed);
+  };
 
   return (
     <div className="space-y-8">
@@ -48,72 +78,102 @@ export default function Retry() {
 
       <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-7 md:px-8">
         <div className="space-y-8">
-          <div className="text-sm text-content-secondary">
-            오답노트{' '}
-            <span className="font-semibold text-content-primary">
-              {wrongNotesTotal !== undefined ? `${wrongNotesTotal}건` : '?건'}
-            </span>{' '}
-            기준 · 최근 기록부터
-          </div>
 
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">1. 복습 기준 고르기</p>
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setSource('wrong_notes')}
-                disabled={hasNoWrongNotes}
-                className={`relative rounded-2xl border px-5 py-5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
-                  source === 'wrong_notes'
-                    ? 'border-brand-500/25 bg-brand-500/10'
-                    : 'border-white/[0.07] bg-surface-deep hover:bg-surface-hover'
-                }`}
-              >
-                {source === 'wrong_notes' && (
-                  <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-[10px] text-white">✓</span>
-                )}
-                <div className="text-lg font-semibold text-content-primary">오답노트 기준</div>
-                <p className="mt-1 text-sm leading-6 text-content-secondary">내가 틀린 문제를 바탕으로 유사 문제를 다시 출제합니다.</p>
-                {hasNoWrongNotes && (
-                  <p className="mt-3 text-xs leading-5 text-content-muted">아직 오답 기록이 없습니다. 퀴즈를 풀고 나서 재도전하세요.</p>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setSource('dashboard_recommendation')}
-                className={`relative rounded-2xl border px-5 py-5 text-left transition-colors ${
-                  source === 'dashboard_recommendation'
-                    ? 'border-brand-500/25 bg-brand-500/10'
-                    : 'border-white/[0.07] bg-surface-deep hover:bg-surface-hover'
-                }`}
-              >
-                {source === 'dashboard_recommendation' && (
-                  <span className="absolute top-3 right-3 flex h-5 w-5 items-center justify-center rounded-full bg-brand-500 text-[10px] text-white">✓</span>
-                )}
-                <div className="text-lg font-semibold text-content-primary">대시보드 추천 기준</div>
-                <p className="mt-1 text-sm leading-6 text-content-secondary">반복 오답 패턴을 분석해 AI가 추천한 문제입니다.</p>
-              </button>
+          {/* 개념 선택 현황 + 자동 체크박스 */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex-1">
+              {hasSelectedConcepts ? (
+                <div>
+                  <div className="mb-3 text-sm text-content-secondary">
+                    선택된 오답노트{' '}
+                    <span className="font-semibold text-content-primary">{selectedCount}건</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedConceptKeys.map((key) => (
+                      <span
+                        key={key}
+                        className="rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-sm text-brand-300"
+                      >
+                        {selectedConceptLabels[key] || key}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="text-sm text-content-secondary">
+                  오답노트 전체{' '}
+                  <span className="font-semibold text-content-primary">
+                    {wrongNotesTotal !== undefined ? `${wrongNotesTotal}건` : '?건'}
+                  </span>{' '}
+                  기준
+                </div>
+              )}
             </div>
+
+            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-2.5 text-sm text-content-primary transition-colors hover:bg-surface-hover">
+              <input
+                type="checkbox"
+                checked={autoMode}
+                onChange={(e) => setAutoMode(e.target.checked)}
+                className="h-4 w-4 accent-brand-500"
+              />
+              자동
+              <span className="text-xs text-content-muted">(AI 추천 기준)</span>
+            </label>
           </div>
 
+          {/* 문제 수 정하기 */}
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">2. 세트 크기 정하기</p>
-            <div className="mt-4 flex flex-wrap gap-3">
-              {sizePresets.map((preset) => (
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">문제 수 정하기</p>
+            <div className="mt-4 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
+              <label htmlFor="retry-question-count" className="text-sm font-medium text-content-primary">
+                문제 수
+              </label>
+              <input
+                id="retry-question-count"
+                type="number"
+                min={1}
+                max={20}
+                value={questionCount}
+                disabled={autoCount}
+                onChange={(e) => handleQuestionCountChange(e.target.value)}
+                className={`mt-3 w-32 rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-3 text-base text-content-primary focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-opacity ${autoCount ? 'opacity-30 cursor-not-allowed' : ''}`}
+              />
+              <div className="mt-4 flex flex-wrap gap-2">
+                {QUESTION_COUNT_PRESETS.map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    disabled={autoCount}
+                    onClick={() => setQuestionCount(preset)}
+                    className={`rounded-full px-4 py-2 text-sm transition-colors ${
+                      autoCount
+                        ? 'bg-surface text-content-muted opacity-30 cursor-not-allowed'
+                        : questionCount === preset
+                          ? 'bg-brand-500/15 text-brand-300'
+                          : 'bg-surface text-content-secondary hover:bg-surface-hover'
+                    }`}
+                  >
+                    {preset}문제
+                  </button>
+                ))}
                 <button
-                  key={preset}
                   type="button"
-                  onClick={() => setSize(preset)}
-                  className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                    size === preset
-                      ? 'border-brand-500 bg-brand-500 text-content-inverse'
-                      : 'border-white/[0.07] bg-surface-deep text-content-primary hover:bg-surface-hover'
+                  onClick={() => setAutoCount((prev) => !prev)}
+                  className={`rounded-full px-4 py-2 text-sm transition-colors ${
+                    autoCount
+                      ? 'bg-brand-500/15 text-brand-300 ring-1 ring-brand-500/30'
+                      : 'bg-surface text-content-secondary hover:bg-surface-hover'
                   }`}
                 >
-                  {preset}문제
+                  자동
                 </button>
-              ))}
+              </div>
+              {autoCount && (
+                <p className="mt-3 text-xs text-content-muted leading-relaxed">
+                  틀린 개념의 수와 오답 패턴을 고려해 AI가 적합한 문제 수를 결정합니다.
+                </p>
+              )}
             </div>
           </div>
 

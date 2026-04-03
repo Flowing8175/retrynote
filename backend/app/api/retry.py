@@ -81,12 +81,14 @@ async def create_retry_set(
     if not concept_keys:
         raise HTTPException(status_code=400, detail="No weak concepts found for retry")
 
+    effective_size = req.size if req.size is not None else 10
+
     session = QuizSession(
         user_id=user.id,
         mode=QuizMode.normal,
         source_mode=SourceMode.document_based,
         status=QuizSessionStatus.draft,
-        question_count=req.size,
+        question_count=effective_size,
         generation_priority="retry",
     )
     db.add(session)
@@ -100,7 +102,7 @@ async def create_retry_set(
         target_id=session.id,
         payload_json={
             "concept_keys": concept_keys,
-            "size": req.size,
+            "size": effective_size,
             "source": req.source,
         },
     )
