@@ -481,36 +481,36 @@ export default function QuizTake() {
         {/* Question */}
         <div className="mb-6">
           <h2 className="text-xl font-medium text-content-primary mb-4">
-            {String(activeItem.question_text)}
+            {activeItem.question_text}
           </h2>
 
           {/* Options for multiple choice / OX */}
           {activeItem.question_type === 'multiple_choice' && activeItem.options != null && (
             <div className="space-y-3">
-              {Object.values(activeItem.options as Record<string, string>).map((option, index) => (
+              {Object.entries(activeItem.options as Record<string, string>).map(([key, text]) => (
                 <label
-                  key={index}
+                  key={key}
                   className={`flex items-center rounded-2xl border px-5 py-4 transition-colors ${
-                    isSubmitted && answerResult && userAnswer === option
+                    isSubmitted && answerResult && userAnswer === key
                       ? answerResult.judgement === 'correct'
                         ? 'border-semantic-success-border bg-semantic-success-bg text-content-primary'
                         : answerResult.judgement === 'partial'
                         ? 'border-semantic-warning-border bg-semantic-warning-bg text-content-primary'
                         : 'border-semantic-error-border bg-semantic-error-bg text-content-primary'
-                      : userAnswer === option
+                      : userAnswer === key
                       ? 'border-brand-500/30 bg-brand-500/10 text-brand-300'
                       : 'border-white/[0.07] bg-surface-deep text-content-primary hover:bg-surface-hover hover:border-white/[0.14]'
                    } ${isSubmitted || isAnyMutationPending ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
                 >
                   <input
                     type="radio"
-                    value={option}
-                    checked={userAnswer === option}
+                    value={key}
+                    checked={userAnswer === key}
                     onChange={(e) => handleAnswerChange(e.target.value)}
                     disabled={isSubmitted || isAnyMutationPending}
                     className="mr-3 h-4 w-4 shrink-0 accent-brand-500"
                   />
-                  <span>{option}</span>
+                  <span>{text}</span>
                 </label>
               ))}
             </div>
@@ -621,18 +621,18 @@ export default function QuizTake() {
                  : '오답'}
              </div>
              <div className="mt-2 text-sm text-content-secondary">
-               점수: {String(answerResult.score_awarded)} / {String(answerResult.max_score)}
+               점수: {answerResult.score_awarded} / {answerResult.max_score}
              </div>
              {answerResult.grading_rationale && (
                <div className="text-sm text-content-secondary mt-2">
-                 {String(answerResult.grading_rationale)}
+                  {answerResult.grading_rationale}
                </div>
              )}
              {answerResult.explanation && (
                <div className="mt-4 pt-4 border-t border-white/10">
                  <div className="text-xs font-semibold uppercase tracking-wider text-content-muted mb-2">해설</div>
                  <div className="text-sm text-content-secondary whitespace-pre-wrap">
-                   {String(answerResult.explanation)}
+                    {answerResult.explanation}
                  </div>
                </div>
              )}
@@ -640,7 +640,7 @@ export default function QuizTake() {
                <div className="mt-3 pt-3 border-t border-white/10">
                  <div className="text-xs font-semibold uppercase tracking-wider text-content-muted mb-2">팁</div>
                  <div className="text-sm text-content-secondary whitespace-pre-wrap">
-                   {String(answerResult.tips)}
+                    {answerResult.tips}
                  </div>
                </div>
              )}

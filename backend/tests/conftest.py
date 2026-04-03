@@ -436,7 +436,13 @@ MOCK_OBJECTION_REJECTED_RESULT = {
 }
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(autouse=True)
+async def mock_dispatch_task():
+    with patch("app.workers.celery_app.dispatch_task", new_callable=AsyncMock) as mock:
+        yield mock
+
+
+@pytest.fixture
 def mock_ai_generation():
     with patch(
         "app.utils.ai_client.call_ai_with_fallback", new_callable=AsyncMock
@@ -445,7 +451,7 @@ def mock_ai_generation():
         yield mock
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def mock_ai_grading_correct():
     with patch(
         "app.utils.ai_client.call_ai_with_fallback", new_callable=AsyncMock
@@ -454,7 +460,7 @@ def mock_ai_grading_correct():
         yield mock
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def mock_ai_grading_incorrect():
     with patch(
         "app.utils.ai_client.call_ai_with_fallback", new_callable=AsyncMock
@@ -463,7 +469,7 @@ def mock_ai_grading_incorrect():
         yield mock
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def mock_ai_grading_partial():
     with patch(
         "app.utils.ai_client.call_ai_with_fallback", new_callable=AsyncMock
@@ -472,7 +478,7 @@ def mock_ai_grading_partial():
         yield mock
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def mock_ai_objection_upheld():
     with patch(
         "app.utils.ai_client.call_ai_with_fallback", new_callable=AsyncMock
@@ -481,7 +487,7 @@ def mock_ai_objection_upheld():
         yield mock
 
 
-@pytest_asyncio.fixture
+@pytest.fixture
 def mock_ai_objection_rejected():
     with patch(
         "app.utils.ai_client.call_ai_with_fallback", new_callable=AsyncMock

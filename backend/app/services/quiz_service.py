@@ -578,6 +578,7 @@ async def grade_exam(job_id: str):
                 draft = draft_result.scalar_one_or_none()
 
                 user_answer = draft.user_answer if draft else ""
+                normalized = normalize_answer(user_answer) if user_answer else ""
                 if not user_answer:
                     judgement = Judgement.skipped
                     score_awarded = 0.0
@@ -589,15 +590,13 @@ async def grade_exam(job_id: str):
                     )
                     from app.config import settings as cfg
 
-                    normalized = normalize_answer(user_answer)
-
                     if item.question_type in (
                         QuestionType.multiple_choice,
                         QuestionType.ox,
                     ):
                         correct = item.correct_answer_json or {}
-                        correct_val = str(correct.get("answer", "")).strip().lower()
-                        if normalized.lower() == correct_val:
+                        correct_val = normalize_answer(str(correct.get("answer", "")))
+                        if normalized == correct_val:
                             judgement = Judgement.correct
                             score_awarded = 1.0
                             error_type = None
@@ -652,9 +651,7 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
                     quiz_session_id=session.id,
                     user_id=session.user_id,
                     user_answer_raw=user_answer,
-                    user_answer_normalized=normalize_answer(user_answer)
-                    if user_answer
-                    else "",
+                    user_answer_normalized=normalized if user_answer else "",
                     judgement=judgement,
                     score_awarded=score_awarded,
                     max_score=1.0,

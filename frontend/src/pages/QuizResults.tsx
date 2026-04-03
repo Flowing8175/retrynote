@@ -227,7 +227,7 @@ export default function QuizResults() {
 
   const objectionCandidates = useMemo(() => {
     if (!quizItems || !wrongNotes?.items) {
-      return [] as Array<{ item: QuizItemResponse; note: WrongNoteItem }>;
+      return [];
     }
 
     const noteMap = new Map<string, WrongNoteItem>();
@@ -240,7 +240,7 @@ export default function QuizResults() {
 
     return quizItems
       .map((item) => {
-        const note = noteMap.get(buildObjectionKey(item as Pick<WrongNoteItem, 'question_text' | 'question_type' | 'concept_label' | 'category_tag'>));
+        const note = noteMap.get(buildObjectionKey(item));
         return note ? { item, note } : null;
       })
       .filter((value): value is { item: QuizItemResponse; note: WrongNoteItem } => Boolean(value));
