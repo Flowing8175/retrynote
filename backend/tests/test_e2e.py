@@ -20,7 +20,7 @@ from app.models.objection import Objection, ObjectionStatus, WeakPoint
 from app.models.admin import AdminAuditLog
 from app.models.search import ImpersonationSession, Job
 from app.models.user import UserRole
-from app.middleware.auth import hash_password, create_access_token
+from app.middleware.auth import hash_password, create_access_token, create_admin_token
 from .conftest import make_quiz_items
 
 
@@ -650,7 +650,11 @@ class TestE2EScenario5AdminImpersonation:
         await db_session.refresh(admin_user)
 
         admin_token = create_access_token(admin_user.id, admin_user.role.value)
-        admin_headers = {"Authorization": f"Bearer {admin_token}"}
+        admin_jwt = create_admin_token(admin_user.id)
+        admin_headers = {
+            "Authorization": f"Bearer {admin_token}",
+            "X-Admin-Token": admin_jwt,
+        }
 
         # Step 1: Admin login & verify master password
         verify_resp = await client.post(

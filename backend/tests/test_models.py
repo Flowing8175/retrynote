@@ -155,7 +155,7 @@ class TestFileModel:
 
 class TestQuizModels:
     async def test_create_quiz_session_defaults(self, db_session, test_user):
-        """status=draft, question_count=5"""
+        """status=draft, question_count defaults to None"""
         session = QuizSession(
             id=str(uuid.uuid4()),
             user_id=test_user.id,
@@ -166,7 +166,7 @@ class TestQuizModels:
         await db_session.commit()
         await db_session.refresh(session)
         assert session.status == QuizSessionStatus.draft
-        assert session.question_count == 5
+        assert session.question_count is None
 
     async def test_quiz_mode_enum(self, db_session, test_user):
         """normal, exam"""
@@ -566,6 +566,7 @@ class TestSearchModels:
         token = PasswordResetToken(
             id=str(uuid.uuid4()),
             user_id=str(uuid.uuid4()),
+            selector="abcdef1234567890",
             token_hash="fake_hash",
             expires_at=expires,
         )

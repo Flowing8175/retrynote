@@ -685,9 +685,9 @@ class TestRegressionAdminImpersonationAuditLogging:
     """Every action in impersonation mode creates admin_audit_log entry."""
 
     async def test_impersonation_start_creates_audit_log(
-        self, admin_client: AsyncClient, db_session, test_user
+        self, verified_admin_client: AsyncClient, db_session, test_user
     ):
-        resp = await admin_client.post(
+        resp = await verified_admin_client.post(
             "/admin/impersonation/start",
             json={
                 "target_user_id": test_user.id,
@@ -710,9 +710,9 @@ class TestRegressionAdminImpersonationAuditLogging:
         assert log.reason == "Testing audit log creation"
 
     async def test_impersonation_end_creates_audit_log(
-        self, admin_client: AsyncClient, db_session, admin_user, test_user
+        self, verified_admin_client: AsyncClient, db_session, admin_user, test_user
     ):
-        imp_resp = await admin_client.post(
+        imp_resp = await verified_admin_client.post(
             "/admin/impersonation/start",
             json={
                 "target_user_id": test_user.id,
@@ -721,7 +721,7 @@ class TestRegressionAdminImpersonationAuditLogging:
         )
         imp_id = imp_resp.json()["impersonation_id"]
 
-        end_resp = await admin_client.post(
+        end_resp = await verified_admin_client.post(
             f"/admin/impersonation/{imp_id}/end",
         )
         assert end_resp.status_code == 200
@@ -737,7 +737,7 @@ class TestRegressionAdminImpersonationAuditLogging:
         assert len(audit_logs) >= 1
 
     async def test_regrade_creates_audit_log(
-        self, admin_client: AsyncClient, db_session, test_user
+        self, verified_admin_client: AsyncClient, db_session, test_user
     ):
         session = QuizSession(
             id=str(uuid.uuid4()),
@@ -761,7 +761,7 @@ class TestRegressionAdminImpersonationAuditLogging:
         await db_session.commit()
         await db_session.refresh(item)
 
-        resp = await admin_client.post(
+        resp = await verified_admin_client.post(
             f"/admin/quiz-items/{item.id}/regrade",
             json={"reason": "Testing regrade audit"},
         )
@@ -782,9 +782,9 @@ class TestRegressionAdminImpersonationAuditLogging:
         assert log.reason == "Testing regrade audit"
 
     async def test_list_users_creates_audit_log(
-        self, admin_client: AsyncClient, db_session, admin_user
+        self, verified_admin_client: AsyncClient, db_session, admin_user
     ):
-        await admin_client.get("/admin/users")
+        await verified_admin_client.get("/admin/users")
 
         from sqlalchemy import select
 
@@ -794,9 +794,9 @@ class TestRegressionAdminImpersonationAuditLogging:
         assert len(logs.scalars().all()) >= 1
 
     async def test_audit_log_has_required_fields(
-        self, admin_client: AsyncClient, db_session, admin_user, test_user
+        self, verified_admin_client: AsyncClient, db_session, admin_user, test_user
     ):
-        await admin_client.post(
+        await verified_admin_client.post(
             "/admin/impersonation/start",
             json={
                 "target_user_id": test_user.id,
@@ -820,9 +820,9 @@ class TestRegressionAdminImpersonationAuditLogging:
         assert log.created_at is not None
 
     async def test_model_settings_update_creates_audit_log(
-        self, super_admin_client: AsyncClient, db_session, super_admin_user
+        self, verified_super_admin_client: AsyncClient, db_session, super_admin_user
     ):
-        resp = await super_admin_client.post(
+        resp = await verified_super_admin_client.post(
             "/admin/settings/models",
             json={
                 "active_generation_model": "gpt-4o-mini",
@@ -840,10 +840,10 @@ class TestRegressionAdminImpersonationAuditLogging:
         assert len(logs.scalars().all()) >= 1
 
     async def test_full_audit_trail(
-        self, admin_client: AsyncClient, db_session, admin_user, test_user
+        self, verified_admin_client: AsyncClient, db_session, admin_user, test_user
     ):
         # Start impersonation
-        imp_resp = await admin_client.post(
+        imp_resp = await verified_admin_client.post(
             "/admin/impersonation/start",
             json={
                 "target_user_id": test_user.id,
@@ -853,13 +853,13 @@ class TestRegressionAdminImpersonationAuditLogging:
         imp_id = imp_resp.json()["impersonation_id"]
 
         # List users
-        await admin_client.get("/admin/users")
+        await verified_admin_client.get("/admin/users")
 
         # End impersonation
-        await admin_client.post(f"/admin/impersonation/{imp_id}/end")
+        await verified_admin_client.post(f"/admin/impersonation/{imp_id}/end")
 
         # Check audit logs
-        resp = await admin_client.get("/admin/audit-logs")
+        resp = await verified_admin_client.get("/admin/audit-logs")
         assert resp.status_code == 200
         logs = resp.json()["logs"]
 

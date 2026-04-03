@@ -145,6 +145,22 @@ async def admin_client(client, admin_token):
 
 
 @pytest_asyncio.fixture
+async def verified_admin_client(client, admin_user, admin_token):
+    admin_jwt = create_admin_token(admin_user.id)
+    client.headers["Authorization"] = f"Bearer {admin_token}"
+    client.headers["X-Admin-Token"] = admin_jwt
+    return client
+
+
+@pytest_asyncio.fixture
+async def verified_super_admin_client(client, super_admin_user, super_admin_token):
+    admin_jwt = create_admin_token(super_admin_user.id)
+    client.headers["Authorization"] = f"Bearer {super_admin_token}"
+    client.headers["X-Admin-Token"] = admin_jwt
+    return client
+
+
+@pytest_asyncio.fixture
 async def super_admin_user(db_session):
     user = User(
         id=str(uuid.uuid4()),
@@ -438,7 +454,15 @@ MOCK_OBJECTION_REJECTED_RESULT = {
 
 @pytest_asyncio.fixture(autouse=True)
 async def mock_dispatch_task():
-    with patch("app.workers.celery_app.dispatch_task", new_callable=AsyncMock) as mock:
+    mock = AsyncMock()
+    with (
+        patch("app.workers.celery_app.dispatch_task", mock),
+        patch("app.api.files.dispatch_task", mock),
+        patch("app.api.quiz.dispatch_task", mock),
+        patch("app.api.objections.dispatch_task", mock),
+        patch("app.api.retry.dispatch_task", mock),
+        patch("app.api.admin.dispatch_task", mock),
+    ):
         yield mock
 
 

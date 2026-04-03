@@ -38,7 +38,7 @@ class TestVerifyMasterPassword:
         # Create AdminSettings with a different password
         admin_settings = AdminSettings(
             id=str(uuid.uuid4()),
-            updated_by=hash_password("CorrectPassword123!"),
+            master_password_hash=hash_password("CorrectPassword123!"),
         )
         db_session.add(admin_settings)
         await db_session.commit()
@@ -219,10 +219,10 @@ class TestModelUsage:
 
 class TestImpersonation:
     async def test_start_impersonation(
-        self, db_session, admin_client: AsyncClient, test_user
+        self, db_session, verified_admin_client: AsyncClient, test_user
     ):
         """admin POSTs start with target_user_id and reason → 200"""
-        resp = await admin_client.post(
+        resp = await verified_admin_client.post(
             "/admin/impersonation/start",
             json={
                 "target_user_id": test_user.id,
@@ -236,10 +236,10 @@ class TestImpersonation:
         assert data["target_username"] == test_user.username
 
     async def test_start_impersonation_nonexistent_user(
-        self, admin_client: AsyncClient
+        self, verified_admin_client: AsyncClient
     ):
         """target_user_id doesn't exist → 404"""
-        resp = await admin_client.post(
+        resp = await verified_admin_client.post(
             "/admin/impersonation/start",
             json={
                 "target_user_id": str(uuid.uuid4()),
@@ -249,7 +249,7 @@ class TestImpersonation:
         assert resp.status_code == 404
 
     async def test_end_impersonation(
-        self, db_session, admin_client: AsyncClient, admin_user, test_user
+        self, db_session, verified_admin_client: AsyncClient, admin_user, test_user
     ):
         """Start then end → 200"""
         # Create impersonation session
@@ -263,7 +263,9 @@ class TestImpersonation:
         db_session.add(imp_session)
         await db_session.commit()
 
-        resp = await admin_client.post(f"/admin/impersonation/{imp_session.id}/end")
+        resp = await verified_admin_client.post(
+            f"/admin/impersonation/{imp_session.id}/end"
+        )
         assert resp.status_code == 200
         assert resp.json()["status"] == "success"
 
@@ -272,9 +274,11 @@ class TestImpersonation:
         assert imp_session.is_active is False
         assert imp_session.ended_at is not None
 
-    async def test_end_nonexistent_session(self, admin_client: AsyncClient):
+    async def test_end_nonexistent_session(self, verified_admin_client: AsyncClient):
         """End fake session → 404"""
-        resp = await admin_client.post(f"/admin/impersonation/{str(uuid.uuid4())}/end")
+        resp = await verified_admin_client.post(
+            f"/admin/impersonation/{str(uuid.uuid4())}/end"
+        )
         assert resp.status_code == 404
 
     async def test_end_wrong_admin(
@@ -327,13 +331,13 @@ class TestImpersonation:
 
 class TestRegrade:
     async def test_regrade_item(
-        self, db_session, admin_client: AsyncClient, quiz_session_ready
+        self, db_session, verified_admin_client: AsyncClient, quiz_session_ready
     ):
         """admin POSTs regrade with item_id and reason → 200, regrade_job_id"""
         session, items = quiz_session_ready
         item = items[0]
 
-        resp = await admin_client.post(
+        resp = await verified_admin_client.post(
             f"/admin/quiz-items/{item.id}/regrade",
             json={"reason": "Testing regrade for incorrect grading"},
         )
@@ -341,9 +345,9 @@ class TestRegrade:
         data = resp.json()
         assert "regrade_job_id" in data
 
-    async def test_regrade_nonexistent_item(self, admin_client: AsyncClient):
+    async def test_regrade_nonexistent_item(self, verified_admin_client: AsyncClient):
         """fake item_id → 404"""
-        resp = await admin_client.post(
+        resp = await verified_admin_client.post(
             f"/admin/quiz-items/{str(uuid.uuid4())}/regrade",
             json={"reason": "Testing with fake item"},
         )
@@ -364,9 +368,11 @@ class TestRegrade:
 
 
 class TestModelSettings:
-    async def test_update_model_settings(self, super_admin_client: AsyncClient):
+    async def test_update_model_settings(
+        self, verified_super_admin_client: AsyncClient
+    ):
         """super_admin POSTs model settings → 200, settings returned"""
-        resp = await super_admin_client.post(
+        resp = await verified_super_admin_client.post(
             "/admin/settings/models",
             json={
                 "active_generation_model": "gpt-4o",
@@ -420,9 +426,9 @@ class TestAnnouncements:
         assert isinstance(data, list)
         assert len(data) >= 1
 
-    async def test_create_announcement(self, super_admin_client: AsyncClient):
+    async def test_create_announcement(self, verified_super_admin_client: AsyncClient):
         """super_admin POSTs announcement → 200 with title, body, is_active"""
-        resp = await super_admin_client.post(
+        resp = await verified_super_admin_client.post(
             "/admin/announcements",
             json={
                 "title": "New Feature Release",

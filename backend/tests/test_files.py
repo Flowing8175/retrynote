@@ -1,8 +1,46 @@
+import io
+import struct
 import uuid
+import zipfile
+import zlib
+
 import pytest
 from httpx import AsyncClient
 from app.models.file import File, FileSourceType, FileStatus
 from app.models.search import Job
+
+
+def _make_docx_bytes() -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(
+            "word/document.xml",
+            '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+            "<w:body><w:p><w:r><w:t>Test</w:t></w:r></w:p></w:body></w:document>",
+        )
+        zf.writestr(
+            "[Content_Types].xml",
+            '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+            '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+            '<Default Extension="xml" ContentType="application/xml"/>'
+            '<Override PartName="/word/document.xml" ContentType='
+            '"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+            "</Types>",
+        )
+    return buf.getvalue()
+
+
+def _make_png_bytes() -> bytes:
+    sig = b"\x89PNG\r\n\x1a\n"
+    ihdr_data = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    ihdr_crc = zlib.crc32(b"IHDR" + ihdr_data) & 0xFFFFFFFF
+    ihdr = struct.pack(">I", 13) + b"IHDR" + ihdr_data + struct.pack(">I", ihdr_crc)
+    raw = zlib.compress(b"\x00\x00\x00\x00")
+    idat_crc = zlib.crc32(b"IDAT" + raw) & 0xFFFFFFFF
+    idat = struct.pack(">I", len(raw)) + b"IDAT" + raw + struct.pack(">I", idat_crc)
+    iend_crc = zlib.crc32(b"IEND") & 0xFFFFFFFF
+    iend = struct.pack(">I", 0) + b"IEND" + struct.pack(">I", iend_crc)
+    return sig + ihdr + idat + iend
 
 
 class TestFileUpload:
@@ -37,7 +75,7 @@ class TestFileUpload:
             files={
                 "file": (
                     "report.docx",
-                    b"PK fake docx",
+                    _make_docx_bytes(),
                     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 ),
             },
@@ -57,7 +95,7 @@ class TestFileUpload:
         resp = await auth_client.post(
             "/files",
             files={
-                "file": ("image.png", b"\x89PNG\r\n\x1a\n fake png", "image/png"),
+                "file": ("image.png", _make_png_bytes(), "image/png"),
             },
         )
         assert resp.status_code == 200

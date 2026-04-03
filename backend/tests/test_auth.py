@@ -1,4 +1,6 @@
 import uuid
+from unittest.mock import AsyncMock, patch
+
 import pytest
 from httpx import AsyncClient
 
@@ -28,7 +30,7 @@ class TestSignup:
                 "password": "StrongPass123!",
             },
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 409
 
     async def test_signup_duplicate_email(self, client: AsyncClient, test_user):
         resp = await client.post(
@@ -39,7 +41,7 @@ class TestSignup:
                 "password": "StrongPass123!",
             },
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 409
 
     async def test_signup_weak_password(self, client: AsyncClient):
         resp = await client.post(
@@ -179,8 +181,9 @@ class TestTokenRefresh:
 
 
 class TestPasswordReset:
+    @patch("app.api.auth.send_password_reset_email", new_callable=AsyncMock)
     async def test_password_reset_request_existing_email(
-        self, client: AsyncClient, test_user
+        self, mock_send_email, client: AsyncClient, test_user
     ):
         resp = await client.post(
             "/auth/password/reset/request",
@@ -190,6 +193,7 @@ class TestPasswordReset:
         )
         assert resp.status_code == 200
         assert resp.json()["status"] == "accepted"
+        mock_send_email.assert_called_once()
 
     async def test_password_reset_request_nonexistent_email(self, client: AsyncClient):
         resp = await client.post(

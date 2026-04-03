@@ -72,6 +72,17 @@ function App() {
             }
           />
 
+          {import.meta.env.DEV && (
+            <Route
+              path="/preview/quiz/new"
+              element={
+                <Layout>
+                  <QuizNew />
+                </Layout>
+              }
+            />
+          )}
+
           {/* Protected Routes */}
           <Route path="/" element={
             <ProtectedRoute>
