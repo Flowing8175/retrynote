@@ -29,6 +29,7 @@ from app.schemas.quiz import (
     QuizItemDetail,
     AnswerSubmit,
     AnswerResponse,
+    AnswerLogEntry,
     DraftAnswerSubmit,
     DraftAnswerResponse,
     ExamSubmit,
@@ -602,3 +603,57 @@ async def submit_exam(
     await dispatch_task("grade_exam", [job.id])
 
     return ExamSubmitResponse(status=session.status.value, job_id=job.id)
+
+
+@router.get("/{session_id}/answer-logs", response_model=list[AnswerLogEntry])
+async def get_answer_logs(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session_result = await db.execute(
+        select(QuizSession).where(QuizSession.id == session_id)
+    )
+    session = session_result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    items_result = await db.execute(
+        select(QuizItem).where(QuizItem.quiz_session_id == session_id)
+    )
+    items_map = {i.id: i for i in items_result.scalars().all()}
+
+    logs_result = await db.execute(
+        select(AnswerLog).where(
+            AnswerLog.quiz_session_id == session_id,
+            AnswerLog.user_id == user.id,
+            AnswerLog.is_active_result == True,
+        )
+    )
+    logs = logs_result.scalars().all()
+
+    return [
+        AnswerLogEntry(
+            item_id=log.quiz_item_id,
+            answer_log_id=log.id,
+            user_answer=log.user_answer_raw or "",
+            judgement=log.judgement.value,
+            score_awarded=log.score_awarded,
+            max_score=log.max_score,
+            grading_confidence=log.grading_confidence,
+            grading_rationale=log.grading_rationale,
+            explanation=items_map[log.quiz_item_id].explanation_text
+            if log.quiz_item_id in items_map
+            else None,
+            tips=items_map[log.quiz_item_id].tips_text
+            if log.quiz_item_id in items_map
+            else None,
+            missing_points=log.missing_points_json,
+            error_type=log.error_type.value if log.error_type else None,
+            normalized_user_answer=log.user_answer_normalized,
+            suggested_feedback=None,
+        )
+        for log in logs
+    ]

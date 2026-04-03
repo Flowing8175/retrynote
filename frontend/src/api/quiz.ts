@@ -7,6 +7,7 @@ import type {
   QuizItemResponse,
   AnswerSubmit,
   AnswerResponse,
+  AnswerLogEntry,
   DraftAnswerSubmit,
   DraftAnswerResponse,
   ExamSubmit,
@@ -67,6 +68,11 @@ export const quizApi = {
       `/quiz-sessions/${sessionId}/submit`,
       data
     );
+    return response.data;
+  },
+
+  getAnswerLogs: async (sessionId: string): Promise<AnswerLogEntry[]> => {
+    const response = await apiClient.get<AnswerLogEntry[]>(`/quiz-sessions/${sessionId}/answer-logs`);
     return response.data;
   },
 

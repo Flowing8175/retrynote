@@ -102,3 +102,20 @@ export interface ExamSubmitResponse {
   status: string;
   job_id: string | null;
 }
+
+export interface AnswerLogEntry {
+  item_id: string;
+  answer_log_id: string;
+  user_answer: string;
+  judgement: string;
+  score_awarded: number;
+  max_score: number;
+  grading_confidence: number | null;
+  grading_rationale: string | null;
+  explanation: string | null;
+  tips: string | null;
+  missing_points: Record<string, unknown> | null;
+  error_type: string | null;
+  normalized_user_answer: string | null;
+  suggested_feedback: string | null;
+}

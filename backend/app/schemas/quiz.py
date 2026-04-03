@@ -119,3 +119,20 @@ class ExamSubmit(BaseModel):
 class ExamSubmitResponse(BaseModel):
     status: str
     job_id: str | None = None
+
+
+class AnswerLogEntry(BaseModel):
+    item_id: str
+    answer_log_id: str
+    user_answer: str
+    judgement: str
+    score_awarded: float
+    max_score: float
+    grading_confidence: float | None = None
+    grading_rationale: str | None = None
+    explanation: str | None = None
+    tips: str | None = None
+    missing_points: list[str] | None = None
+    error_type: str | None = None
+    normalized_user_answer: str | None = None
+    suggested_feedback: str | None = None

@@ -4,7 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import { LoadingSpinner, StatusBadge } from '@/components';
-import type { AnswerResponse } from '@/types';
+import type { AnswerResponse, AnswerLogEntry } from '@/types';
 
 const VALIDATION_TIMEOUT_MS = 3000;
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
@@ -57,6 +57,12 @@ export default function QuizTake() {
         ? QUIZ_REFRESH_INTERVAL_MS
         : false,
     refetchIntervalInBackground: true,
+  });
+
+  const { data: answerLogsData } = useQuery({
+    queryKey: ['quizAnswerLogs', sessionId],
+    queryFn: () => quizApi.getAnswerLogs(sessionId || ''),
+    enabled: !!sessionId,
   });
 
   const submitAnswerMutation = useMutation({
@@ -119,13 +125,37 @@ export default function QuizTake() {
   const isGeneratingQuiz = sessionData?.status === 'draft' || sessionData?.status === 'generating';
 
   useEffect(() => {
-    if (sessionData && itemsData) {
+    if (sessionData && itemsData && answerLogsData !== undefined) {
       const snapshot = currentAnswerMapRef.current;
-      const restoredAnswerMap = Object.fromEntries(
+
+      const storedAnswerMap = Object.fromEntries(
         itemsData
           .filter((item) => snapshot[item.id] != null)
           .map((item) => [item.id, snapshot[item.id]])
       );
+
+      const restoredAnswerMap: Record<string, string> = { ...storedAnswerMap };
+      const restoredResults: Record<string, AnswerResponse> = {};
+
+      for (const log of answerLogsData) {
+        restoredAnswerMap[log.item_id] = log.user_answer;
+        restoredResults[log.item_id] = {
+          answer_log_id: log.answer_log_id,
+          judgement: log.judgement,
+          score_awarded: log.score_awarded,
+          max_score: log.max_score,
+          grading_confidence: log.grading_confidence,
+          grading_rationale: log.grading_rationale,
+          explanation: log.explanation,
+          tips: log.tips,
+          missing_points: log.missing_points,
+          error_type: log.error_type,
+          normalized_user_answer: log.normalized_user_answer,
+          suggested_feedback: log.suggested_feedback,
+          next_item_id: null,
+        };
+      }
+
       const restoredIndexes = itemsData
         .map((item, index) => (restoredAnswerMap[item.id] ? index : -1))
         .filter((index) => index >= 0);
@@ -140,12 +170,12 @@ export default function QuizTake() {
       setValidationMessage(null);
       setDraftAnswers(restoredAnswerMap);
       setSubmittedAnswers(restoredAnswerMap);
-      setAnswerResultsByItemId({});
+      setAnswerResultsByItemId(restoredResults);
       setFurthestAvailableIndex(
         itemsData.length === 0 ? 0 : Math.min(itemsData.length - 1, Math.max(0, highestRestoredIndex + 1))
       );
     }
-  }, [sessionData, itemsData, setCurrentItems, setCurrentSession]);
+  }, [sessionData, itemsData, answerLogsData, setCurrentItems, setCurrentSession]);
 
   useEffect(() => {
     if (itemsData && itemsData.length > 0) {
