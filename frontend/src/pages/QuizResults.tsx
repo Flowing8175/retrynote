@@ -3,10 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { quizApi, retryApi } from '@/api';
 import { objectionsApi } from '@/api/objections';
-import { wrongNotesApi } from '@/api/wrongNotes';
 import { StatusBadge } from '@/components';
 import LoadingSpinner from '@/components/LoadingSpinner';
-import type { QuizItemResponse, WrongNoteItem } from '@/types';
+import type { QuizItemResponse } from '@/types';
 
 function formatMode(mode: string) {
   return mode === 'exam' ? '시험 모드' : '일반 모드';
@@ -180,9 +179,6 @@ function truncateText(value: string, maxLength: number) {
   return `${value.slice(0, maxLength).trimEnd()}...`;
 }
 
-function buildObjectionKey(item: Pick<WrongNoteItem, 'question_text' | 'question_type' | 'concept_label' | 'category_tag'>) {
-  return [item.question_text, item.question_type, item.concept_label || '', item.category_tag || ''].join('|');
-}
 
 function formatJudgementLabel(judgement: string) {
   if (judgement === 'partial') {
@@ -219,38 +215,30 @@ export default function QuizResults() {
     enabled: !!sessionId,
   });
 
-  const { data: wrongNotes, isLoading: wrongNotesLoading } = useQuery({
-    queryKey: ['wrongNotes', sessionId, 'objections'],
-    queryFn: () => wrongNotesApi.listWrongNotes('date', ['incorrect', 'partial'], undefined, null, null, 1, 100),
-    enabled: !!sessionId,
-  });
-
-  const { data: answerLogs } = useQuery({
+  const { data: answerLogs, isLoading: answerLogsLoading } = useQuery({
     queryKey: ['answerLogs', sessionId],
     queryFn: () => quizApi.getAnswerLogs(sessionId || ''),
     enabled: !!sessionId,
   });
 
   const objectionCandidates = useMemo(() => {
-    if (!quizItems || !wrongNotes?.items) {
+    if (!quizItems || !answerLogs) {
       return [];
     }
 
-    const noteMap = new Map<string, WrongNoteItem>();
-    for (const note of wrongNotes.items) {
-      const key = buildObjectionKey(note);
-      if (!noteMap.has(key)) {
-        noteMap.set(key, note);
-      }
-    }
+    const wrongLogMap = new Map(
+      answerLogs
+        .filter((log) => log.judgement === 'incorrect' || log.judgement === 'partial')
+        .map((log) => [log.item_id, log])
+    );
 
     return quizItems
       .map((item) => {
-        const note = noteMap.get(buildObjectionKey(item));
-        return note ? { item, note } : null;
+        const log = wrongLogMap.get(item.id);
+        return log ? { item, log } : null;
       })
-      .filter((value): value is { item: QuizItemResponse; note: WrongNoteItem } => Boolean(value));
-  }, [quizItems, wrongNotes]);
+      .filter((value): value is { item: QuizItemResponse; log: (typeof answerLogs)[number] } => Boolean(value));
+  }, [quizItems, answerLogs]);
 
   const createRetryMutation = useMutation({
     mutationFn: () =>
@@ -285,7 +273,7 @@ export default function QuizResults() {
       setObjectionReasons((prev) => ({ ...prev, [variables.itemId]: '' }));
     },
   });
-  const objectionSectionLoading = quizItemsLoading || wrongNotesLoading;
+  const objectionSectionLoading = quizItemsLoading || answerLogsLoading;
 
   if (sessionLoading) {
     return <LoadingSpinner message="퀴즈 결과 불러오는 중" />;
@@ -430,7 +418,7 @@ export default function QuizResults() {
           <p className="text-sm text-content-secondary">이의제기 항목을 불러오는 중입니다.</p>
         ) : objectionCandidates.length > 0 ? (
           <div className="space-y-3">
-            {objectionCandidates.map(({ item, note }) => {
+            {objectionCandidates.map(({ item, log }) => {
               const isOpen = openObjectionItemId === item.id;
               const isSubmitted = submittedObjections[item.id];
               const reason = objectionReasons[item.id] || '';
@@ -442,8 +430,8 @@ export default function QuizResults() {
                       <p className="text-sm font-medium text-content-primary" title={item.question_text}>
                         {truncateText(item.question_text, 80)}
                       </p>
-                      <div className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${getJudgementBadgeClass(note.judgement)}`}>
-                        {formatJudgementLabel(note.judgement)}
+                      <div className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${getJudgementBadgeClass(log.judgement)}`}>
+                        {formatJudgementLabel(log.judgement)}
                       </div>
                     </div>
 
@@ -471,10 +459,9 @@ export default function QuizResults() {
                           return;
                         }
 
-                        const answerLogId = answerLogs?.find((log) => log.item_id === item.id)?.answer_log_id ?? note.id;
                         createObjectionMutation.mutate({
                           itemId: item.id,
-                          answerLogId,
+                          answerLogId: log.answer_log_id,
                           reason,
                         });
                       }}
