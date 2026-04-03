@@ -207,6 +207,8 @@ export default function QuizResults() {
     queryKey: ['quizSession', sessionId],
     queryFn: () => quizApi.getQuizSession(sessionId || ''),
     enabled: !!sessionId,
+    refetchInterval: (query) =>
+      query.state.data?.status === 'objection_pending' ? 3000 : false,
   });
 
   const { data: quizItems, isLoading: quizItemsLoading } = useQuery({
