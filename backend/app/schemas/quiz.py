@@ -14,6 +14,7 @@ class QuizSessionCreate(BaseModel):
     question_types: list[str] = Field(default=[], max_length=10)
     generation_priority: str | None = Field(default=None, max_length=50)
     source_mode: Literal["document_based", "no_source"]
+    topic: str | None = Field(default=None, max_length=200)
     idempotency_key: str | None = Field(default=None, max_length=255)
 
 
@@ -95,7 +96,7 @@ class AnswerResponse(BaseModel):
     grading_rationale: str | None
     explanation: str | None = None
     tips: str | None = None
-    missing_points: dict | None = None
+    missing_points: list[str] | None = None
     error_type: str | None = None
     normalized_user_answer: str | None
     suggested_feedback: str | None = None

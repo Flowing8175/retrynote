@@ -185,7 +185,7 @@ class AnswerLog(CommonMixin, Base):
     max_score: Mapped[float] = mapped_column(Float, default=1.0)
     grading_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     grading_rationale: Mapped[str | None] = mapped_column(Text, nullable=True)
-    missing_points_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    missing_points_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
     error_type: Mapped[ErrorType | None] = mapped_column(Enum(ErrorType), nullable=True)
     is_active_result: Mapped[bool] = mapped_column(Boolean, default=True)
     graded_at: Mapped[datetime | None] = mapped_column(
