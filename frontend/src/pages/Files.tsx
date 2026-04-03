@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Upload } from 'lucide-react';
 import type { AxiosError } from 'axios';
@@ -57,12 +57,6 @@ function getStatusHint(file: FileDetail) {
   return '';
 }
 
-function getCapabilityClass(enabled: boolean) {
-  return enabled
-    ? 'border-semantic-success-border bg-semantic-success-bg text-semantic-success'
-    : 'border-white/[0.07] bg-surface-hover text-content-secondary';
-}
-
 export default function Files() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -88,6 +82,7 @@ export default function Files() {
   const { data, isLoading } = useQuery({
     queryKey: ['files', page, statusFilter, selectedFolderId],
     queryFn: () => filesApi.listFiles(page, 20, selectedFolderId, statusFilter || null),
+    placeholderData: keepPreviousData,
     refetchInterval: (query) =>
       query.state.data?.files.some((file) => isFileProcessingStatus(file.status)) ? 3000 : false,
     refetchIntervalInBackground: true,
@@ -642,14 +637,6 @@ export default function Files() {
                                       <p className="text-sm leading-6 text-content-secondary">{getStatusHint(file)}</p>
                                     ) : null}
                                   </div>
-                                  <div className="flex flex-wrap gap-2 text-xs font-medium">
-                                    <span className={`rounded-full border px-2.5 py-1 ${getCapabilityClass(file.is_searchable)}`}>
-                                      검색 {file.is_searchable ? '가능' : '대기'}
-                                    </span>
-                                    <span className={`rounded-full border px-2.5 py-1 ${getCapabilityClass(file.is_quiz_eligible)}`}>
-                                      퀴즈 {file.is_quiz_eligible ? '가능' : '대기'}
-                                    </span>
-                                  </div>
                                   <div className="space-y-1 text-sm text-content-secondary">
                                     <div>업로드 {formatDateTime(file.created_at)}</div>
                                     <div>최근 처리 {formatDateTime(file.processing_finished_at)}</div>
@@ -687,9 +674,6 @@ export default function Files() {
                         </th>
                         <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-[0.18em] text-content-muted">
                           상태
-                        </th>
-                        <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-[0.18em] text-content-muted">
-                          활용
                         </th>
                         <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-[0.18em] text-content-muted">
                           업로드 정보
@@ -772,18 +756,6 @@ export default function Files() {
                                     {getStatusHint(file)}
                                   </p>
                                 ) : null}
-                              </div>
-                            </td>
-                            <td className="px-6 py-5">
-                              <div className="flex min-w-[12rem] flex-wrap gap-2 text-xs font-medium">
-                                <span className={`rounded-full border px-2.5 py-1 ${getCapabilityClass(file.is_searchable)}`}>
-                                  검색 {file.is_searchable ? '가능' : '대기'}
-                                </span>
-                                <span
-                                  className={`rounded-full border px-2.5 py-1 ${getCapabilityClass(file.is_quiz_eligible)}`}
-                                >
-                                  퀴즈 {file.is_quiz_eligible ? '가능' : '대기'}
-                                </span>
                               </div>
                             </td>
                             <td className="px-6 py-5">

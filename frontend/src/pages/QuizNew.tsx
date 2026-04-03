@@ -79,6 +79,12 @@ export default function QuizNew() {
   const [noSourceConfirmed, setNoSourceConfirmed] = useState(false);
   const [topic, setTopic] = useState('');
   const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+
+  const { data: foldersData } = useQuery({
+    queryKey: ['folders'],
+    queryFn: () => filesApi.listFolders(),
+  });
 
   const { data: filesData, isLoading: filesLoading } = useQuery({
     queryKey: ['quiz-new-files'],
@@ -111,13 +117,15 @@ export default function QuizNew() {
   });
 
   const fileGroups = useMemo(() => {
-    const allFiles = filesData?.files ?? [];
+    const allFiles = (filesData?.files ?? []).filter(
+      (file) => selectedFolderId === null || file.folder_id === selectedFolderId
+    );
     const readyFiles = allFiles.filter((file) => file.is_quiz_eligible && (file.status === 'ready' || file.status === 'failed_partial'));
     const processingFiles = allFiles.filter((file) => file.is_quiz_eligible && isFileProcessingStatus(file.status));
     const unavailableFiles = allFiles.filter((file) => !file.is_quiz_eligible || (!isFileProcessingStatus(file.status) && file.status !== 'ready' && file.status !== 'failed_partial'));
 
     return { readyFiles, processingFiles, unavailableFiles };
-  }, [filesData?.files]);
+  }, [filesData?.files, selectedFolderId]);
 
   const canSubmitDocumentBased = sourceMode === 'document_based' && selectedFileIds.length > 0;
   const primaryActionLabel = sourceMode === 'no_source' ? '자료 없이 퀴즈 만들기' : '퀴즈 만들기';
@@ -262,6 +270,36 @@ export default function QuizNew() {
                     자료 관리로 이동
                   </button>
                 </div>
+
+                {foldersData && foldersData.length > 0 && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedFolderId(null)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                        selectedFolderId === null
+                          ? 'border-brand-500/30 bg-brand-500/10 text-brand-300'
+                          : 'border-white/[0.07] bg-surface-deep text-content-secondary hover:bg-surface-hover'
+                      }`}
+                    >
+                      전체
+                    </button>
+                    {foldersData.map((folder) => (
+                      <button
+                        key={folder.id}
+                        type="button"
+                        onClick={() => setSelectedFolderId(folder.id)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          selectedFolderId === folder.id
+                            ? 'border-brand-500/30 bg-brand-500/10 text-brand-300'
+                            : 'border-white/[0.07] bg-surface-deep text-content-secondary hover:bg-surface-hover'
+                        }`}
+                      >
+                        {folder.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {fileGroups.readyFiles.length === 0 ? (
                   <div className="mt-5 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
