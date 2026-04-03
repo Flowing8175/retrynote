@@ -183,25 +183,40 @@ def _extract_pptx(path: str) -> str:
         return ""
 
 
-def _is_safe_url(url: str) -> bool:
-    """Validate URL is safe for server-side requests (SSRF prevention)."""
-    try:
-        from urllib.parse import urlparse
-        import ipaddress
-        import socket
+def _validate_ip(addr: str) -> bool:
+    """Check if a resolved IP address is safe (not private/internal)."""
+    import ipaddress
 
+    try:
+        ip = ipaddress.ip_address(addr)
+        return not (
+            ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
+        )
+    except ValueError:
+        return False
+
+
+def _resolve_and_validate_url(url: str) -> tuple[str, str, int] | None:
+    """Resolve URL hostname and validate the resolved IP is safe.
+
+    Returns (resolved_ip, hostname, port) or None if unsafe.
+    Resolves DNS exactly once to prevent TOCTOU / DNS rebinding attacks.
+    """
+    from urllib.parse import urlparse
+    import socket
+
+    try:
         parsed = urlparse(url)
     except Exception:
-        return False
+        return None
 
     if parsed.scheme not in ("http", "https"):
-        return False
+        return None
 
     hostname = parsed.hostname
     if not hostname:
-        return False
+        return None
 
-    # Block obvious internal hostnames
     blocked_hosts = {
         "localhost",
         "127.0.0.1",
@@ -211,40 +226,54 @@ def _is_safe_url(url: str) -> bool:
         "169.254.169.254",
     }
     if hostname.lower() in blocked_hosts:
-        return False
+        return None
 
-    # Block private/reserved IP ranges
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+
+    # Resolve DNS exactly once and validate ALL resolved addresses
     try:
-        ip = ipaddress.ip_address(hostname)
-        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
-            return False
-    except ValueError:
-        # hostname is a domain name, not IP — resolve and check
-        try:
-            for info in socket.getaddrinfo(hostname, None):
-                addr = info[4][0]
-                ip = ipaddress.ip_address(addr)
-                if (
-                    ip.is_private
-                    or ip.is_loopback
-                    or ip.is_link_local
-                    or ip.is_reserved
-                ):
-                    return False
-        except socket.gaierror:
-            return False
-
-    return True
+        addr_infos = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
+        if not addr_infos:
+            return None
+        for info in addr_infos:
+            addr = str(info[4][0])
+            if not _validate_ip(addr):
+                return None
+        resolved_ip = str(addr_infos[0][4][0])
+        return resolved_ip, hostname, port
+    except socket.gaierror:
+        return None
 
 
 async def _fetch_url_text(url: str) -> str:
-    if not _is_safe_url(url):
+    resolution = _resolve_and_validate_url(url)
+    if not resolution:
         return ""
+    resolved_ip, hostname, port = resolution
     try:
         import httpx
+        from urllib.parse import urlparse, urlunparse
+
+        # Rewrite URL to use the resolved IP directly, preventing DNS rebinding
+        parsed = urlparse(url)
+        ip_url = urlunparse(
+            (
+                parsed.scheme,
+                f"{resolved_ip}:{port}",
+                parsed.path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
 
         async with httpx.AsyncClient() as client:
-            resp = await client.get(url, follow_redirects=False, timeout=30)
+            resp = await client.get(
+                ip_url,
+                headers={"Host": hostname},
+                follow_redirects=False,
+                timeout=30,
+            )
             if resp.status_code != 200:
                 return ""
             from bs4 import BeautifulSoup

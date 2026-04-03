@@ -30,7 +30,7 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = 7
     admin_session_expire_minutes: int = 30
 
-    admin_master_password_hash: str = ""
+    admin_master_password: str = ""
 
     openai_api_key: str = ""
     openai_generation_model: str = "gpt-5.4-mini"

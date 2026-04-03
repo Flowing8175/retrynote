@@ -116,7 +116,7 @@ docker run -d -p 6379:6379 redis:7-alpine
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access Token 만료 시간 (분) | `60` |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | Refresh Token 만료 시간 (일) | `7` |
 | `ADMIN_SESSION_EXPIRE_MINUTES` | 관리자 세션 만료 시간 (분) | `30` |
-| `ADMIN_MASTER_PASSWORD_HASH` | 관리자 마스터 비밀번호 해시 (최초 사용 시 생성됨) | |
+| `ADMIN_MASTER_PASSWORD` | 관리자 마스터 비밀번호 (최초 사용 시 해시되어 DB에 저장) | |
 | **AI** | | |
 | `OPENAI_API_KEY` | OpenAI API Key | (필수) |
 | `OPENAI_GENERATION_MODEL` | 문제 생성 모델 | `gpt-4o` |

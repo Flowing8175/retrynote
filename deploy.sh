@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-SERVER="ubuntu@DEPLOY_HOST_PLACEHOLDER"
-SSH_KEY="$HOME/.ssh/oracle.key"
-APP_DIR="/home/retrynote/app"
-DIST_DIR="/home/retrynote/frontend/dist"
-BRANCH="main"
+SERVER="${DEPLOY_SERVER:?Set DEPLOY_SERVER (e.g. user@host)}"
+SSH_KEY="${DEPLOY_SSH_KEY:-$HOME/.ssh/oracle.key}"
+APP_DIR="${DEPLOY_APP_DIR:-/home/retrynote/app}"
+DIST_DIR="${DEPLOY_DIST_DIR:-/home/retrynote/frontend/dist}"
+BRANCH="${DEPLOY_BRANCH:-main}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'

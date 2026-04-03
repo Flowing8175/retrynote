@@ -478,5 +478,4 @@ async def download_file(
         file.stored_path,
         filename=filename,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
