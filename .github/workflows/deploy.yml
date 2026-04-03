@@ -38,7 +38,15 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H ${{ secrets.DEPLOY_HOST }} >> ~/.ssh/known_hosts
 
-      # ── 4. 프론트엔드 전송 ───────────────────────────────────
+      # ── 4. nginx 설정 배포 ──────────────────────────────────
+      - name: Deploy nginx config
+        run: |
+          scp -i ~/.ssh/deploy_key nginx/retrynote.conf \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/tmp/retrynote.nginx.conf
+          ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            "sudo cp /tmp/retrynote.nginx.conf /etc/nginx/sites-enabled/retrynote && sudo nginx -t"
+
+      # ── 5. 프론트엔드 전송 ───────────────────────────────────
       - name: Deploy frontend
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
@@ -50,7 +58,7 @@ jobs:
           ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "sudo chown -R retrynote:retrynote /home/retrynote/frontend/dist"
 
-      # ── 5. 백엔드 배포 ───────────────────────────────────────
+      # ── 6. 백엔드 배포 ───────────────────────────────────────
       - name: Deploy backend
         run: |
           ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} << 'ENDSSH'
