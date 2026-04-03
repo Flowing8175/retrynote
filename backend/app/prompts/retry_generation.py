@@ -123,3 +123,57 @@ def build_retry_prompt(
 
 JSON 형식으로 응답하세요:
 {{"question_type": "...", "question_text": "...", "options": null or {...}, "correct_answer": {{"answer": "..."}}, "explanation": "...", "concept_key": "{concept_key}", "targeted_error_type": "{error_type}", "hint": "...", "similarity_safety_note": "..."}}"""
+
+
+def build_batch_retry_prompt(items: list[dict]) -> str:
+    """Build a single batched prompt for multiple retry quiz generations.
+
+    Args:
+        items: list of dicts with keys:
+            concept_key, concept_label, previous_question_type,
+            previous_question, error_type, user_answer, correct_answer,
+            retry_count
+    """
+    blocks = []
+    for i, item in enumerate(items, 1):
+        hint_note = ""
+        if item.get("retry_count", 1) > 1:
+            hint_note = "\n  - 이것은 재도전입니다. 명확한 힌트를 포함하세요 (정답 직접 노출 금지)."
+
+        prev_type = item.get("previous_question_type", "")
+        new_type_instruction = ""
+        if prev_type == "multiple_choice":
+            new_type_instruction = "\n  - 가능하면 short_answer, fill_blank, 또는 ox 유형으로 바꾸세요."
+        elif prev_type == "short_answer":
+            new_type_instruction = "\n  - 가능하면 fill_blank, ox, 또는 essay 유형으로 바꾸세요."
+        elif prev_type in ("fill_blank", "ox"):
+            new_type_instruction = "\n  - 가능하면 multiple_choice 또는 short_answer 유형으로 바꾸세요."
+
+        error_type = item.get("error_type", "unknown")
+        error_instruction = ""
+        if error_type == "concept_confusion":
+            error_instruction = "\n  - 비슷한 개념 간 구분을 명확히 해야 합니다 (비교형)."
+        elif error_type == "missing_keyword":
+            error_instruction = "\n  - 핵심어를 명시적으로 포함하도록 유도해야 합니다 (빈칸형/단답형)."
+        elif error_type == "reasoning_error":
+            error_instruction = "\n  - 개념의 실제 응용을 테스트합니다 (상황 적용형)."
+        elif error_type == "careless_mistake":
+            error_instruction = "\n  - 명확하고 간단명료해야 합니다."
+
+        blocks.append(
+            f"[문제 {i}]\n"
+            f"- 개념: {item['concept_label']} (concept_key: {item['concept_key']})\n"
+            f"- 이전 유형: {prev_type}\n"
+            f"- 오류 유형: {error_type}\n"
+            f"- 사용자 답: {item.get('user_answer', '')}\n"
+            f"- 정답: {item.get('correct_answer', '')}\n"
+            f"- 이전 문제: {item.get('previous_question', '')}\n"
+            f"- 요구사항: 이전과 다른 문장과 각도로 같은 개념 테스트"
+            f"{new_type_instruction}{error_instruction}{hint_note}"
+        )
+
+    return (
+        f"아래 {len(items)}개의 concept_key 각각에 대해 재도전 문제를 만드세요.\n"
+        f"questions 배열에 순서대로 {len(items)}개의 문제를 반환하세요.\n\n"
+        + "\n\n".join(blocks)
+    )

@@ -1,4 +1,3 @@
-import asyncio
 import os
 import json
 import uuid
@@ -30,7 +29,7 @@ from app.prompts import (
 from app.prompts.generation import build_generation_prompt
 from app.prompts.retry_generation import (
     SYSTEM_PROMPT_RETRY_GENERATION,
-    build_retry_prompt,
+    build_batch_retry_prompt,
 )
 
 
@@ -354,7 +353,7 @@ async def generate_quiz(job_id: str):
             from app.utils.ai_client import (
                 call_ai_with_fallback,
                 GENERATION_SCHEMA,
-                RETRY_GENERATION_SCHEMA,
+                BATCH_RETRY_GENERATION_SCHEMA,
             )
             from app.config import settings as cfg
 
@@ -374,8 +373,9 @@ async def generate_quiz(job_id: str):
 
                 items_created = 0
 
-                # Phase 1: sequential DB reads to collect prompts and metadata
-                tasks_data = []
+                # Phase 1: sequential DB reads to collect context per concept
+                tasks_data = []  # (idx, concept_key, quiz_item)
+                batch_items = []  # dicts for build_batch_retry_prompt
                 for idx, concept_key in enumerate(concept_keys):
                     if idx >= question_count:
                         break
@@ -398,66 +398,69 @@ async def generate_quiz(job_id: str):
                         continue
 
                     answer_log, quiz_item = row
-                    retry_prompt = build_retry_prompt(
-                        previous_question=quiz_item.question_text,
-                        previous_question_type=quiz_item.question_type.value,
-                        concept_key=concept_key,
-                        concept_label=quiz_item.concept_label or concept_key,
-                        error_type=answer_log.error_type.value
-                        if answer_log.error_type
-                        else "unknown",
-                        user_answer=answer_log.user_answer_raw or "",
-                        correct_answer=str(
+                    tasks_data.append((idx, concept_key, quiz_item))
+                    batch_items.append({
+                        "concept_key": concept_key,
+                        "concept_label": quiz_item.concept_label or concept_key,
+                        "previous_question_type": quiz_item.question_type.value,
+                        "previous_question": quiz_item.question_text,
+                        "error_type": answer_log.error_type.value if answer_log.error_type else "unknown",
+                        "user_answer": answer_log.user_answer_raw or "",
+                        "correct_answer": str(
                             quiz_item.correct_answer_json.get("answer", "")
                             if isinstance(quiz_item.correct_answer_json, dict)
                             else quiz_item.correct_answer_json
                         ),
-                        previous_explanation=quiz_item.explanation_text or "",
-                        retry_count=1,
-                    )
-                    tasks_data.append((idx, concept_key, retry_prompt, quiz_item))
+                        "retry_count": 1,
+                    })
 
-                # Phase 2: run all AI calls in parallel
-                ai_results = await asyncio.gather(
-                    *[
-                        call_ai_with_fallback(
-                            prompt,
-                            RETRY_GENERATION_SCHEMA,
-                            primary_model=session.generation_model_name
-                            or cfg.openai_generation_model,
-                            fallback_model=cfg.openai_fallback_generation_model,
-                            system_message=SYSTEM_PROMPT_RETRY_GENERATION,
-                        )
-                        for _, _, prompt, _ in tasks_data
-                    ],
-                    return_exceptions=True,
+                if not batch_items:
+                    session.status = QuizSessionStatus.generation_failed
+                    job.status = "failed"
+                    job.error_message = "No retry questions could be generated"
+                    await db.commit()
+                    return
+
+                # Phase 2: single batched AI call for all concepts
+                batch_prompt = build_batch_retry_prompt(batch_items)
+                batch_result = await call_ai_with_fallback(
+                    batch_prompt,
+                    BATCH_RETRY_GENERATION_SCHEMA,
+                    primary_model=session.generation_model_name or cfg.openai_generation_model,
+                    fallback_model=cfg.openai_fallback_generation_model,
+                    system_message=SYSTEM_PROMPT_RETRY_GENERATION,
                 )
 
-                # Phase 3: insert successful results
-                for (idx, concept_key, _, quiz_item), ai_result in zip(tasks_data, ai_results):
-                    if isinstance(ai_result, Exception):
+                # Phase 3: match results by concept_key and insert
+                result_by_concept = {
+                    q["concept_key"]: q
+                    for q in batch_result.get("questions", [])
+                    if q.get("concept_key")
+                }
+                for idx, concept_key, quiz_item in tasks_data:
+                    ai_result = result_by_concept.get(concept_key)
+                    if not ai_result or not ai_result.get("question_text"):
                         continue
-                    if ai_result and ai_result.get("question_text"):
-                        new_item = QuizItem(
-                            quiz_session_id=session.id,
-                            item_order=idx + 1,
-                            question_type=QuestionType(
-                                ai_result.get("question_type", "multiple_choice")
-                            ),
-                            question_text=ai_result.get("question_text", ""),
-                            correct_answer_json=ai_result.get(
-                                "correct_answer", {"answer": ""}
-                            ),
-                            explanation_text=ai_result.get("explanation", ""),
-                            concept_key=concept_key,
-                            concept_label=quiz_item.concept_label,
-                            category_tag=quiz_item.category_tag,
-                            difficulty=quiz_item.difficulty or "medium",
-                            source_refs_json=None,
-                            options_json=ai_result.get("options"),
-                        )
-                        db.add(new_item)
-                        items_created += 1
+                    new_item = QuizItem(
+                        quiz_session_id=session.id,
+                        item_order=idx + 1,
+                        question_type=QuestionType(
+                            ai_result.get("question_type", "multiple_choice")
+                        ),
+                        question_text=ai_result.get("question_text", ""),
+                        correct_answer_json=ai_result.get(
+                            "correct_answer", {"answer": ""}
+                        ),
+                        explanation_text=ai_result.get("explanation", ""),
+                        concept_key=concept_key,
+                        concept_label=quiz_item.concept_label,
+                        category_tag=quiz_item.category_tag,
+                        difficulty=quiz_item.difficulty or "medium",
+                        source_refs_json=None,
+                        options_json=ai_result.get("options"),
+                    )
+                    db.add(new_item)
+                    items_created += 1
 
                 if items_created == 0:
                     session.status = QuizSessionStatus.generation_failed

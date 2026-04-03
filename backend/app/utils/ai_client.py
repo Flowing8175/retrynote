@@ -6,6 +6,7 @@ from typing import Any
 __all__ = [
     "GENERATION_SCHEMA",
     "RETRY_GENERATION_SCHEMA",
+    "BATCH_RETRY_GENERATION_SCHEMA",
     "GRADING_SCHEMA",
     "OBJECTION_REVIEW_SCHEMA",
     "COACHING_SCHEMA",
@@ -97,6 +98,43 @@ RETRY_GENERATION_SCHEMA = {
     "additionalProperties": False,
 }
 
+
+BATCH_RETRY_GENERATION_SCHEMA = {
+    "type": "object",
+    "required": ["questions"],
+    "properties": {
+        "questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": [
+                    "question_type",
+                    "question_text",
+                    "correct_answer",
+                    "explanation",
+                    "concept_key",
+                    "targeted_error_type",
+                ],
+                "properties": {
+                    "question_type": {
+                        "type": "string",
+                        "enum": ["multiple_choice", "ox", "short_answer", "fill_blank", "essay"],
+                    },
+                    "question_text": {"type": "string"},
+                    "options": {"type": ["object", "null"]},
+                    "correct_answer": {"type": "object"},
+                    "explanation": {"type": "string"},
+                    "concept_key": {"type": "string"},
+                    "targeted_error_type": {"type": "string"},
+                    "hint": {"type": ["string", "null"]},
+                    "similarity_safety_note": {"type": ["string", "null"]},
+                },
+                "additionalProperties": False,
+            },
+        }
+    },
+    "additionalProperties": False,
+}
 
 GRADING_SCHEMA = {
     "type": "object",
