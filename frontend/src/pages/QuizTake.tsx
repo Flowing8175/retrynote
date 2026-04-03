@@ -4,7 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import { LoadingSpinner, StatusBadge } from '@/components';
-import type { AnswerResponse, AnswerLogEntry } from '@/types';
+import type { AnswerResponse } from '@/types';
 
 const VALIDATION_TIMEOUT_MS = 3000;
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
