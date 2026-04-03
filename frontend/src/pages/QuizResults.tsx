@@ -225,6 +225,12 @@ export default function QuizResults() {
     enabled: !!sessionId,
   });
 
+  const { data: answerLogs } = useQuery({
+    queryKey: ['answerLogs', sessionId],
+    queryFn: () => quizApi.getAnswerLogs(sessionId || ''),
+    enabled: !!sessionId,
+  });
+
   const objectionCandidates = useMemo(() => {
     if (!quizItems || !wrongNotes?.items) {
       return [];
@@ -465,9 +471,10 @@ export default function QuizResults() {
                           return;
                         }
 
+                        const answerLogId = answerLogs?.find((log) => log.item_id === item.id)?.answer_log_id ?? note.id;
                         createObjectionMutation.mutate({
                           itemId: item.id,
-                          answerLogId: note.id,
+                          answerLogId,
                           reason,
                         });
                       }}
