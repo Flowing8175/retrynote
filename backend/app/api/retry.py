@@ -63,6 +63,48 @@ async def create_retry_set(
             )
             concept_keys = [k for k in log_result.scalars().all() if k]
 
+    elif req.source == "quiz_session":
+        if not req.quiz_session_id:
+            raise HTTPException(status_code=400, detail="quiz_session_id is required for quiz_session source")
+        session_check = await db.execute(
+            select(QuizSession).where(
+                QuizSession.id == req.quiz_session_id,
+                QuizSession.user_id == user.id,
+            )
+        )
+        if not session_check.scalar_one_or_none():
+            raise HTTPException(status_code=404, detail="Quiz session not found")
+
+        from sqlalchemy import distinct
+        log_result = await db.execute(
+            select(distinct(QuizItem.concept_key))
+            .join(AnswerLog, AnswerLog.quiz_item_id == QuizItem.id)
+            .where(
+                AnswerLog.quiz_session_id == req.quiz_session_id,
+                AnswerLog.user_id == user.id,
+                AnswerLog.is_active_result == True,
+                AnswerLog.deleted_at.is_(None),
+                AnswerLog.judgement.in_(
+                    [Judgement.incorrect, Judgement.partial, Judgement.skipped]
+                ),
+                QuizItem.concept_key.isnot(None),
+                QuizItem.concept_key != "",
+            )
+        )
+        concept_keys = [k for k in log_result.scalars().all() if k]
+
+        # Fallback: use all concept_keys in this session regardless of judgement
+        if not concept_keys:
+            all_result = await db.execute(
+                select(distinct(QuizItem.concept_key))
+                .where(
+                    QuizItem.quiz_session_id == req.quiz_session_id,
+                    QuizItem.concept_key.isnot(None),
+                    QuizItem.concept_key != "",
+                )
+            )
+            concept_keys = [k for k in all_result.scalars().all() if k]
+
     elif req.source == "dashboard_recommendation":
         weak_result = await db.execute(
             select(WeakPoint)

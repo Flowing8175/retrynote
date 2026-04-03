@@ -246,20 +246,13 @@ export default function QuizResults() {
       .filter((value): value is { item: QuizItemResponse; note: WrongNoteItem } => Boolean(value));
   }, [quizItems, wrongNotes]);
 
-  const wrongConceptKeys = useMemo(() => {
-    return [...new Set(
-      objectionCandidates
-        .map(({ note }) => note.concept_key)
-        .filter((k): k is string => !!k)
-    )];
-  }, [objectionCandidates]);
-
   const createRetryMutation = useMutation({
-    mutationFn: (conceptKeys: string[]) =>
+    mutationFn: () =>
       retryApi.createRetrySet({
-        source: 'wrong_notes',
-        concept_keys: conceptKeys.length > 0 ? conceptKeys : null,
+        source: 'quiz_session',
+        concept_keys: null,
         size: null,
+        quiz_session_id: sessionId,
       }),
     onSuccess: (data) => {
       navigate(`/quiz/${data.quiz_session_id}`);
@@ -268,7 +261,7 @@ export default function QuizResults() {
 
   const handleRetryAction = (to: string) => {
     if (to === '/retry') {
-      createRetryMutation.mutate(wrongConceptKeys);
+      createRetryMutation.mutate();
     } else {
       navigate(to);
     }

@@ -1,7 +1,8 @@
 export interface RetrySetCreate {
-  source: 'wrong_notes' | 'dashboard_recommendation' | 'concept_manual';
+  source: 'wrong_notes' | 'dashboard_recommendation' | 'concept_manual' | 'quiz_session';
   concept_keys: string[] | null;
   size: number | null;
+  quiz_session_id?: string | null;
 }
 
 export interface RetrySetResponse {
