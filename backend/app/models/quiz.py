@@ -79,7 +79,9 @@ class QuizSession(CommonMixin, Base):
         Enum(QuizSessionStatus), default=QuizSessionStatus.draft, nullable=False
     )
     difficulty: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    question_count: Mapped[int] = mapped_column(Integer, default=5)
+    question_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, default=None
+    )
     generation_priority: Mapped[str | None] = mapped_column(String(50), nullable=True)
     generation_model_name: Mapped[str | None] = mapped_column(
         String(100), nullable=True

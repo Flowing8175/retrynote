@@ -497,13 +497,21 @@ async def generate_quiz(job_id: str):
                 system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
             )
 
-            questions = ai_result.get("questions", [])[:question_count]
+            all_questions = ai_result.get("questions", [])
+            questions = (
+                all_questions
+                if question_count is None
+                else all_questions[:question_count]
+            )
             if not questions:
                 session.status = QuizSessionStatus.generation_failed
                 job.status = "failed"
                 job.error_message = "AI returned no questions"
                 await db.commit()
                 return
+
+            if question_count is None:
+                session.question_count = len(questions)
 
             for i, q in enumerate(questions):
                 item = QuizItem(

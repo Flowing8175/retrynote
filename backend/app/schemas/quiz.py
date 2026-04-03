@@ -9,7 +9,7 @@ class QuizSessionCreate(BaseModel):
     mode: Literal["normal", "exam"]
     selected_file_ids: list[str] = Field(default=[], max_length=50)
     manual_text: str | None = Field(default=None, max_length=50000)
-    question_count: int = Field(default=5, ge=1, le=50)
+    question_count: int | None = Field(default=None)
     difficulty: str | None = Field(default=None, max_length=50)
     question_types: list[str] = Field(default=[], max_length=10)
     generation_priority: str | None = Field(default=None, max_length=50)
@@ -31,7 +31,7 @@ class QuizSessionDetail(BaseModel):
     source_mode: str
     status: str
     difficulty: str | None
-    question_count: int
+    question_count: int | None
     generation_model_name: str | None
     grading_model_name: str | None
     started_at: datetime | None
@@ -50,7 +50,7 @@ class QuizSessionHistoryItem(BaseModel):
     mode: str
     source_mode: str
     status: str
-    question_count: int
+    question_count: int | None
     difficulty: str | None
     total_score: float | None
     max_score: float | None

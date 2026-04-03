@@ -101,7 +101,7 @@ export default function QuizHistory() {
                       <StatusBadge status={session.status} />
                     </div>
                     <div className="mt-3 text-lg font-semibold text-content-primary">
-                      {session.question_count}문제 세트
+                      {session.question_count ?? '?'}문제 세트
                     </div>
                     <div className="mt-2 text-sm leading-6 text-content-secondary">
                       생성 시각 {formatHistoryDate(session.created_at)}

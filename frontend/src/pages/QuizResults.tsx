@@ -302,7 +302,7 @@ export default function QuizResults() {
               >
                 {performanceTier.badge}
               </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-surface-deep px-3 py-1 text-xs text-content-secondary">{sessionData.question_count}문제 기준</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-surface-deep px-3 py-1 text-xs text-content-secondary">{sessionData.question_count ?? '?'}문제 기준</span>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-surface-deep px-3 py-1 text-xs text-content-secondary">{formatMode(sessionData.mode)}</span>
             </div>
           </div>
@@ -366,7 +366,7 @@ export default function QuizResults() {
           <div className="rounded-xl border border-white/[0.07] bg-surface p-4">
             <div className="text-sm text-content-secondary">문제 수</div>
             <div className="mt-2 text-2xl font-semibold text-content-primary">
-              {sessionData.question_count}문제
+              {sessionData.question_count ?? '?'}문제
             </div>
           </div>
 

@@ -2,7 +2,7 @@ export interface QuizSessionCreate {
   mode: 'normal' | 'exam';
   selected_file_ids: string[];
   manual_text: string | null;
-  question_count: number;
+  question_count: number | null;
   difficulty: string | null;
   question_types: string[];
   generation_priority: string | null;
@@ -22,7 +22,7 @@ export interface QuizSessionDetail {
   source_mode: string;
   status: string;
   difficulty: string | null;
-  question_count: number;
+  question_count: number | null;
   generation_model_name: string | null;
   grading_model_name: string | null;
   started_at: string | null;
@@ -39,7 +39,7 @@ export interface QuizSessionHistoryItem {
   mode: string;
   source_mode: string;
   status: string;
-  question_count: number;
+  question_count: number | null;
   difficulty: string | null;
   total_score: number | null;
   max_score: number | null;

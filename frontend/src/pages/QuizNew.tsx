@@ -71,6 +71,7 @@ export default function QuizNew() {
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [mode, setMode] = useState<'normal' | 'exam'>('normal');
   const [questionCount, setQuestionCount] = useState(5);
+  const [autoCount, setAutoCount] = useState(false);
   const [difficulty, setDifficulty] = useState('');
   const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>([]);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
@@ -91,7 +92,7 @@ export default function QuizNew() {
         mode,
         selected_file_ids: sourceMode === 'document_based' ? selectedFileIds : [],
         manual_text: null,
-        question_count: Math.max(1, Math.min(questionCount, 20)),
+        question_count: autoCount ? null : Math.max(1, Math.min(questionCount, 20)),
         difficulty: difficulty || null,
         question_types: selectedQuestionTypes,
         generation_priority: null,
@@ -391,25 +392,45 @@ export default function QuizNew() {
                     min={1}
                     max={20}
                     value={questionCount}
+                    disabled={autoCount}
                     onChange={(e) => handleQuestionCountChange(e.target.value)}
-                    className="mt-3 w-32 rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-3 text-base text-content-primary focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none"
+                    className={`mt-3 w-32 rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-3 text-base text-content-primary focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-opacity ${autoCount ? 'opacity-30 cursor-not-allowed' : ''}`}
                   />
                   <div className="mt-4 flex flex-wrap gap-2">
                     {QUESTION_COUNT_PRESETS.map((preset) => (
                       <button
                         key={preset}
                         type="button"
+                        disabled={autoCount}
                         onClick={() => setQuestionCount(preset)}
                         className={`rounded-full px-4 py-2 text-sm transition-colors ${
-                          questionCount === preset
-                            ? 'bg-brand-500/15 text-brand-300'
-                            : 'bg-surface text-content-secondary hover:bg-surface-hover'
+                          autoCount
+                            ? 'bg-surface text-content-muted opacity-30 cursor-not-allowed'
+                            : questionCount === preset
+                              ? 'bg-brand-500/15 text-brand-300'
+                              : 'bg-surface text-content-secondary hover:bg-surface-hover'
                         }`}
                       >
                         {preset}문제
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => setAutoCount((prev) => !prev)}
+                      className={`rounded-full px-4 py-2 text-sm transition-colors ${
+                        autoCount
+                          ? 'bg-brand-500/15 text-brand-300 ring-1 ring-brand-500/30'
+                          : 'bg-surface text-content-secondary hover:bg-surface-hover'
+                      }`}
+                    >
+                      자동
+                    </button>
                   </div>
+                  {autoCount && (
+                    <p className="mt-3 text-xs text-content-muted leading-relaxed">
+                      업로드한 자료의 분량과 선택한 문제 유형을 고려해 AI가 적합한 문제 수를 결정합니다.
+                    </p>
+                  )}
                 </div>
               </div>
 
