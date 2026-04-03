@@ -76,23 +76,23 @@ export default function Retry() {
         </p>
       </section>
 
-      <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-7 md:px-8">
-        <div className="space-y-8">
+      <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-8 md:px-8">
+        <div className="space-y-10">
 
           {/* 개념 선택 현황 + 자동 체크박스 */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex-1">
               {hasSelectedConcepts ? (
                 <div>
-                  <div className="mb-4 text-base text-content-secondary">
-                    선택된 오답노트{' '}
-                    <span className="text-xl font-bold text-content-primary">{selectedCount}건</span>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
+                  <p className="text-sm font-medium text-content-secondary">선택된 오답노트</p>
+                  <p className="mt-1 text-3xl font-bold tracking-tight text-content-primary">
+                    {selectedCount}건
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
                     {selectedConceptKeys.map((key) => (
                       <span
                         key={key}
-                        className="rounded-full border border-brand-500/20 bg-brand-500/10 px-4 py-1.5 text-base text-brand-300"
+                        className="rounded-full border border-brand-500/20 bg-brand-500/10 px-4 py-1.5 text-sm font-medium text-brand-300"
                       >
                         {selectedConceptLabels[key] || key}
                       </span>
@@ -100,17 +100,16 @@ export default function Retry() {
                   </div>
                 </div>
               ) : (
-                <div className="text-base text-content-secondary">
-                  오답노트 전체{' '}
-                  <span className="text-xl font-bold text-content-primary">
-                    {wrongNotesTotal !== undefined ? `${wrongNotesTotal}건` : '?건'}
-                  </span>{' '}
-                  기준
+                <div>
+                  <p className="text-sm font-medium text-content-secondary">오답노트 전체 기준</p>
+                  <p className="mt-1 text-3xl font-bold tracking-tight text-content-primary">
+                    {wrongNotesTotal !== undefined ? `${wrongNotesTotal}건` : '—'}
+                  </p>
                 </div>
               )}
             </div>
 
-            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2 rounded-xl border border-white/[0.07] bg-surface-deep px-5 py-3 text-base text-content-primary transition-colors hover:bg-surface-hover">
+            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2.5 rounded-xl border border-white/[0.07] bg-surface-deep px-5 py-3 text-base text-content-primary transition-colors hover:bg-surface-hover">
               <input
                 type="checkbox"
                 checked={autoMode}
@@ -118,17 +117,14 @@ export default function Retry() {
                 className="h-4 w-4 accent-brand-500"
               />
               자동
-              <span className="text-sm text-content-muted">(AI 추천 기준)</span>
+              <span className="text-sm text-content-muted">AI 추천</span>
             </label>
           </div>
 
           {/* 문제 수 정하기 */}
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">문제 수 정하기</p>
-            <div className="mt-4 rounded-2xl border border-white/[0.07] bg-surface-deep px-6 py-6">
-              <label htmlFor="retry-question-count" className="text-base font-semibold text-content-primary">
-                문제 수
-              </label>
+          <div className="border-t border-white/[0.07] pt-8">
+            <p className="text-lg font-semibold text-content-primary">문제 수 정하기</p>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
               <input
                 id="retry-question-count"
                 type="number"
@@ -137,44 +133,45 @@ export default function Retry() {
                 value={questionCount}
                 disabled={autoCount}
                 onChange={(e) => handleQuestionCountChange(e.target.value)}
-                className={`mt-3 w-36 rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-3 text-lg text-content-primary focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-opacity ${autoCount ? 'opacity-30 cursor-not-allowed' : ''}`}
+                className={`w-24 rounded-xl border border-white/[0.10] bg-surface-deep px-4 py-2.5 text-xl font-semibold text-content-primary focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-opacity ${autoCount ? 'opacity-30 cursor-not-allowed' : ''}`}
               />
-              <div className="mt-5 flex flex-wrap gap-3">
-                {QUESTION_COUNT_PRESETS.map((preset) => (
-                  <button
-                    key={preset}
-                    type="button"
-                    disabled={autoCount}
-                    onClick={() => setQuestionCount(preset)}
-                    className={`rounded-full px-5 py-2.5 text-base font-medium transition-colors ${
-                      autoCount
-                        ? 'bg-surface text-content-muted opacity-30 cursor-not-allowed'
-                        : questionCount === preset
-                          ? 'bg-brand-500/15 text-brand-300'
-                          : 'bg-surface text-content-secondary hover:bg-surface-hover'
-                    }`}
-                  >
-                    {preset}문제
-                  </button>
-                ))}
+              <span className={`text-base text-content-secondary transition-opacity ${autoCount ? 'opacity-30' : ''}`}>문제</span>
+            </div>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {QUESTION_COUNT_PRESETS.map((preset) => (
                 <button
+                  key={preset}
                   type="button"
-                  onClick={() => setAutoCount((prev) => !prev)}
-                  className={`rounded-full px-5 py-2.5 text-base font-medium transition-colors ${
+                  disabled={autoCount}
+                  onClick={() => setQuestionCount(preset)}
+                  className={`rounded-full px-5 py-2 text-base font-medium transition-colors ${
                     autoCount
-                      ? 'bg-brand-500/15 text-brand-300 ring-1 ring-brand-500/30'
-                      : 'bg-surface text-content-secondary hover:bg-surface-hover'
+                      ? 'cursor-not-allowed opacity-30 bg-surface-deep text-content-muted'
+                      : questionCount === preset
+                        ? 'bg-brand-500/15 text-brand-300 ring-1 ring-brand-500/30'
+                        : 'bg-surface-deep text-content-secondary hover:bg-surface-hover'
                   }`}
                 >
-                  자동
+                  {preset}문제
                 </button>
-              </div>
-              {autoCount && (
-                <p className="mt-4 text-sm text-content-muted leading-relaxed">
-                  틀린 개념의 수와 오답 패턴을 고려해 AI가 적합한 문제 수를 결정합니다.
-                </p>
-              )}
+              ))}
+              <button
+                type="button"
+                onClick={() => setAutoCount((prev) => !prev)}
+                className={`rounded-full px-5 py-2 text-base font-medium transition-colors ${
+                  autoCount
+                    ? 'bg-brand-500/15 text-brand-300 ring-1 ring-brand-500/30'
+                    : 'bg-surface-deep text-content-secondary hover:bg-surface-hover'
+                }`}
+              >
+                자동
+              </button>
             </div>
+            {autoCount && (
+              <p className="mt-3 text-sm leading-relaxed text-content-muted">
+                틀린 개념의 수와 오답 패턴을 고려해 AI가 적합한 문제 수를 결정합니다.
+              </p>
+            )}
           </div>
 
           {error && (
