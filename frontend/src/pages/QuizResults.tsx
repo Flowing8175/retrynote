@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { quizApi } from '@/api';
+import { quizApi, retryApi } from '@/api';
 import { objectionsApi } from '@/api/objections';
 import { wrongNotesApi } from '@/api/wrongNotes';
 import { StatusBadge } from '@/components';
@@ -245,6 +245,34 @@ export default function QuizResults() {
       })
       .filter((value): value is { item: QuizItemResponse; note: WrongNoteItem } => Boolean(value));
   }, [quizItems, wrongNotes]);
+
+  const wrongConceptKeys = useMemo(() => {
+    return [...new Set(
+      objectionCandidates
+        .map(({ note }) => note.concept_key)
+        .filter((k): k is string => !!k)
+    )];
+  }, [objectionCandidates]);
+
+  const createRetryMutation = useMutation({
+    mutationFn: (conceptKeys: string[]) =>
+      retryApi.createRetrySet({
+        source: 'wrong_notes',
+        concept_keys: conceptKeys.length > 0 ? conceptKeys : null,
+        size: null,
+      }),
+    onSuccess: (data) => {
+      navigate(`/quiz/${data.quiz_session_id}`);
+    },
+  });
+
+  const handleRetryAction = (to: string) => {
+    if (to === '/retry') {
+      createRetryMutation.mutate(wrongConceptKeys);
+    } else {
+      navigate(to);
+    }
+  };
 
   const createObjectionMutation = useMutation({
     mutationFn: (params: { itemId: string; answerLogId: string; reason: string }) =>
@@ -491,39 +519,51 @@ export default function QuizResults() {
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.3fr,1fr,1fr]">
-          <button
-            type="button"
-            onClick={() => navigate(performanceTier.primaryAction.to)}
-            className="w-full rounded-2xl border border-brand-500/20 bg-brand-500/10 p-5 text-left transition-colors hover:bg-brand-500/15"
-          >
-            <div className="text-sm font-medium text-brand-300">추천 다음 단계</div>
-            <div className="mt-3 text-xl font-semibold text-content-primary">
-              {performanceTier.primaryAction.title}
-            </div>
-            {performanceTier.primaryAction.description && (
-              <p className="mt-2 text-sm leading-6 text-content-secondary">{performanceTier.primaryAction.description}</p>
-            )}
-            <span className="mt-6 inline-flex items-center rounded-2xl bg-brand-500 px-4 py-2 text-sm font-bold text-content-inverse transition-colors hover:bg-brand-600 hover:-translate-y-px">
-              {performanceTier.primaryAction.buttonLabel}
-            </span>
-          </button>
+          {(() => {
+            const isPrimaryRetry = performanceTier.primaryAction.to === '/retry';
+            const isPrimaryPending = isPrimaryRetry && createRetryMutation.isPending;
+            return (
+              <button
+                type="button"
+                onClick={() => handleRetryAction(performanceTier.primaryAction.to)}
+                disabled={isPrimaryPending}
+                className="w-full rounded-2xl border border-brand-500/20 bg-brand-500/10 p-5 text-left transition-colors hover:bg-brand-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <div className="text-sm font-medium text-brand-300">추천 다음 단계</div>
+                <div className="mt-3 text-xl font-semibold text-content-primary">
+                  {performanceTier.primaryAction.title}
+                </div>
+                {performanceTier.primaryAction.description && (
+                  <p className="mt-2 text-sm leading-6 text-content-secondary">{performanceTier.primaryAction.description}</p>
+                )}
+                <span className="mt-6 inline-flex items-center rounded-2xl bg-brand-500 px-4 py-2 text-sm font-bold text-content-inverse transition-colors hover:bg-brand-600 hover:-translate-y-px">
+                  {isPrimaryPending ? '생성 중…' : performanceTier.primaryAction.buttonLabel}
+                </span>
+              </button>
+            );
+          })()}
 
-          {performanceTier.secondaryActions.map((action) => (
-            <button
-              key={action.to}
-              type="button"
-              onClick={() => navigate(action.to)}
-              className="w-full rounded-2xl border border-white/[0.07] bg-surface p-5 text-left transition-colors hover:bg-surface-hover"
-            >
-              <div className="text-lg font-semibold text-content-primary">{action.title}</div>
-              {action.description && (
-                <p className="mt-2 text-sm leading-6 text-content-secondary">{action.description}</p>
-              )}
-              <span className="mt-6 inline-flex items-center rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-2 text-sm font-medium text-content-primary">
-                {action.buttonLabel}
-              </span>
-            </button>
-          ))}
+          {performanceTier.secondaryActions.map((action) => {
+            const isRetry = action.to === '/retry';
+            const isPending = isRetry && createRetryMutation.isPending;
+            return (
+              <button
+                key={action.to}
+                type="button"
+                onClick={() => handleRetryAction(action.to)}
+                disabled={isPending}
+                className="w-full rounded-2xl border border-white/[0.07] bg-surface p-5 text-left transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <div className="text-lg font-semibold text-content-primary">{action.title}</div>
+                {action.description && (
+                  <p className="mt-2 text-sm leading-6 text-content-secondary">{action.description}</p>
+                )}
+                <span className="mt-6 inline-flex items-center rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-2 text-sm font-medium text-content-primary">
+                  {isPending ? '생성 중…' : action.buttonLabel}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </section>
     </div>
