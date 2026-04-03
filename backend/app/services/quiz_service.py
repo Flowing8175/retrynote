@@ -446,9 +446,13 @@ async def generate_quiz(job_id: str):
 
             question_count = payload.get("question_count", session.question_count)
             difficulty = payload.get("difficulty", session.difficulty)
-            question_types = payload.get(
-                "question_types", ["multiple_choice", "short_answer"]
-            )
+            question_types = payload.get("question_types", []) or [
+                "multiple_choice",
+                "ox",
+                "short_answer",
+                "fill_blank",
+                "essay",
+            ]
 
             recent_concepts_result = await db.execute(
                 select(QuizItem.concept_key)
