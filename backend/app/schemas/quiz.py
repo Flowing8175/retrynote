@@ -137,3 +137,4 @@ class AnswerLogEntry(BaseModel):
     error_type: str | None = None
     normalized_user_answer: str | None = None
     suggested_feedback: str | None = None
+    correct_answer: dict | None = None

@@ -119,4 +119,5 @@ export interface AnswerLogEntry {
   error_type: string | null;
   normalized_user_answer: string | null;
   suggested_feedback: string | null;
+  correct_answer: Record<string, unknown> | null;
 }

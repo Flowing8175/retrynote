@@ -655,6 +655,9 @@ async def get_answer_logs(
             error_type=log.error_type.value if log.error_type else None,
             normalized_user_answer=log.user_answer_normalized,
             suggested_feedback=None,
+            correct_answer=items_map[log.quiz_item_id].correct_answer_json
+            if log.quiz_item_id in items_map
+            else None,
         )
         for log in logs
     ]
