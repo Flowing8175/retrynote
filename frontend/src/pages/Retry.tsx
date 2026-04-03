@@ -25,7 +25,7 @@ export default function Retry() {
   const selectedConceptLabels = hasSelectedConcepts ? locationState!.conceptLabels : {};
   const selectedCount = hasSelectedConcepts ? locationState!.selectedCount : 0;
 
-  const [autoMode, setAutoMode] = useState(false);
+  const [conceptMode, setConceptMode] = useState<'manual' | 'ai'>('manual');
   const [questionCount, setQuestionCount] = useState(5);
   const [autoCount, setAutoCount] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,15 +39,16 @@ export default function Retry() {
 
   const createRetryMutation = useMutation({
     mutationFn: () => {
-      const source = autoMode
-        ? 'dashboard_recommendation'
-        : hasSelectedConcepts
-          ? 'concept_manual'
-          : 'wrong_notes';
+      const source =
+        conceptMode === 'ai'
+          ? 'dashboard_recommendation'
+          : hasSelectedConcepts
+            ? 'concept_manual'
+            : 'wrong_notes';
 
       return retryApi.createRetrySet({
         source,
-        concept_keys: !autoMode && hasSelectedConcepts ? selectedConceptKeys : null,
+        concept_keys: conceptMode === 'manual' && hasSelectedConcepts ? selectedConceptKeys : null,
         size: autoCount ? null : Math.max(1, Math.min(questionCount, 20)),
       });
     },
@@ -79,46 +80,69 @@ export default function Retry() {
       <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-8 md:px-8">
         <div className="space-y-10">
 
-          {/* 개념 선택 현황 + 자동 체크박스 */}
-          <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex-1">
-              {hasSelectedConcepts ? (
-                <div>
-                  <p className="text-sm font-medium text-content-secondary">선택된 오답노트</p>
-                  <p className="mt-1 text-3xl font-bold tracking-tight text-content-primary">
-                    {selectedCount}건
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {selectedConceptKeys.map((key) => (
-                      <span
-                        key={key}
-                        className="rounded-full border border-brand-500/20 bg-brand-500/10 px-4 py-1.5 text-sm font-medium text-brand-300"
-                      >
-                        {selectedConceptLabels[key] || key}
-                      </span>
-                    ))}
+          {/* 개념 선택 모드 토글 */}
+          <div>
+            <div className="inline-flex rounded-2xl bg-surface-deep p-1 gap-1">
+              <button
+                type="button"
+                onClick={() => setConceptMode('manual')}
+                className={
+                  conceptMode === 'manual'
+                    ? 'rounded-xl px-5 py-2.5 text-sm font-medium bg-surface text-content-primary shadow-sm'
+                    : 'rounded-xl px-5 py-2.5 text-sm font-medium text-content-secondary hover:bg-surface-hover'
+                }
+              >
+                내가 고른 개념
+              </button>
+              <button
+                type="button"
+                onClick={() => setConceptMode('ai')}
+                className={
+                  conceptMode === 'ai'
+                    ? 'rounded-xl px-5 py-2.5 text-sm font-medium bg-surface text-content-primary shadow-sm'
+                    : 'rounded-xl px-5 py-2.5 text-sm font-medium text-content-secondary hover:bg-surface-hover'
+                }
+              >
+                AI 추천 개념
+              </button>
+            </div>
+
+            <div className="mt-6">
+              {conceptMode === 'manual' ? (
+                hasSelectedConcepts ? (
+                  <div>
+                    <p className="text-sm font-medium text-content-secondary">선택된 오답노트</p>
+                    <p className="mt-1 text-3xl font-bold tracking-tight text-content-primary">
+                      {selectedCount}건
+                    </p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {selectedConceptKeys.map((key) => (
+                        <span
+                          key={key}
+                          className="rounded-full border border-brand-500/20 bg-brand-500/10 px-4 py-1.5 text-sm font-medium text-brand-300"
+                        >
+                          {selectedConceptLabels[key] || key}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div>
+                    <p className="text-sm font-medium text-content-secondary">오답노트 전체 기준</p>
+                    <p className="mt-1 text-3xl font-bold tracking-tight text-content-primary">
+                      {wrongNotesTotal !== undefined ? `${wrongNotesTotal}건` : '—'}
+                    </p>
+                  </div>
+                )
               ) : (
-                <div>
-                  <p className="text-sm font-medium text-content-secondary">오답노트 전체 기준</p>
-                  <p className="mt-1 text-3xl font-bold tracking-tight text-content-primary">
-                    {wrongNotesTotal !== undefined ? `${wrongNotesTotal}건` : '—'}
+                <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
+                  <p className="text-base font-medium text-content-primary">AI가 개념을 선택합니다</p>
+                  <p className="mt-2 text-sm leading-6 text-content-secondary">
+                    반복 오답 패턴을 분석해 지금 가장 취약한 개념 위주로 문제를 구성합니다.
                   </p>
                 </div>
               )}
             </div>
-
-            <label className="inline-flex shrink-0 cursor-pointer items-center gap-2.5 rounded-xl border border-white/[0.07] bg-surface-deep px-5 py-3 text-base text-content-primary transition-colors hover:bg-surface-hover">
-              <input
-                type="checkbox"
-                checked={autoMode}
-                onChange={(e) => setAutoMode(e.target.checked)}
-                className="h-4 w-4 accent-brand-500"
-              />
-              자동
-              <span className="text-sm text-content-muted">AI 추천</span>
-            </label>
           </div>
 
           {/* 문제 수 정하기 */}
@@ -164,7 +188,7 @@ export default function Retry() {
                     : 'bg-surface-deep text-content-secondary hover:bg-surface-hover'
                 }`}
               >
-                자동
+                AI 결정
               </button>
             </div>
             {autoCount && (
