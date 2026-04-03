@@ -153,7 +153,7 @@ export default function QuizTake() {
           normalized_user_answer: log.normalized_user_answer,
           suggested_feedback: log.suggested_feedback,
           next_item_id: null,
-          correct_answer: log.correct_answer,
+          correct_answer: null,
         };
       }
 
