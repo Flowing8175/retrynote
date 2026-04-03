@@ -53,7 +53,7 @@ export default function WrongNotes() {
       ),
   });
 
-  const handleRetry = (_conceptKey: string) => {
+  const handleRetry = () => {
     navigate('/retry');
   };
 
@@ -157,7 +157,7 @@ export default function WrongNotes() {
 
               <div className="mt-5">
                 <button
-                  onClick={() => handleRetry(item.concept_key || '')}
+                  onClick={handleRetry}
                   className="inline-flex items-center justify-center rounded-xl border border-brand-500/20 bg-brand-500/10 px-4 py-2.5 text-sm font-medium text-brand-300 transition-colors hover:bg-brand-500/10 hover:text-brand-300"
                 >
                   이 개념으로 재도전

@@ -234,7 +234,7 @@ export default function QuizTake() {
         setValidationMessage(null);
       }
     },
-    [currentItem, validationMessage]
+    [currentItem, isExamMode, validationMessage]
   );
 
   const handleSubmit = useCallback(() => {

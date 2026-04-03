@@ -7,6 +7,14 @@ import type {
   FileFolder,
 } from '@/types';
 
+const decodeDownloadName = (value: string): string => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
 export const filesApi = {
   uploadFile: async (
     file: File | null,
@@ -88,11 +96,8 @@ export const filesApi = {
     const anchor = document.createElement('a');
     anchor.href = blobUrl;
     const contentDisposition = response.headers['content-disposition'] as string | undefined;
-    const filenameMatch = contentDisposition?.match(/filename\*?=(?:UTF-8''|\")?([^\";]+)/i);
-    let downloadName = (filenameMatch?.[1] ?? fileId).replace(/\"/g, '');
-    try {
-      downloadName = decodeURIComponent(downloadName);
-    } catch {}
+    const filenameMatch = contentDisposition?.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+    const downloadName = decodeDownloadName((filenameMatch?.[1] ?? fileId).replace(/"/g, ''));
     anchor.download = downloadName;
     document.body.appendChild(anchor);
     anchor.click();

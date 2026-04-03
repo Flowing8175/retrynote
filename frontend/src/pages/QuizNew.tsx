@@ -108,15 +108,14 @@ export default function QuizNew() {
     },
   });
 
-  const allFiles = filesData?.files ?? [];
-
   const fileGroups = useMemo(() => {
+    const allFiles = filesData?.files ?? [];
     const readyFiles = allFiles.filter((file) => file.is_quiz_eligible && (file.status === 'ready' || file.status === 'failed_partial'));
     const processingFiles = allFiles.filter((file) => file.is_quiz_eligible && isFileProcessingStatus(file.status));
     const unavailableFiles = allFiles.filter((file) => !file.is_quiz_eligible || (!isFileProcessingStatus(file.status) && file.status !== 'ready' && file.status !== 'failed_partial'));
 
     return { readyFiles, processingFiles, unavailableFiles };
-  }, [allFiles]);
+  }, [filesData?.files]);
 
   const selectedFiles = fileGroups.readyFiles.filter((file) => selectedFileIds.includes(file.id));
 

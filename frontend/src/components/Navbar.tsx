@@ -9,7 +9,7 @@ export default function Navbar() {
     return (
     <>
       <AdminBanner />
-      <nav className="sticky top-0 z-40 border-b border-white/[0.05] bg-surface/85 backdrop-blur-md">
+      <nav className="sticky top-0 z-40 border-b border-white/[0.05] bg-surface/95 md:bg-surface/85 md:backdrop-blur-md">
         <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:h-16 sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-0 lg:px-8">
           <div className="flex min-w-0 items-center gap-3 sm:gap-4">
             <Link to="/" className="flex min-w-0 items-center gap-3 text-content-primary transition-opacity hover:opacity-80">
