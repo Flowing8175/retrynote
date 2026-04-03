@@ -8,6 +8,7 @@ import PasswordReset from '@/pages/PasswordReset';
 import Dashboard from '@/pages/Dashboard';
 import Files from '@/pages/Files';
 import QuizNew from '@/pages/QuizNew';
+import QuizHistory from '@/pages/QuizHistory';
 import QuizTake from '@/pages/QuizTake';
 import QuizResults from '@/pages/QuizResults';
 import WrongNotes from '@/pages/WrongNotes';
@@ -90,6 +91,13 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <QuizNew />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/quiz/history" element={
+            <ProtectedRoute>
+              <Layout>
+                <QuizHistory />
               </Layout>
             </ProtectedRoute>
           } />

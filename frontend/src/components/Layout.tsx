@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderOpen, CircleHelp, TriangleAlert, RefreshCw, Search, Menu } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu } from 'lucide-react';
 import Navbar from './Navbar';
 
 interface LayoutProps {
@@ -29,6 +29,11 @@ const navItems: NavItem[] = [
     path: '/quiz/new',
     label: '퀴즈 생성',
     icon: <CircleHelp className="w-5 h-5" />,
+  },
+  {
+    path: '/quiz/history',
+    label: '퀴즈 기록',
+    icon: <History className="w-5 h-5" />,
   },
   {
     path: '/wrong-notes',

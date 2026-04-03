@@ -235,25 +235,6 @@ async def get_quiz_items(
     )
     items = result.scalars().all()
 
-    if session.mode == QuizMode.exam and session.status not in (
-        QuizSessionStatus.graded,
-        QuizSessionStatus.regraded,
-        QuizSessionStatus.closed,
-    ):
-        return [
-            QuizItemResponse(
-                id=i.id,
-                item_order=i.item_order,
-                question_type=i.question_type.value,
-                question_text=i.question_text,
-                options=i.options_json,
-                difficulty=i.difficulty,
-                concept_label=i.concept_label,
-                category_tag=i.category_tag,
-            )
-            for i in items
-        ]
-
     return [
         QuizItemResponse(
             id=i.id,
@@ -504,6 +485,28 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
         suggested_feedback=suggested_feedback,
         next_item_id=next_item_id,
     )
+
+
+@router.delete("/{session_id}", status_code=204)
+async def delete_quiz_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(QuizSession).where(
+            QuizSession.id == session_id,
+            QuizSession.deleted_at.is_(None),
+        )
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.user_id != user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    session.deleted_at = datetime.now(timezone.utc)
+    await db.commit()
 
 
 @router.post("/{session_id}/draft-answer", response_model=DraftAnswerResponse)

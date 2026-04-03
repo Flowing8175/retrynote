@@ -1,27 +1,11 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
+import { History } from 'lucide-react';
 import { filesApi, quizApi } from '@/api';
 import { LoadingSpinner, Modal, StatusBadge } from '@/components';
 import { fileProcessingStatusLabels, isFileProcessingStatus } from '@/types/file';
 import type { FileDetail } from '@/types';
-
-function formatHistoryDate(value: string) {
-  return new Intl.DateTimeFormat('ko-KR', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
-
-function formatHistorySource(sourceMode: string) {
-  return sourceMode === 'document_based' ? '자료 기반' : '자료 없이 생성';
-}
-
-function formatHistoryMode(mode: string) {
-  return mode === 'exam' ? '시험 모드' : '일반 모드';
-}
 
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: '객관식' },
@@ -99,11 +83,6 @@ export default function QuizNew() {
     queryFn: () => filesApi.listFiles(1, 100),
     refetchInterval: (query) =>
       query.state.data?.files.some((file) => isFileProcessingStatus(file.status)) ? 2000 : false,
-  });
-
-  const { data: historyData, isLoading: historyLoading } = useQuery({
-    queryKey: ['quiz-history'],
-    queryFn: () => quizApi.listQuizSessions(5),
   });
 
   const createQuizMutation = useMutation({
@@ -201,6 +180,15 @@ export default function QuizNew() {
             <h1 className="text-3xl font-semibold tracking-tight text-content-primary md:text-4xl">
               퀴즈 만들기
             </h1>
+            <div className="mt-3">
+              <Link
+                to="/quiz/history"
+                className="inline-flex items-center gap-2 rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover hover:text-content-primary"
+              >
+                <History className="h-4 w-4" />
+                퀴즈 기록 보기
+              </Link>
+            </div>
           </div>
 
           <aside className="rounded-3xl border border-brand-500/20 bg-surface-raised px-6 py-7">
@@ -533,55 +521,6 @@ export default function QuizNew() {
           </section>
         )}
 
-        <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-7 md:px-8">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">이전에 만든 퀴즈</p>
-              <h2 className="mt-2 text-xl font-semibold text-content-primary">최근 퀴즈</h2>
-            </div>
-          </div>
-
-          {historyLoading ? (
-            <div className="mt-6 flex items-center justify-center rounded-2xl border border-white/[0.07] bg-surface-deep px-6 py-8">
-              <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-brand-500" />
-            </div>
-          ) : (historyData?.length ?? 0) === 0 ? (
-            <div className="mt-6 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5 text-sm leading-6 text-content-secondary">
-              생성 기록이 없습니다.
-            </div>
-          ) : (
-            <div className="mt-6 space-y-3">
-              {historyData?.map((session) => (
-                <Link
-                  key={session.id}
-                  to={`/quiz/${session.id}`}
-                  className="flex flex-col gap-4 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5 transition-colors hover:bg-surface-hover lg:flex-row lg:items-center lg:justify-between"
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-xs font-medium text-brand-300">
-                        {formatHistorySource(session.source_mode)}
-                      </span>
-                      <span className="rounded-full border border-white/[0.07] bg-surface px-3 py-1 text-xs text-content-secondary">
-                        {formatHistoryMode(session.mode)}
-                      </span>
-                      <StatusBadge status={session.status} />
-                    </div>
-                    <div className="mt-3 text-lg font-semibold text-content-primary">
-                      {session.question_count}문제 세트
-                    </div>
-                    <div className="mt-2 text-sm leading-6 text-content-secondary">
-                      생성 시각 {formatHistoryDate(session.created_at)}
-                      {session.difficulty ? ` · 난이도 ${session.difficulty}` : ''}
-                    </div>
-                  </div>
-
-                  <div className="text-sm text-brand-300">열어보기 →</div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </section>
       </div>
 
       <Modal

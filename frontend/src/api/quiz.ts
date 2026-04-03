@@ -69,4 +69,8 @@ export const quizApi = {
     );
     return response.data;
   },
+
+  deleteQuizSession: async (sessionId: string): Promise<void> => {
+    await apiClient.delete(`/quiz-sessions/${sessionId}`);
+  },
 };
