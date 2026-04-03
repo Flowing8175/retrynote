@@ -30,7 +30,7 @@ SYSTEM_PROMPT_RETRY_GENERATION = """너는 오답 재도전 문제를 만드는 
   - question_text: 명확한 문제 문장
   - options: 객관식/OX인 경우만 제공
   - correct_answer: {"answer": "정답값"}
-  - explanation: 해설 - 반드시 "정답: [정답값]"으로 시작 후 이유 설명
+  - explanation: 해설
   - concept_key: 이전과 동일한 concept_key
   - targeted_error_type: 이번 재도전이 겨냥하는 오류 유형
   - hint: 힌트 (없으면 null)
