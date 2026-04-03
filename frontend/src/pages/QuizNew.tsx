@@ -117,56 +117,6 @@ export default function QuizNew() {
     return { readyFiles, processingFiles, unavailableFiles };
   }, [filesData?.files]);
 
-  const selectedFiles = fileGroups.readyFiles.filter((file) => selectedFileIds.includes(file.id));
-  const difficultyLabel = DIFFICULTY_OPTIONS.find((option) => option.value === difficulty)?.label ?? '선택 안 함';
-  const selectedQuestionTypeLabels = QUESTION_TYPES.filter((questionType) => selectedQuestionTypes.includes(questionType.value)).map(
-    (questionType) => questionType.label
-  );
-  const sourceModeLabel = sourceMode === 'document_based' ? '자료 기반' : '자료 없이 생성';
-  const modeLabel = mode === 'normal' ? '일반 모드' : '시험 모드';
-  const questionCountSummary = autoCount ? 'AI 자동 결정' : `${questionCount}문제`;
-  const settingsSummary = showAdvancedOptions
-    ? [
-        difficulty ? `난이도 ${difficultyLabel}` : '난이도 기본',
-        selectedQuestionTypeLabels.length > 0 ? `유형 ${selectedQuestionTypeLabels.length}개 선택` : '유형 전체',
-      ].join(' · ')
-    : '기본 설정 사용';
-  const selectedFilePreviewNames = selectedFiles.slice(0, 2).map((file) => file.original_filename || '이름 없는 자료');
-  const remainingSelectedFileCount = Math.max(0, selectedFiles.length - selectedFilePreviewNames.length);
-  const headerNoteTone = sourceMode === 'no_source' || (sourceMode === 'document_based' && selectedFiles.length === 0) ? 'warning' : 'brand';
-  const headerNoteTitle = sourceMode === 'no_source'
-    ? '자료 없이 빠르게 점검용 세트를 만들 수 있습니다.'
-    : selectedFiles.length > 0
-      ? '선택한 자료를 바탕으로 바로 생성할 준비가 됐습니다.'
-      : '자료 기반으로 만들려면 먼저 사용할 자료를 골라 주세요.';
-  const headerNoteDescription = sourceMode === 'no_source'
-    ? '자료를 쓰지 않으면 생성 속도는 빠르지만, 정답 근거와 정확도는 더 약해질 수 있습니다.'
-    : selectedFiles.length > 0
-      ? `${selectedFiles.length}개 자료에서 핵심 내용을 뽑아 ${mode === 'normal' ? '즉시 피드백형' : '시험형'}으로 구성합니다.`
-      : '처리 완료된 자료를 1개 이상 선택하면 내용 기반으로 더 안정적인 퀴즈를 만들 수 있습니다.';
-  const setupSteps = [
-    {
-      label: '생성 기준',
-      value: sourceModeLabel,
-      tone: 'brand',
-    },
-    {
-      label: '자료 선택',
-      value: sourceMode === 'no_source' ? '건너뜀' : selectedFiles.length > 0 ? `${selectedFiles.length}개 선택` : '선택 필요',
-      tone: sourceMode === 'no_source' || selectedFiles.length > 0 ? 'brand' : 'warning',
-    },
-    {
-      label: '풀이 방식',
-      value: modeLabel,
-      tone: 'brand',
-    },
-    {
-      label: '세트 설정',
-      value: questionCountSummary,
-      tone: 'neutral',
-    },
-  ] as const;
-
   const canSubmitDocumentBased = sourceMode === 'document_based' && selectedFileIds.length > 0;
   const primaryActionLabel = sourceMode === 'no_source' ? '자료 없이 퀴즈 만들기' : '퀴즈 만들기';
 
@@ -223,7 +173,7 @@ export default function QuizNew() {
   return (
     <>
       <div className="space-y-8">
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
+        <section>
           <div className="animate-fade-in-up space-y-5 px-1 py-2">
             <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div className="max-w-3xl">
@@ -244,126 +194,7 @@ export default function QuizNew() {
               </Link>
             </div>
 
-            <div className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-6">
-              <div className="flex flex-wrap gap-2">
-                {setupSteps.map((step) => (
-                  <div
-                    key={step.label}
-                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium ${
-                      step.tone === 'warning'
-                        ? 'border-semantic-warning-border bg-semantic-warning-bg/70 text-semantic-warning'
-                        : step.tone === 'brand'
-                          ? 'border-brand-500/20 bg-brand-500/10 text-brand-300'
-                          : 'border-white/[0.07] bg-surface-deep text-content-secondary'
-                    }`}
-                  >
-                    <span className="text-[11px] font-bold uppercase tracking-[0.18em]">{step.label}</span>
-                    <span className="text-content-primary">{step.value}</span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-4">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-content-muted">생성 기준</div>
-                  <div className="mt-2 text-base font-semibold text-content-primary">{sourceModeLabel}</div>
-                  <p className="mt-1 text-sm leading-6 text-content-secondary">
-                    {sourceMode === 'document_based' ? '업로드한 자료 내용에서 출제' : '주제만 보고 빠르게 생성'}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-4">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-content-muted">사용 자료</div>
-                  <div className="mt-2 text-base font-semibold text-content-primary">
-                    {sourceMode === 'no_source' ? '사용 안 함' : `${selectedFiles.length}개 선택`}
-                  </div>
-                  <p className="mt-1 text-sm leading-6 text-content-secondary">
-                    {sourceMode === 'no_source'
-                      ? '자료 없이 바로 시작'
-                      : selectedFiles.length > 0
-                        ? '선택 자료를 바탕으로 안정적으로 생성'
-                        : '자료 기반 생성에는 최소 1개가 필요'}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-4">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-content-muted">풀이 방식</div>
-                  <div className="mt-2 text-base font-semibold text-content-primary">{modeLabel}</div>
-                  <p className="mt-1 text-sm leading-6 text-content-secondary">
-                    {mode === 'normal' ? '문제마다 바로 정답과 해설 확인' : '마지막에 한꺼번에 채점'}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-4">
-                  <div className="text-[11px] font-bold uppercase tracking-[0.18em] text-content-muted">세트 설정</div>
-                  <div className="mt-2 text-base font-semibold text-content-primary">{questionCountSummary}</div>
-                  <p className="mt-1 text-sm leading-6 text-content-secondary">{settingsSummary}</p>
-                </div>
-              </div>
-
-              <div
-                className={`mt-4 rounded-2xl border px-4 py-4 ${
-                  headerNoteTone === 'warning'
-                    ? 'border-semantic-warning-border bg-semantic-warning-bg/70'
-                    : 'border-brand-500/20 bg-brand-500/10'
-                }`}
-              >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="max-w-2xl">
-                    <div className="text-sm font-medium text-content-primary">지금 확인할 것</div>
-                    <div className="mt-1 text-base font-semibold text-content-primary">{headerNoteTitle}</div>
-                    <p className="mt-2 text-sm leading-6 text-content-secondary">{headerNoteDescription}</p>
-                  </div>
-
-                  {sourceMode === 'document_based' && selectedFilePreviewNames.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 lg:max-w-sm lg:justify-end">
-                      {selectedFilePreviewNames.map((fileName) => (
-                        <span
-                          key={fileName}
-                          className="inline-block max-w-[14rem] truncate rounded-full border border-white/[0.07] bg-surface px-3 py-1 text-xs text-content-secondary"
-                        >
-                          {fileName}
-                        </span>
-                      ))}
-                      {remainingSelectedFileCount > 0 && (
-                        <span className="rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-xs font-medium text-brand-300">
-                          +{remainingSelectedFileCount}개 더 선택
-                        </span>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="rounded-full border border-white/[0.07] bg-surface px-3 py-1 text-xs text-content-secondary">
-                      {showAdvancedOptions ? '고급 옵션 검토 중' : '고급 옵션은 기본값 유지'}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
           </div>
-
-          <aside className="rounded-3xl border border-brand-500/20 bg-surface-raised px-6 py-7">
-            <p className="text-sm font-medium text-content-secondary">현재 선택</p>
-            <div className="mt-4 space-y-4">
-              <div>
-                <div className="text-xs uppercase tracking-[0.18em] text-content-muted">생성 기준</div>
-                <div className="mt-2 text-lg font-semibold text-content-primary">
-                  {sourceMode === 'document_based' ? '선택한 자료를 바탕으로 생성' : '자료 없이 간단 점검용으로 생성'}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-[0.18em] text-content-muted">풀이 방식</div>
-                <div className="mt-2 text-lg font-semibold text-content-primary">
-                  {mode === 'normal' ? '일반 모드 · 즉시 피드백' : '시험 모드 · 끝까지 푼 뒤 확인'}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-[0.18em] text-content-muted">선택된 자료</div>
-                <div className="mt-2 text-lg font-semibold text-content-primary">
-                  {sourceMode === 'document_based' ? `${selectedFiles.length}개` : '사용 안 함'}
-                </div>
-              </div>
-            </div>
-          </aside>
         </section>
 
         <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-7 md:px-8">
