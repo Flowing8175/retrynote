@@ -100,8 +100,19 @@ export default function Files() {
       queryClient.invalidateQueries({ queryKey: ['files'] });
     },
     onError: (error: AxiosError<{ detail: string }>) => {
-      const detail = error.response?.data?.detail;
-      setUploadError(detail ?? '업로드 중 오류가 발생했습니다.');
+      const status = error.response?.status;
+      if (status === 413) {
+        setUploadError('파일이 너무 큽니다. (최대 5MB)');
+      } else if (status === 415) {
+        setUploadError('지원하지 않는 파일 형식입니다.');
+      } else if (status === 401 || status === 403) {
+        setUploadError('업로드 권한이 없습니다.');
+      } else if (!error.response) {
+        setUploadError('네트워크 오류가 발생했습니다. 연결을 확인해 주세요.');
+      } else {
+        const detail = error.response?.data?.detail;
+        setUploadError(detail ?? '업로드 중 오류가 발생했습니다.');
+      }
     },
   });
 
