@@ -35,6 +35,8 @@ from app.schemas.quiz import (
     ExamSubmit,
     ExamSubmitResponse,
 )
+from app.models.objection import Objection, ObjectionStatus
+from app.schemas.objection import ObjectionCreate, ObjectionResponse
 from app.middleware.auth import get_current_user
 from app.workers.celery_app import dispatch_task
 
@@ -661,3 +663,77 @@ async def get_answer_logs(
         )
         for log in logs
     ]
+
+
+@router.post(
+    "/{session_id}/items/{item_id}/objections",
+    response_model=ObjectionResponse,
+)
+async def create_objection(
+    session_id: str,
+    item_id: str,
+    req: ObjectionCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session_result = await db.execute(
+        select(QuizSession).where(QuizSession.id == session_id)
+    )
+    session = session_result.scalar_one_or_none()
+    if not session or session.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    answer_result = await db.execute(
+        select(AnswerLog).where(
+            AnswerLog.id == req.answer_log_id,
+            AnswerLog.quiz_item_id == item_id,
+            AnswerLog.user_id == user.id,
+            AnswerLog.is_active_result == True,
+        )
+    )
+    answer_log = answer_result.scalar_one_or_none()
+    if not answer_log:
+        raise HTTPException(status_code=404, detail="Answer log not found")
+
+    existing = await db.execute(
+        select(Objection).where(
+            Objection.answer_log_id == req.answer_log_id,
+            Objection.status.in_(
+                [ObjectionStatus.submitted, ObjectionStatus.under_review]
+            ),
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(
+            status_code=400, detail="Objection already pending for this answer"
+        )
+
+    objection = Objection(
+        user_id=user.id,
+        quiz_session_id=session_id,
+        quiz_item_id=item_id,
+        answer_log_id=req.answer_log_id,
+        objection_reason=req.objection_reason,
+        status=ObjectionStatus.submitted,
+    )
+    db.add(objection)
+
+    if session.status == QuizSessionStatus.graded:
+        session.status = QuizSessionStatus.objection_pending
+
+    job = Job(
+        id=str(uuid.uuid4()),
+        job_type="objection_review",
+        status="pending",
+        target_type="objection",
+        target_id=objection.id,
+    )
+    db.add(job)
+
+    objection.status = ObjectionStatus.under_review
+    await db.commit()
+    await db.refresh(objection)
+
+    await dispatch_task("review_objection", [job.id])
+
+    return ObjectionResponse(objection_id=objection.id, status=objection.status.value)
