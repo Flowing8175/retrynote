@@ -23,12 +23,22 @@ function formatQuestionType(type: string) {
 
 function formatErrorType(type: string) {
   switch (type) {
-    case 'calculation':
-      return '계산 실수';
-    case 'missing_point':
-      return '핵심 포인트 누락';
-    case 'concept_mismatch':
+    case 'concept_confusion':
       return '개념 혼동';
+    case 'missing_keyword':
+      return '핵심 키워드 누락';
+    case 'expression_mismatch':
+      return '표현 불일치';
+    case 'careless_mistake':
+      return '실수';
+    case 'ambiguous_question':
+      return '문제 모호함';
+    case 'insufficient_source':
+      return '자료 부족';
+    case 'reasoning_error':
+      return '추론 오류';
+    case 'no_response':
+      return '무응답';
     default:
       return type;
   }
@@ -144,7 +154,7 @@ export default function WrongNotes() {
               <div className="mt-4 space-y-3 text-sm">
                 {item.error_type && (
                   <div className="rounded-2xl border border-semantic-warning-border bg-semantic-warning-bg px-4 py-3">
-                    <span className="text-content-secondary">오류 유형: </span>
+                    <span className="text-content-secondary">틀린 이유: </span>
                     <span className="font-medium text-semantic-warning">{formatErrorType(item.error_type)}</span>
                   </div>
                 )}
