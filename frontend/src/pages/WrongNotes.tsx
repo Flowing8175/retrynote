@@ -170,10 +170,11 @@ export default function WrongNotes() {
           {data.items.map((item: WrongNoteItem) => (
             <article
               key={item.id}
-              className={`rounded-2xl border bg-surface px-6 py-6 transition-colors ${
+              onClick={() => handleNoteToggle(item.id)}
+              className={`cursor-pointer rounded-2xl border bg-surface px-6 py-6 transition-colors ${
                 selectedNoteIds.has(item.id)
                   ? 'border-brand-500/30 bg-brand-500/5'
-                  : 'border-white/[0.07]'
+                  : 'border-white/[0.07] hover:bg-surface-hover'
               }`}
             >
               <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -182,6 +183,7 @@ export default function WrongNotes() {
                     type="checkbox"
                     checked={selectedNoteIds.has(item.id)}
                     onChange={() => handleNoteToggle(item.id)}
+                    onClick={(e) => e.stopPropagation()}
                     className="mt-1.5 h-4 w-4 shrink-0 accent-brand-500"
                   />
                   <div className="flex-1">
