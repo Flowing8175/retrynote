@@ -196,6 +196,44 @@ export default function Files() {
   const failedCount = files.filter((file) => failedStatuses.includes(file.status)).length;
   const selectedCount = selectedFileIds.length;
 
+  const renderFileActions = (file: FileDetail) => (
+    <>
+      {(file.stored_path || file.status === 'ready') && (
+        <button
+          type="button"
+          onClick={() => filesApi.downloadFile(file.id)}
+          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/[0.07] bg-surface-deep px-3 py-2 text-sm font-medium text-content-primary transition-colors hover:bg-surface-hover"
+        >
+          다운로드
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => beginRename(file)}
+        className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/[0.07] bg-surface-deep px-3 py-2 text-sm font-medium text-content-primary transition-colors hover:bg-surface-hover"
+      >
+        이름 변경
+      </button>
+      {(file.status === 'failed_partial' || file.status === 'failed_terminal') && (
+        <button
+          type="button"
+          onClick={() => retryMutation.mutate(file.id)}
+          disabled={retryMutation.isPending}
+          className="inline-flex min-h-11 items-center justify-center rounded-xl border border-brand-500/20 bg-brand-500/10 px-3 py-2 text-sm font-medium text-brand-300 transition-colors hover:bg-brand-500/15 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          재시도
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => setFilePendingDelete(file)}
+        className="inline-flex min-h-11 items-center justify-center rounded-xl border border-semantic-error-border bg-semantic-error-bg px-3 py-2 text-sm font-medium text-semantic-error transition-colors hover:bg-semantic-error-bg/50"
+      >
+        삭제
+      </button>
+    </>
+  );
+
   const toggleFileSelection = (fileId: string) => {
     setSelectedFileIds((current) =>
       current.includes(fileId) ? current.filter((selectedId) => selectedId !== fileId) : [...current, fileId]
@@ -280,7 +318,7 @@ export default function Files() {
       </header>
 
       <section className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)]">
-        <aside className="rounded-3xl border border-white/[0.07] bg-surface px-5 py-6">
+        <aside className="rounded-3xl border border-white/[0.07] bg-surface px-4 py-5 sm:px-5 sm:py-6">
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-xl font-semibold text-content-primary">폴더</h2>
@@ -288,18 +326,18 @@ export default function Files() {
             </div>
           </div>
 
-          <div className="mt-5 space-y-2">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedFolderId(null);
-                setPage(1);
-              }}
-              className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition-colors ${
-                selectedFolderId === null
-                  ? 'border-brand-500/30 bg-brand-500/10 text-brand-300'
-                  : 'border-white/[0.07] bg-surface-deep text-content-primary hover:bg-surface-hover'
-              }`}
+            <div className="mt-5 flex gap-2 overflow-x-auto pb-1 xl:block xl:space-y-2 xl:overflow-visible xl:pb-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedFolderId(null);
+                  setPage(1);
+                }}
+                className={`flex shrink-0 items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition-colors xl:w-full ${
+                  selectedFolderId === null
+                    ? 'border-brand-500/30 bg-brand-500/10 text-brand-300'
+                    : 'border-white/[0.07] bg-surface-deep text-content-primary hover:bg-surface-hover'
+                }`}
             >
               <span>전체 자료</span>
             </button>
@@ -313,7 +351,7 @@ export default function Files() {
                     setSelectedFolderId(folder.id);
                     setPage(1);
                   }}
-                  className={`flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition-colors ${
+                  className={`flex shrink-0 items-center justify-between rounded-2xl border px-4 py-3 text-left text-sm transition-colors xl:w-full ${
                     selectedFolderId === folder.id
                       ? 'border-brand-500/30 bg-brand-500/10 text-brand-300'
                       : 'border-white/[0.07] bg-surface-deep text-content-primary hover:bg-surface-hover'
@@ -525,7 +563,99 @@ export default function Files() {
                   <span className="text-xs text-content-muted">파일을 선택하면 일괄 삭제·이동할 수 있어요</span>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="md:hidden space-y-3 p-4">
+                  {files.map((file) => {
+                    const isEditing = editingFileId === file.id;
+
+                    return (
+                      <article key={file.id} className="rounded-2xl border border-white/[0.07] bg-surface-deep p-4">
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selectedFileIds.includes(file.id)}
+                            onChange={() => toggleFileSelection(file.id)}
+                            className="mt-1 h-4 w-4 shrink-0 rounded border-white/[0.07] bg-surface text-brand-500 focus:ring-brand-500"
+                          />
+                          <div className="min-w-0 flex-1 space-y-4">
+                            <div className="space-y-3">
+                              {isEditing ? (
+                                <div className="space-y-3">
+                                  <input
+                                    value={editingFilename}
+                                    onChange={(e) => setEditingFilename(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        saveRename();
+                                      }
+                                    }}
+                                    className="w-full rounded-xl border border-white/[0.07] bg-surface px-4 py-3 text-sm text-content-primary placeholder:text-content-muted"
+                                  />
+                                  <div className="grid gap-2 sm:grid-cols-2">
+                                    <button
+                                      type="button"
+                                      onClick={saveRename}
+                                      disabled={renameMutation.isPending}
+                                      className="rounded-xl bg-brand-500 px-3 py-2.5 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                      {renameMutation.isPending ? '저장 중…' : '저장'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingFileId(null);
+                                        setEditingFilename('');
+                                      }}
+                                      className="rounded-xl border border-white/[0.07] px-3 py-2.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover"
+                                    >
+                                      취소
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="space-y-2">
+                                    <div className="text-sm font-medium text-content-primary break-words">
+                                      {file.original_filename || '이름 없는 자료'}
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2 text-xs text-content-secondary">
+                                      <span className="rounded-full border border-white/[0.07] bg-surface px-2.5 py-1">
+                                        {formatFileType(file)}
+                                      </span>
+                                      <span>{formatFileSize(file.file_size_bytes)}</span>
+                                      {file.retry_count > 0 && <span>재시도 {file.retry_count}회</span>}
+                                    </div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <StatusBadge status={file.status} />
+                                    {getStatusHint(file) ? (
+                                      <p className="text-sm leading-6 text-content-secondary">{getStatusHint(file)}</p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex flex-wrap gap-2 text-xs font-medium">
+                                    <span className={`rounded-full border px-2.5 py-1 ${getCapabilityClass(file.is_searchable)}`}>
+                                      검색 {file.is_searchable ? '가능' : '대기'}
+                                    </span>
+                                    <span className={`rounded-full border px-2.5 py-1 ${getCapabilityClass(file.is_quiz_eligible)}`}>
+                                      퀴즈 {file.is_quiz_eligible ? '가능' : '대기'}
+                                    </span>
+                                  </div>
+                                  <div className="space-y-1 text-sm text-content-secondary">
+                                    <div>업로드 {formatDateTime(file.created_at)}</div>
+                                    <div>최근 처리 {formatDateTime(file.processing_finished_at)}</div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+
+                            {!isEditing && <div className="grid grid-cols-2 gap-2">{renderFileActions(file)}</div>}
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden overflow-x-auto md:block">
                   <table className="min-w-full divide-y divide-white/[0.07]">
                     <thead className="bg-surface-raised">
                       <tr>
@@ -653,39 +783,7 @@ export default function Files() {
                             </td>
                             <td className="px-6 py-5">
                               <div className="flex min-w-[14rem] flex-wrap justify-end gap-2">
-                                {(file.stored_path || file.status === 'ready') && (
-                                  <button
-                                    type="button"
-                                    onClick={() => filesApi.downloadFile(file.id)}
-                                    className="inline-flex items-center justify-center rounded-xl border border-white/[0.07] bg-surface-deep px-3 py-2 text-sm font-medium text-content-primary transition-colors hover:bg-surface-hover"
-                                  >
-                                    다운로드
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => beginRename(file)}
-                                  className="inline-flex items-center justify-center rounded-xl border border-white/[0.07] bg-surface-deep px-3 py-2 text-sm font-medium text-content-primary transition-colors hover:bg-surface-hover"
-                                >
-                                  이름 변경
-                                </button>
-                                {(file.status === 'failed_partial' || file.status === 'failed_terminal') && (
-                                  <button
-                                    type="button"
-                                    onClick={() => retryMutation.mutate(file.id)}
-                                    disabled={retryMutation.isPending}
-                                    className="inline-flex items-center justify-center rounded-xl border border-brand-500/20 bg-brand-500/10 px-3 py-2 text-sm font-medium text-brand-300 transition-colors hover:bg-brand-500/15 disabled:cursor-not-allowed disabled:opacity-60"
-                                  >
-                                    재시도
-                                  </button>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => setFilePendingDelete(file)}
-                                  className="inline-flex items-center justify-center rounded-xl border border-semantic-error-border bg-semantic-error-bg px-3 py-2 text-sm font-medium text-semantic-error transition-colors hover:bg-semantic-error-bg/50"
-                                >
-                                  삭제
-                                </button>
+                                {renderFileActions(file)}
                               </div>
                             </td>
                           </tr>
@@ -705,11 +803,11 @@ export default function Files() {
       </section>
 
       {selectedCount > 0 && (
-        <div className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-2xl border border-white/[0.07] bg-surface px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur">
+        <div className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-3xl flex-col items-stretch gap-3 rounded-2xl border border-white/[0.07] bg-surface px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
           <div className="text-sm text-content-primary">
             <span className="font-semibold">{selectedCount}개</span> 선택됨
           </div>
-          <div className="flex gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:flex">
             <button
               type="button"
               onClick={() => setDeleteSelectedOpen(true)}
