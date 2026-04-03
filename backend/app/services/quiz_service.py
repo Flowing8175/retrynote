@@ -849,6 +849,25 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
                     else ObjectionStatus(decision)
                 )
 
+                session_result = await db.execute(
+                    select(QuizSession).where(
+                        QuizSession.id == objection.quiz_session_id
+                    )
+                )
+                session = session_result.scalar_one_or_none()
+                if session and session.status == QuizSessionStatus.objection_pending:
+                    remaining_result = await db.execute(
+                        select(Objection).where(
+                            Objection.quiz_session_id == objection.quiz_session_id,
+                            Objection.id != objection.id,
+                            Objection.status.in_(
+                                [ObjectionStatus.submitted, ObjectionStatus.under_review]
+                            ),
+                        )
+                    )
+                    if not remaining_result.scalar_one_or_none():
+                        session.status = QuizSessionStatus.graded
+
             job.status = "completed"
             job.finished_at = datetime.now(timezone.utc)
             await db.commit()
