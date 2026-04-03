@@ -312,13 +312,14 @@ export default function QuizTake() {
   );
 
   const handleNext = useCallback(() => {
+    if (isAnyMutationPending) return;
     if (itemsData && currentItemIndex < itemsData.length - 1) {
       setCurrentItemIndex(currentItemIndex + 1);
       setValidationMessage(null);
     } else {
       navigate(`/quiz/${sessionId}/results`);
     }
-  }, [currentItemIndex, itemsData, navigate, sessionId]);
+  }, [currentItemIndex, isAnyMutationPending, itemsData, navigate, sessionId]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
