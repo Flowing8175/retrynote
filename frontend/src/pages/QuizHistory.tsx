@@ -59,8 +59,7 @@ export default function QuizHistory() {
         <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-7 md:px-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-content-muted">전체 기록</p>
-              <h2 className="mt-2 text-xl font-semibold text-content-primary">최근 퀴즈</h2>
+              <h2 className="text-xl font-semibold text-content-primary">최근 기록</h2>
             </div>
             <Link
               to="/quiz/new"
@@ -72,7 +71,7 @@ export default function QuizHistory() {
 
           {(historyData?.length ?? 0) === 0 ? (
             <div className="mt-6 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-8 text-center">
-              <p className="text-sm leading-6 text-content-secondary">생성 기록이 없습니다.</p>
+              <p className="text-sm leading-6 text-content-secondary">최근 기록이 없습니다.</p>
               <Link
                 to="/quiz/new"
                 className="mt-4 inline-flex items-center justify-center rounded-xl border border-white/[0.07] bg-surface px-4 py-2 text-sm font-medium text-brand-300 transition-colors hover:bg-surface-hover"
