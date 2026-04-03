@@ -717,6 +717,7 @@ async def create_objection(
         status=ObjectionStatus.submitted,
     )
     db.add(objection)
+    await db.flush()  # populate objection.id before creating the Job
 
     if session.status == QuizSessionStatus.graded:
         session.status = QuizSessionStatus.objection_pending
