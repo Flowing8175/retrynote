@@ -45,3 +45,7 @@ export interface PasswordResetConfirm {
 export interface RefreshTokenRequest {
   refresh_token: string;
 }
+
+export interface DeleteAccountRequest {
+  password: string;
+}

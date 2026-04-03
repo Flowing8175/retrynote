@@ -8,6 +8,7 @@ import type {
   PasswordResetConfirm,
   RefreshTokenRequest,
   UserProfile,
+  DeleteAccountRequest,
 } from '@/types';
 
 export const authApi = {
@@ -42,6 +43,11 @@ export const authApi = {
 
   getMe: async (): Promise<UserProfile> => {
     const response = await apiClient.get<UserProfile>('/auth/me');
+    return response.data;
+  },
+
+  deleteAccount: async (data: DeleteAccountRequest): Promise<{ status: string }> => {
+    const response = await apiClient.delete<{ status: string }>('/auth/me', { data });
     return response.data;
   },
 };

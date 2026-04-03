@@ -21,6 +21,7 @@ from app.schemas.auth import (
     PasswordResetConfirm,
     UserProfile,
     RefreshTokenRequest,
+    DeleteAccountRequest,
 )
 from app.middleware.auth import (
     hash_password,
@@ -254,3 +255,29 @@ async def get_me(user: User = Depends(get_current_user)):
         storage_quota_bytes=user.storage_quota_bytes,
         last_login_at=user.last_login_at,
     )
+
+
+@router.delete("/me", status_code=200)
+async def delete_account(
+    req: DeleteAccountRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not verify_password(req.password, user.password_hash):
+        raise HTTPException(status_code=400, detail="비밀번호가 올바르지 않습니다.")
+
+    tokens_result = await db.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    for token in tokens_result.scalars().all():
+        token.revoked_at = datetime.now(timezone.utc)
+
+    user.is_active = False
+    user.status = "deleted"
+    user.deleted_at = datetime.now(timezone.utc)
+
+    await db.commit()
+    return {"status": "ok"}

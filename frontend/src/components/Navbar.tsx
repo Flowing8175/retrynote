@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { GraduationCap } from 'lucide-react';
+import { GraduationCap, Settings } from 'lucide-react';
 import { useAuthStore } from '@/stores';
 import AdminBanner from './AdminBanner';
 
@@ -35,6 +35,13 @@ export default function Navbar() {
                     관리자
                   </Link>
                 ) : null}
+                <Link
+                  to="/settings"
+                  aria-label="계정 설정"
+                  className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/[0.06] bg-surface-deep px-3 py-2 text-content-secondary transition-colors hover:bg-surface-hover hover:text-content-primary"
+                >
+                  <Settings className="h-4 w-4" />
+                </Link>
                 <button
                   onClick={logout}
                   className="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/[0.06] bg-surface-deep px-3 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover hover:text-content-primary sm:px-4"

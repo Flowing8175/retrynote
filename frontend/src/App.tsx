@@ -15,6 +15,7 @@ import WrongNotes from '@/pages/WrongNotes';
 import Retry from '@/pages/Retry';
 import Search from '@/pages/Search';
 import Admin from '@/pages/Admin';
+import Settings from '@/pages/Settings';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -144,6 +145,13 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <Search />
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute>
+              <Layout>
+                <Settings />
               </Layout>
             </ProtectedRoute>
           } />
