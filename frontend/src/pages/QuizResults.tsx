@@ -196,6 +196,108 @@ function getJudgementBadgeClass(judgement: string) {
   return 'border border-semantic-error-border bg-semantic-error-bg text-semantic-error';
 }
 
+interface ReviewResult {
+  decision: 'upheld' | 'rejected' | 'partially_upheld';
+  reasoning: string;
+  updated_judgement?: string;
+  updated_score_awarded?: number;
+  should_apply?: boolean;
+  ambiguity_flag?: boolean;
+  confidence?: number;
+}
+
+function ObjectionFeedback({ objectionId }: { objectionId: string }) {
+  const { data: objection } = useQuery({
+    queryKey: ['objection', objectionId],
+    queryFn: () => objectionsApi.getObjection(objectionId),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'submitted' || status === 'under_review' ? 3000 : false;
+    },
+  });
+
+  if (!objection) {
+    return (
+      <div className="mt-3 rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-brand-300" />
+          <span className="text-sm text-content-secondary">이의제기가 접수되었습니다</span>
+        </div>
+      </div>
+    );
+  }
+
+  const isPending = objection.status === 'submitted' || objection.status === 'under_review';
+
+  if (isPending) {
+    return (
+      <div className="mt-3 rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-brand-300" />
+          <span className="text-sm text-content-secondary">심사 AI가 검토 중입니다...</span>
+        </div>
+      </div>
+    );
+  }
+
+  const reviewResult = objection.review_result as ReviewResult | null;
+
+  const decisionConfig = {
+    upheld: {
+      label: '인용',
+      message: '채점이 변경되었습니다',
+      borderClass: 'border-semantic-success-border',
+      bgClass: 'bg-semantic-success-bg',
+      textClass: 'text-semantic-success',
+      dotClass: 'bg-semantic-success',
+    },
+    rejected: {
+      label: '기각',
+      message: '기존 채점이 유지됩니다',
+      borderClass: 'border-semantic-error-border',
+      bgClass: 'bg-semantic-error-bg',
+      textClass: 'text-semantic-error',
+      dotClass: 'bg-semantic-error',
+    },
+    partially_upheld: {
+      label: '부분 인용',
+      message: '일부 채점이 조정되었습니다',
+      borderClass: 'border-semantic-warning-border',
+      bgClass: 'bg-semantic-warning-bg',
+      textClass: 'text-semantic-warning',
+      dotClass: 'bg-semantic-warning',
+    },
+    applied: {
+      label: '적용됨',
+      message: '채점이 변경되었습니다',
+      borderClass: 'border-semantic-success-border',
+      bgClass: 'bg-semantic-success-bg',
+      textClass: 'text-semantic-success',
+      dotClass: 'bg-semantic-success',
+    },
+  } as const;
+
+  const decisionKey = (reviewResult?.decision ?? objection.status) as keyof typeof decisionConfig;
+  const config = decisionConfig[decisionKey] ?? decisionConfig.rejected;
+
+  return (
+    <div className={`mt-3 rounded-xl border ${config.borderClass} ${config.bgClass} px-4 py-3 space-y-2`}>
+      <div className="flex items-center gap-2">
+        <span className={`inline-block h-2 w-2 rounded-full ${config.dotClass}`} />
+        <span className={`text-xs font-semibold ${config.textClass}`}>{config.label}</span>
+        <span className="text-xs text-content-muted">·</span>
+        <span className="text-xs text-content-secondary">{config.message}</span>
+      </div>
+      {reviewResult?.reasoning && (
+        <p className="text-sm leading-relaxed text-content-primary">{reviewResult.reasoning}</p>
+      )}
+      {reviewResult?.ambiguity_flag && (
+        <p className="text-xs text-semantic-warning">문제에 모호한 표현이 포함되어 있을 수 있습니다.</p>
+      )}
+    </div>
+  );
+}
+
 export default function QuizResults() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
@@ -203,9 +305,12 @@ export default function QuizResults() {
   const [objectionReasons, setObjectionReasons] = useState<Record<string, string>>({});
 
   const storageKey = `objections_submitted_${sessionId}`;
-  const [submittedObjections, setSubmittedObjections] = useState<Record<string, boolean>>(() => {
+  const [submittedObjections, setSubmittedObjections] = useState<Record<string, string>>(() => {
     try {
-      return JSON.parse(localStorage.getItem(storageKey) || '{}');
+      const stored = JSON.parse(localStorage.getItem(storageKey) || '{}');
+      return Object.fromEntries(
+        Object.entries(stored).filter(([, v]) => typeof v === 'string')
+      ) as Record<string, string>;
     } catch {
       return {};
     }
@@ -277,9 +382,9 @@ export default function QuizResults() {
         answer_log_id: params.answerLogId,
         objection_reason: params.reason,
       }),
-    onSuccess: (_result, variables) => {
+    onSuccess: (result, variables) => {
       setSubmittedObjections((prev) => {
-        const next = { ...prev, [variables.itemId]: true };
+        const next = { ...prev, [variables.itemId]: result.objection_id };
         localStorage.setItem(storageKey, JSON.stringify(next));
         return next;
       });
@@ -434,7 +539,7 @@ export default function QuizResults() {
           <div className="space-y-3">
             {objectionCandidates.map(({ item, log }) => {
               const isOpen = openObjectionItemId === item.id;
-              const isSubmitted = submittedObjections[item.id];
+              const isSubmitted = !!submittedObjections[item.id];
               const reason = objectionReasons[item.id] || '';
 
               return (
@@ -450,8 +555,8 @@ export default function QuizResults() {
                     </div>
 
                     {isSubmitted ? (
-                      <span className="inline-flex items-center rounded-full border border-semantic-success-border bg-semantic-success-bg px-3 py-1 text-xs font-medium text-semantic-success">
-                        이의제기가 접수되었습니다
+                      <span className="inline-flex shrink-0 items-center rounded-full border border-semantic-success-border bg-semantic-success-bg px-3 py-1 text-xs font-medium text-semantic-success">
+                        접수됨
                       </span>
                     ) : (
                       <button
@@ -463,6 +568,10 @@ export default function QuizResults() {
                       </button>
                     )}
                   </div>
+
+                  {isSubmitted && (
+                    <ObjectionFeedback objectionId={submittedObjections[item.id]} />
+                  )}
 
                   {isOpen && !isSubmitted && (
                     <form
