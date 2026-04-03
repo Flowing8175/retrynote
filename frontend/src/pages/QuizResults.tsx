@@ -317,8 +317,8 @@ export default function QuizResults() {
                     / {maxScore.toFixed(1)}
                   </span>
                 </div>
-                <div className={`mt-2 text-lg font-semibold ${performanceTier.accentTextClass}`}>
-                  {scorePercentage.toFixed(1)}%
+                <div className={`mt-2 text-sm font-medium ${performanceTier.accentTextClass}`}>
+                  {performanceTier.badge}
                 </div>
               </div>
 
@@ -337,12 +337,9 @@ export default function QuizResults() {
         </div>
 
           <div className="mt-8">
-            <div className="mb-2 flex items-end justify-between gap-4">
+            <div className="mb-2">
               <span className="text-sm text-content-secondary">이번 세트 기준 점수 달성률</span>
-              <span className={`text-sm font-medium ${performanceTier.accentTextClass}`}>
-                {scorePercentage.toFixed(1)}%
-              </span>
-          </div>
+            </div>
           <div className="rounded-full bg-surface-deep p-1">
             <div className="h-4 overflow-hidden rounded-full bg-surface-hover">
               <div
