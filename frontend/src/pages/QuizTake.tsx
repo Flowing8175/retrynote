@@ -237,6 +237,23 @@ export default function QuizTake() {
     [currentItem, isExamMode, validationMessage]
   );
 
+  const handleSelectAndSubmit = useCallback(
+    (answer: string) => {
+      if (!currentItem || isAnyMutationPending || isSubmitted) {
+        return;
+      }
+
+      handleAnswerChange(answer);
+
+      if (isExamMode) {
+        saveDraftAnswerMutation.mutate({ itemId: currentItem.id, answer });
+      } else {
+        submitAnswerMutation.mutate({ itemId: currentItem.id, answer });
+      }
+    },
+    [currentItem, isAnyMutationPending, isSubmitted, isExamMode, handleAnswerChange, saveDraftAnswerMutation, submitAnswerMutation]
+  );
+
   const handleSubmit = useCallback(() => {
     if (!currentItem || isAnyMutationPending) {
       return;
@@ -301,21 +318,19 @@ export default function QuizTake() {
         return;
       }
 
-      if (
-        event.key === 'Enter' &&
-        !event.altKey &&
-        !event.ctrlKey &&
-        !event.metaKey &&
-        !isInteractiveTarget &&
-        targetTag !== 'BUTTON' &&
-        targetTag !== 'A'
-      ) {
-        if (isTextArea && event.shiftKey) {
+      if (event.key === 'Enter' && !event.altKey && !event.ctrlKey && !event.metaKey) {
+        if (isTextArea) {
+          if (!event.shiftKey) {
+            event.preventDefault();
+            handleSubmit();
+          }
           return;
         }
 
-        event.preventDefault();
-        handleSubmit();
+        if (!isInteractiveTarget && targetTag !== 'BUTTON' && targetTag !== 'A') {
+          event.preventDefault();
+          handleSubmit();
+        }
       }
     };
 
@@ -520,7 +535,7 @@ export default function QuizTake() {
                     type="radio"
                     value={key}
                     checked={userAnswer === key}
-                    onChange={(e) => handleAnswerChange(e.target.value)}
+                    onChange={(e) => handleSelectAndSubmit(e.target.value)}
                     disabled={isSubmitted || isAnyMutationPending}
                     className="mr-3 h-4 w-4 shrink-0 accent-brand-500"
                   />
@@ -551,7 +566,7 @@ export default function QuizTake() {
                     type="radio"
                     value={option}
                     checked={userAnswer === option}
-                    onChange={(e) => handleAnswerChange(e.target.value)}
+                    onChange={(e) => handleSelectAndSubmit(e.target.value)}
                     disabled={isSubmitted || isAnyMutationPending}
                     className="mr-3 h-4 w-4 shrink-0 accent-brand-500"
                   />
