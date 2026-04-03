@@ -248,7 +248,7 @@ async def call_ai_structured(
     else:
         completion_kwargs["max_tokens"] = max_tokens
 
-    response = await client.chat.completions.create(**completion_kwargs)
+    response = await client.chat.completions.create(**completion_kwargs, timeout=60)
     content = response.choices[0].message.content
     if content is None:
         raise ValueError("AI returned empty response")
