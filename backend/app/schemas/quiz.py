@@ -101,6 +101,7 @@ class AnswerResponse(BaseModel):
     normalized_user_answer: str | None
     suggested_feedback: str | None = None
     next_item_id: str | None = None
+    correct_answer: dict | None = None
 
 
 class DraftAnswerSubmit(BaseModel):

@@ -83,6 +83,7 @@ export interface AnswerResponse {
   normalized_user_answer: string | null;
   suggested_feedback: string | null;
   next_item_id: string | null;
+  correct_answer: Record<string, unknown> | null;
 }
 
 export interface DraftAnswerSubmit {

@@ -546,11 +546,15 @@ export default function QuizTake() {
           {/* Options for multiple choice / OX */}
           {activeItem.question_type === 'multiple_choice' && activeItem.options != null && (
             <div className="space-y-3">
-              {Object.entries(activeItem.options as Record<string, string>).map(([key, text]) => (
+              {Object.entries(activeItem.options as Record<string, string>).map(([key, text]) => {
+                const isCorrectKey = isSubmitted && answerResult && answerResult.judgement !== 'correct' && String(answerResult.correct_answer?.answer) === key;
+                return (
                 <label
                   key={key}
                   className={`flex items-center rounded-2xl border px-5 py-4 transition-colors ${
-                    isSubmitted && answerResult && userAnswer === key
+                    isCorrectKey
+                      ? 'border-semantic-success-border bg-semantic-success-bg text-content-primary'
+                      : isSubmitted && answerResult && userAnswer === key
                       ? answerResult.judgement === 'correct'
                         ? 'border-semantic-success-border bg-semantic-success-bg text-content-primary'
                         : answerResult.judgement === 'partial'
@@ -571,17 +575,22 @@ export default function QuizTake() {
                   />
                   <span>{text}</span>
                 </label>
-              ))}
+                );
+              })}
             </div>
           )}
 
           {activeItem.question_type === 'ox' && (
             <div className="space-y-3">
-              {['O', 'X'].map((option) => (
+              {['O', 'X'].map((option) => {
+                const isCorrectKey = isSubmitted && answerResult && answerResult.judgement !== 'correct' && String(answerResult.correct_answer?.answer).toUpperCase() === option;
+                return (
                 <label
                   key={option}
                   className={`flex items-center rounded-2xl border px-5 py-4 transition-colors ${
-                    isSubmitted && answerResult && userAnswer === option
+                    isCorrectKey
+                      ? 'border-semantic-success-border bg-semantic-success-bg text-content-primary'
+                      : isSubmitted && answerResult && userAnswer === option
                       ? answerResult.judgement === 'correct'
                         ? 'border-semantic-success-border bg-semantic-success-bg text-content-primary'
                         : answerResult.judgement === 'partial'
@@ -602,7 +611,8 @@ export default function QuizTake() {
                   />
                   <span className="font-medium">{option}</span>
                 </label>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -685,6 +695,14 @@ export default function QuizTake() {
              {answerResult.grading_rationale && (
                <div className="text-sm text-content-secondary mt-2">
                   {answerResult.grading_rationale}
+               </div>
+             )}
+             {answerResult.judgement !== 'correct' && answerResult.correct_answer?.answer && (
+               <div className="mt-3 pt-3 border-t border-white/10">
+                 <div className="text-xs font-semibold uppercase tracking-wider text-content-muted mb-1">정답</div>
+                 <div className="text-sm font-medium text-semantic-success">
+                   {String(answerResult.correct_answer.answer)}
+                 </div>
                </div>
              )}
              {answerResult.explanation && (

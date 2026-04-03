@@ -486,6 +486,7 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
         normalized_user_answer=normalized,
         suggested_feedback=suggested_feedback,
         next_item_id=next_item_id,
+        correct_answer=correct_answer if judgement != Judgement.correct else None,
     )
 
 
