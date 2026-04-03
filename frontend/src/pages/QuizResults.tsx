@@ -201,7 +201,15 @@ export default function QuizResults() {
   const navigate = useNavigate();
   const [openObjectionItemId, setOpenObjectionItemId] = useState<string | null>(null);
   const [objectionReasons, setObjectionReasons] = useState<Record<string, string>>({});
-  const [submittedObjections, setSubmittedObjections] = useState<Record<string, boolean>>({});
+
+  const storageKey = `objections_submitted_${sessionId}`;
+  const [submittedObjections, setSubmittedObjections] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(storageKey) || '{}');
+    } catch {
+      return {};
+    }
+  });
 
   const { data: sessionData, isLoading: sessionLoading } = useQuery({
     queryKey: ['quizSession', sessionId],
@@ -270,7 +278,11 @@ export default function QuizResults() {
         objection_reason: params.reason,
       }),
     onSuccess: (_result, variables) => {
-      setSubmittedObjections((prev) => ({ ...prev, [variables.itemId]: true }));
+      setSubmittedObjections((prev) => {
+        const next = { ...prev, [variables.itemId]: true };
+        localStorage.setItem(storageKey, JSON.stringify(next));
+        return next;
+      });
       setOpenObjectionItemId((current) => (current === variables.itemId ? null : current));
       setObjectionReasons((prev) => ({ ...prev, [variables.itemId]: '' }));
     },
