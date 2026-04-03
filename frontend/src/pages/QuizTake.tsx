@@ -153,6 +153,7 @@ export default function QuizTake() {
           normalized_user_answer: log.normalized_user_answer,
           suggested_feedback: log.suggested_feedback,
           next_item_id: null,
+          correct_answer: log.correct_answer,
         };
       }
 
@@ -697,7 +698,7 @@ export default function QuizTake() {
                   {answerResult.grading_rationale}
                </div>
              )}
-             {answerResult.judgement !== 'correct' && answerResult.correct_answer?.answer && (
+             {answerResult.judgement !== 'correct' && !!answerResult.correct_answer?.answer && (
                <div className="mt-3 pt-3 border-t border-white/10">
                  <div className="text-xs font-semibold uppercase tracking-wider text-content-muted mb-1">정답</div>
                  <div className="text-sm font-medium text-semantic-success">
