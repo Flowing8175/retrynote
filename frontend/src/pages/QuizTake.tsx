@@ -4,8 +4,10 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import { LoadingSpinner } from '@/components';
-import type { AnswerResponse } from '@/types';
+import type { AnswerLogEntry, AnswerResponse } from '@/types';
 import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, PlayCircle } from 'lucide-react';
+
+const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded', 'closed']);
 
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
 
@@ -73,10 +75,38 @@ export default function QuizTake() {
     enabled: !!sessionId,
   });
 
+  const isCompleted = !!sessionData && COMPLETED_STATUSES.has(sessionData.status);
+
+  const { data: answerLogsData } = useQuery({
+    queryKey: ['answerLogs', sessionId],
+    queryFn: () => quizApi.getAnswerLogs(sessionId || ''),
+    enabled: !!sessionId && isCompleted,
+  });
+
   useEffect(() => {
     if (sessionData) setCurrentSession(sessionData);
     if (itemsData) setCurrentItems(itemsData);
   }, [sessionData, itemsData, setCurrentSession, setCurrentItems]);
+
+  useEffect(() => {
+    if (!answerLogsData || !itemsData?.length) return;
+    const submitted: Record<string, string> = {};
+    const results: Record<string, AnswerResponse> = {};
+    for (const log of answerLogsData) {
+      submitted[log.item_id] = log.user_answer;
+      results[log.item_id] = { ...(log as AnswerLogEntry), next_item_id: null } as AnswerResponse;
+    }
+    setSubmittedAnswers(submitted);
+    setDraftAnswers(submitted);
+    setAnswerResultsByItemId(results);
+    setFurthestAvailableIndex(itemsData.length - 1);
+    const firstItem = itemsData[0];
+    if (submitted[firstItem.id]) {
+      setUserAnswer(submitted[firstItem.id]);
+      setIsSubmitted(true);
+      setAnswerResult(results[firstItem.id] ?? null);
+    }
+  }, [answerLogsData, itemsData]);
 
   const submitAnswerMutation = useMutation({
     mutationFn: (data: { itemId: string; answer: string }) =>
@@ -276,7 +306,7 @@ export default function QuizTake() {
           </button>
           <button
             onClick={handleNext}
-            disabled={currentItemIndex >= furthestAvailableIndex}
+            disabled={currentItemIndex >= (isCompleted ? (itemsData?.length ?? 1) - 1 : furthestAvailableIndex)}
             className="flex-1 sm:flex-none flex items-center justify-center h-12 w-16 bg-surface border border-white/[0.05] rounded-xl text-content-primary hover:bg-surface-hover disabled:opacity-30 transition-colors"
           >
             <ChevronRight size={20} />
