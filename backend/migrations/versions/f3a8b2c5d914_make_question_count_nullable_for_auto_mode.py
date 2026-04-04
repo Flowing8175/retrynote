@@ -17,12 +17,12 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.alter_column(
-        "quiz_sessions",
-        "question_count",
-        existing_type=sa.Integer(),
-        nullable=True,
-    )
+    with op.batch_alter_table("quiz_sessions") as batch_op:
+        batch_op.alter_column(
+            "question_count",
+            existing_type=sa.Integer(),
+            nullable=True,
+        )
 
 
 def downgrade() -> None:
@@ -30,9 +30,9 @@ def downgrade() -> None:
     op.execute(
         "UPDATE quiz_sessions SET question_count = 0 WHERE question_count IS NULL"
     )
-    op.alter_column(
-        "quiz_sessions",
-        "question_count",
-        existing_type=sa.Integer(),
-        nullable=False,
-    )
+    with op.batch_alter_table("quiz_sessions") as batch_op:
+        batch_op.alter_column(
+            "question_count",
+            existing_type=sa.Integer(),
+            nullable=False,
+        )
