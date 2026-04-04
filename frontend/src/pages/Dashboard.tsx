@@ -299,7 +299,7 @@ export default function Dashboard() {
                   className="rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-4"
                 >
                   <div className="flex flex-wrap items-center gap-2 text-xs text-content-secondary">
-                    <span className="rounded-full bg-semantic-warning-bg px-3 py-1 text-semantic-warning">
+                    <span className={`rounded-full px-3 py-1 ${note.judgement === 'incorrect' ? 'bg-semantic-error-bg text-semantic-error' : 'bg-semantic-warning-bg text-semantic-warning'}`}>
                       {note.judgement === 'incorrect' ? '오답 기록' : '부분정답 기록'}
                     </span>
                     <span>{formatDateTime(note.graded_at)}</span>
