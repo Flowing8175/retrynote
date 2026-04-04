@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     openai_fallback_generation_model: str = "gpt-4.1-mini"
     openai_fallback_grading_model: str = "gpt-4.1-mini"
 
+    gemini_api_key: str = ""
+    gemini_generation_model: str = "gemini-3.1-flash-lite"
+    gemini_grading_model: str = "gemini-3.1-flash-lite"
+    gemini_fallback_generation_model: str = "gemini-3-flash"
+    gemini_fallback_grading_model: str = "gemini-3-flash"
+
     upload_dir: str = "./storage/uploads"
     max_upload_size_mb: int = 5
     allowed_file_types: str = "pdf,docx,pptx,txt,md,png,jpg,jpeg"

@@ -16,6 +16,16 @@ __all__ = [
 
 client = AsyncOpenAI(api_key=settings.openai_api_key)
 
+_gemini_client = None
+
+
+def _get_gemini_client():
+    global _gemini_client
+    if _gemini_client is None:
+        from google import genai
+        _gemini_client = genai.Client(api_key=settings.gemini_api_key)
+    return _gemini_client
+
 
 GENERATION_SCHEMA = {
     "type": "object",
@@ -254,6 +264,33 @@ COACHING_SCHEMA = {
 }
 
 
+async def _call_gemini_structured(
+    prompt: str,
+    schema: dict,
+    system_message: str,
+    model: str,
+    temperature: float = 0.3,
+    max_tokens: int = 4096,
+) -> dict[str, Any]:
+    from google.genai import types
+
+    gemini = _get_gemini_client()
+    response = await gemini.aio.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=system_message,
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+            response_mime_type="application/json",
+            response_schema=schema,
+        ),
+    )
+    if not response.text:
+        raise ValueError("Gemini returned empty response")
+    return json.loads(response.text)
+
+
 async def call_ai_structured(
     prompt: str,
     schema: dict,
@@ -263,11 +300,16 @@ async def call_ai_structured(
     max_tokens: int = 4096,
 ) -> dict[str, Any]:
     model = model or settings.openai_generation_model
-    system = system_message
+
+    if model.startswith("gemini-"):
+        return await _call_gemini_structured(
+            prompt, schema, system_message, model, temperature, max_tokens
+        )
+
     completion_kwargs: dict[str, Any] = {
         "model": model,
         "messages": [
-            {"role": "system", "content": system},
+            {"role": "system", "content": system_message},
             {"role": "user", "content": prompt},
         ],
         "temperature": temperature,
