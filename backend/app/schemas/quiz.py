@@ -13,6 +13,7 @@ class QuizSessionCreate(BaseModel):
     difficulty: str | None = Field(default=None, max_length=50)
     question_types: list[str] = Field(default=[], max_length=10)
     generation_priority: str | None = Field(default=None, max_length=50)
+    preferred_model: Literal["gpt-4.1-mini", "gpt-5.4-mini", "gpt-4.1"] | None = None
     source_mode: Literal["document_based", "no_source"]
     topic: str | None = Field(default=None, max_length=200)
     idempotency_key: str | None = Field(default=None, max_length=255)

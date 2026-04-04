@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { dashboardApi } from '@/api';
 import type { DashboardResponse } from '@/types';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -45,32 +45,32 @@ function getCoachingMessage(dashboardData: DashboardResponse) {
   }
 
   if (dashboardData.retry_recommendations.length > 0) {
-    return '반복된 개념부터 다시 보세요.';
+    return '반복된 오답 개념부터 다시 복습해 보세요.';
   }
 
   if (dashboardData.recent_wrong_notes.length > 0) {
-    return '막힌 문제부터 다시 보세요.';
+    return '최근에 막힌 문제부터 다시 풀어보세요.';
   }
 
-  return '지금 흐름을 유지해 보세요.';
+  return '좋은 흐름입니다. 꾸준히 학습을 이어가세요.';
 }
 
 function getPrimaryAction(dashboardData: DashboardResponse) {
   if (dashboardData.retry_recommendations.length > 0) {
     return {
       to: '/retry',
-      eyebrow: '최근 기록 기준',
-      title: '재도전부터 시작',
-      description: `${dashboardData.retry_recommendations.length}개 추천이 있어요.`,
+      eyebrow: '다음 추천 학습',
+      title: '재도전부터 시작하기',
+      description: `${dashboardData.retry_recommendations.length}개의 추천 복습이 준비되어 있습니다.`,
       buttonLabel: '재도전 시작',
     };
   }
 
   return {
     to: '/quiz/new',
-    eyebrow: '다음 추천',
+    eyebrow: '다음 추천 학습',
     title: '새 퀴즈로 이어가기',
-    description: '새 문제를 한 세트 더 풀어보세요.',
+    description: '새로운 퀴즈를 풀며 실력을 점검해 보세요.',
     buttonLabel: '새 퀴즈 만들기',
   };
 }
@@ -80,13 +80,16 @@ export default function Dashboard() {
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedCategoryTag, setSelectedCategoryTag] = useState<string | null>(null);
 
+  const navigate = useNavigate();
+  const handleStartQuiz = () => navigate('/quiz/new');
+
   const { data: dashboardData, isLoading } = useQuery({
     queryKey: ['dashboard', range, selectedFileId, selectedCategoryTag],
     queryFn: () => dashboardApi.getDashboard(range, selectedFileId, selectedCategoryTag),
   });
 
   if (isLoading) {
-    return <LoadingSpinner message="대시보드 불러오는 중" />;
+    return <LoadingSpinner message="학습 데이터를 불러오는 중입니다" />;
   }
 
   if (!dashboardData) {
@@ -103,74 +106,61 @@ export default function Dashboard() {
 
   if (!hasData) {
     return (
-      <div className="space-y-8">
-        <div className="py-4 animate-fade-in-up">
-          <h1 className="text-3xl font-semibold tracking-tight text-content-primary md:text-4xl">
-            자료를 올리거나 첫 퀴즈를 시작하세요.
+      <div className="max-w-4xl mx-auto space-y-16 py-20">
+        <div className="animate-fade-in-up">
+          <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl leading-snug">
+            성장의 첫 걸음,<br />자료를 올려보세요.
           </h1>
-          <p className="mt-3 text-base text-content-secondary">
-            학습 기록이 쌓이면 여기서 흐름을 확인할 수 있습니다.
+          <p className="mt-6 text-lg text-content-secondary max-w-2xl leading-relaxed">
+            학습 자료를 업로드하면 AI가 핵심 개념을 분석하여 당신만의 맞춤형 퀴즈를 생성합니다.
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2">
           <Link
             to="/files"
-            className="rounded-2xl border border-brand-500/25 bg-brand-500/10 p-6 transition-colors hover:bg-brand-500/15"
+            className="group relative overflow-hidden rounded-3xl bg-surface p-10 transition-all hover:bg-surface-hover border border-white/[0.05]"
           >
-            <div className="mb-3 text-xs font-semibold uppercase tracking-widest text-brand-300">시작하기</div>
-            <h2 className="text-xl font-semibold text-content-primary">자료 올리기</h2>
-            <p className="mt-2 text-sm leading-6 text-content-secondary">PDF, 문서 등을 올리면 내용 기반으로 퀴즈를 만들 수 있습니다.</p>
+            <div className="relative z-10">
+              <div className="mb-4 text-xs font-semibold uppercase tracking-widest text-brand-300">시작하기</div>
+              <h2 className="text-2xl font-semibold text-white">자료 올리기</h2>
+              <p className="mt-3 text-sm leading-relaxed text-content-secondary">PDF나 문서 파일을 분석하여 학습 맵을 구성합니다.</p>
+            </div>
           </Link>
 
-          <Link
-            to="/quiz/new"
-            className="rounded-2xl border border-white/[0.07] bg-surface-raised p-6 transition-colors hover:bg-surface-hover"
+          <button
+            type="button"
+            onClick={handleStartQuiz}
+            className="group relative overflow-hidden rounded-3xl bg-brand-500/10 p-10 text-left transition-all hover:bg-brand-500/15 border border-brand-500/20"
           >
-            <div className="mb-3 text-xs font-semibold uppercase tracking-widest text-content-muted">바로 시작</div>
-            <h2 className="text-xl font-semibold text-content-primary">퀴즈 시작</h2>
-            <p className="mt-2 text-sm leading-6 text-content-secondary">자료 없이도 바로 퀴즈를 시작할 수 있습니다.</p>
-          </Link>
+            <div className="relative z-10">
+              <div className="mb-4 text-xs font-semibold uppercase tracking-widest text-brand-300">바로 시작</div>
+              <h2 className="text-2xl font-semibold text-white">퀴즈 시작</h2>
+              <p className="mt-3 text-sm leading-relaxed text-content-secondary">자료 없이도 AI와 함께 바로 학습을 시작할 수 있습니다.</p>
+            </div>
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-10">
-      <section className="grid gap-8 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]">
-        <div className="animate-fade-in-up space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-widest text-brand-300">{rangeLabel}</span>
-              {dashboardData.retry_recommendations.length > 0 && (
-                <Link
-                  to="/retry"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-xs font-medium text-brand-300 transition-colors hover:bg-brand-500/15"
-                >
-                  재도전 {dashboardData.retry_recommendations.length}개 대기 중
-                </Link>
-              )}
-              {recentWrongNotes.length > 0 && (
-                <Link
-                  to="/wrong-notes"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-surface-deep px-3 py-1 text-xs font-medium text-content-secondary transition-colors hover:bg-surface-hover"
-                >
-                  오답 {recentWrongNotes.length}건 미확인
-                </Link>
-              )}
-            </div>
-
-            <div className="flex gap-1.5">
+    <div className="space-y-20 py-8">
+      {/* Hero Section: Coaching & Action */}
+      <section className="grid gap-12 lg:grid-cols-[1fr_360px] items-start">
+        <div className="animate-fade-in-up space-y-8">
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="text-xs font-semibold uppercase tracking-widest text-brand-300 bg-brand-500/10 px-3 py-1.5 rounded-full">{rangeLabel}</span>
+            <div className="flex gap-2 p-1 bg-surface-deep rounded-full border border-white/[0.05]">
               {(['7d', '30d', 'all'] as const).map((item) => (
                 <button
                   key={item}
                   type="button"
                   onClick={() => setRange(item)}
-                  className={`rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                  className={`text-xs font-medium uppercase tracking-widest transition-all px-4 py-1.5 rounded-full ${
                     range === item
-                      ? 'bg-brand-500/15 text-brand-300'
-                      : 'bg-surface-deep text-content-secondary hover:bg-surface-hover'
+                      ? 'bg-surface text-white shadow-sm'
+                      : 'text-content-muted hover:text-content-secondary'
                   }`}
                 >
                   {item === '7d' ? '7일' : item === '30d' ? '30일' : '전체'}
@@ -179,168 +169,162 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="max-w-3xl">
-            <h1 className="text-3xl font-semibold tracking-tight text-content-primary md:text-4xl">
-              지금 이어서 볼 학습 흐름
+          <div className="space-y-4">
+            <h1 className="text-4xl font-semibold tracking-tight text-white lg:text-5xl leading-tight">
+              {coachingMessage}
             </h1>
-            <p className="mt-3 text-lg leading-8 text-content-secondary">{coachingMessage}</p>
           </div>
 
-          <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 border-t border-white/[0.07] pt-5 text-sm">
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-semibold tabular-nums text-content-primary">{dashboardData.learning_volume}</span>
-              <span className="text-content-secondary">문제 풀이</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-semibold tabular-nums text-content-primary">{formatPercent(dashboardData.overall_accuracy)}</span>
-              <span className="text-content-secondary">정답률</span>
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-semibold tabular-nums text-content-primary">{formatPercent(dashboardData.score_rate)}</span>
-              <span className="text-content-secondary">점수율</span>
-            </div>
-            {dashboardData.retry_recommendations.length > 0 && (
+          <div className="flex flex-wrap gap-8 pt-8">
+            <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 flex-1 min-w-[140px]">
+              <div className="text-xs font-medium uppercase tracking-widest text-content-muted mb-2">학습량</div>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-semibold tabular-nums text-brand-300">{dashboardData.retry_recommendations.length}</span>
-                <span className="text-content-secondary">재도전 추천</span>
+                <div className="text-4xl font-semibold tabular-nums text-white">{dashboardData.learning_volume}</div>
+                <div className="text-sm font-medium text-content-secondary">문제</div>
               </div>
-            )}
+            </div>
+            <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 flex-1 min-w-[140px]">
+              <div className="text-xs font-medium uppercase tracking-widest text-content-muted mb-2">정답률</div>
+              <div className="flex items-baseline gap-2">
+                <div className="text-4xl font-semibold tabular-nums text-brand-300">{formatPercent(dashboardData.overall_accuracy)}</div>
+              </div>
+            </div>
+            <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 flex-1 min-w-[140px]">
+              <div className="text-xs font-medium uppercase tracking-widest text-content-muted mb-2">점수율</div>
+              <div className="flex items-baseline gap-2">
+                <div className="text-4xl font-semibold tabular-nums text-white">{formatPercent(dashboardData.score_rate)}</div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <aside className="rounded-3xl border border-brand-500/20 bg-surface-raised px-6 py-7">
-          <p className="text-xs font-semibold uppercase tracking-widest text-brand-300">{primaryAction.eyebrow}</p>
-          <h2 className="mt-3 text-2xl font-semibold text-content-primary">{primaryAction.title}</h2>
-          {primaryAction.description && (
-            <p className="mt-3 text-sm leading-6 text-content-secondary">{primaryAction.description}</p>
-          )}
-
+        <div className="bg-surface-deep border border-white/[0.05] rounded-3xl p-8 animate-fade-in-up stagger-1">
+          <div className="text-xs font-semibold uppercase tracking-widest text-brand-300 mb-4">{primaryAction.eyebrow}</div>
+          <h2 className="text-2xl font-semibold text-white mb-3">{primaryAction.title}</h2>
+          <p className="text-content-secondary text-sm leading-relaxed mb-8">
+            {primaryAction.description}
+          </p>
           <Link
             to={primaryAction.to}
-            className="mt-6 inline-flex items-center justify-center rounded-xl bg-brand-500 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-600"
+            className="w-full inline-flex items-center justify-center bg-brand-500 text-brand-900 rounded-2xl px-6 py-4 text-sm font-semibold transition-transform hover:-translate-y-0.5"
           >
             {primaryAction.buttonLabel}
           </Link>
-
-          <div className="mt-8 grid gap-2 border-t border-white/[0.07] pt-6 text-sm text-content-secondary">
-            <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-3">
-              <span>오답 기록</span>
-              <span className="font-medium text-content-primary">{dashboardData.recent_wrong_notes.length}건</span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-3">
-              <span>취약 개념</span>
-              <span className="font-medium text-content-primary">{dashboardData.weak_concepts.length}건</span>
-            </div>
-            <div className="flex items-center justify-between rounded-xl bg-surface px-4 py-3">
-              <span>재도전 추천</span>
-              <span className="font-medium text-brand-300">{dashboardData.retry_recommendations.length}건</span>
-            </div>
-          </div>
-        </aside>
+        </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
-        <div className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-7">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <h2 className="mt-2 text-2xl font-semibold text-content-primary">다시 볼 개념</h2>
+      {/* Main Content Grid */}
+      <div className="grid gap-12 lg:grid-cols-[1fr_1fr]">
+        {/* Left: Retry Recommendations */}
+        <section className="space-y-6">
+          <div className="flex items-center justify-between border-b border-white/[0.05] pb-4">
+            <h2 className="text-2xl font-semibold text-white">복습이 필요한 개념</h2>
             <Link to="/retry" className="text-sm font-medium text-brand-300 hover:text-brand-400">
-              재도전 보기
+              전체 보기
             </Link>
           </div>
 
           {retryRecommendations.length === 0 ? (
-            <div className="mt-6 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5 text-sm leading-6 text-content-secondary">지금 바로 권할 재도전은 많지 않아요.</div>
+            <div className="text-sm text-content-muted py-8 text-center bg-surface-deep rounded-3xl border border-white/[0.05]">
+              현재 복습이 시급한 개념은 없습니다.
+            </div>
           ) : (
-            <div className="mt-6 divide-y divide-white/[0.07] rounded-2xl border border-white/[0.07] bg-surface-deep">
+            <div className="space-y-4">
               {retryRecommendations.map((concept) => (
-                <div key={concept.concept_key} className="px-5 py-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div className="min-w-0 max-w-3xl">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-brand-500/15 px-3 py-1 text-xs font-medium text-brand-300">
-                          {concept.category_tag || '복습 추천'}
+                <div key={concept.concept_key} className="bg-surface border border-white/[0.05] rounded-3xl p-6 group transition-colors hover:bg-surface-hover">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2.5 py-1 rounded-md">
+                          {concept.category_tag || '개념'}
                         </span>
-                        <span className="text-xs text-content-secondary">
-                          오답 {concept.wrong_count}회 · 부분정답 {concept.partial_count}회
+                        <span className="text-xs text-content-muted">
+                          오답 {concept.wrong_count} · 부분정답 {concept.partial_count}
                         </span>
                       </div>
-                      <h3 className="mt-3 text-lg font-semibold text-content-primary break-words">
+                      <h3 className="text-lg font-medium text-white group-hover:text-brand-300 transition-colors">
                         {concept.concept_label}
                       </h3>
-                      <p className="mt-2 text-sm leading-6 text-content-secondary break-words">
+                      <p className="text-sm text-content-secondary line-clamp-1">
                         {concept.recommended_action || '이 개념을 한 번 더 확인해 보세요.'}
                       </p>
                     </div>
                     <Link
                       to="/retry"
-                      className="inline-flex items-center justify-center rounded-xl border border-brand-500/20 bg-brand-500/10 px-4 py-2 text-sm font-medium text-brand-300 transition-colors hover:bg-brand-500/15"
+                      className="shrink-0 inline-flex items-center justify-center bg-surface-deep border border-white/[0.05] rounded-xl px-4 py-2 text-sm font-medium text-white hover:bg-white/5 transition-colors"
                     >
-                      바로 복습
+                      복습하기
                     </Link>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        <div className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-7">
-          <h2 className="mt-2 text-2xl font-semibold text-content-primary">흔들린 문제</h2>
+        {/* Right: Recent Errors */}
+        <section className="space-y-6">
+          <div className="flex items-center justify-between border-b border-white/[0.05] pb-4">
+            <h2 className="text-2xl font-semibold text-white">최근 오답 노트</h2>
+            <Link to="/wrong-notes" className="text-sm font-medium text-brand-300 hover:text-brand-400">
+              전체 보기
+            </Link>
+          </div>
 
           {recentWrongNotes.length === 0 ? (
-            <div className="mt-6 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5 text-sm leading-6 text-content-secondary">
-              최근 오답 기록이 없어요.
+            <div className="text-sm text-content-muted py-8 text-center bg-surface-deep rounded-3xl border border-white/[0.05]">
+              최근에 틀린 문제가 없습니다.
             </div>
           ) : (
-            <div className="mt-6 space-y-3">
+            <div className="space-y-4">
               {recentWrongNotes.map((note, index) => (
                 <div
                   key={`${note.concept_key}-${index}`}
-                  className="rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-4"
+                  className="bg-surface border border-white/[0.05] rounded-3xl p-6"
                 >
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-content-secondary">
-                    <span className={`rounded-full px-3 py-1 ${note.judgement === 'incorrect' ? 'bg-semantic-error-bg text-semantic-error' : 'bg-semantic-warning-bg text-semantic-warning'}`}>
-                      {note.judgement === 'incorrect' ? '오답 기록' : '부분정답 기록'}
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className={`text-xs px-2.5 py-1 rounded-md font-medium ${note.judgement === 'incorrect' ? 'bg-semantic-error/10 text-semantic-error' : 'bg-semantic-warning/10 text-semantic-warning'}`}>
+                      {note.judgement === 'incorrect' ? '오답' : '부분정답'}
                     </span>
-                    <span>{formatDateTime(note.graded_at)}</span>
+                    <span className="text-xs text-content-muted">
+                      {formatDateTime(note.graded_at)}
+                    </span>
                   </div>
-                  <div className="mt-3 text-base font-medium leading-7 text-content-primary break-words">
+                  <div className="text-base font-medium text-white mb-2 line-clamp-2">
                     {note.question_text}
                   </div>
-                  <div className="mt-2 text-sm text-content-secondary break-words">
-                    {note.concept_label || '개념 정보 없음'}
+                  <div className="text-xs text-content-muted">
+                    {note.concept_label || '미분류 개념'}
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
-      </section>
+        </section>
+      </div>
 
-      <section>
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-2xl font-semibold text-content-primary">세부 지표</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <label htmlFor="category-tag-filter" className="sr-only">과목별 필터</label>
+      {/* Metrics Section */}
+      <section className="pt-12">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between mb-8">
+          <h2 className="text-2xl font-semibold text-white">세부 학습 지표</h2>
+          
+          <div className="flex flex-wrap gap-3">
             <select
-              id="category-tag-filter"
               value={selectedCategoryTag ?? ''}
               onChange={(e) => setSelectedCategoryTag(e.target.value || null)}
-              className="rounded-xl border border-white/[0.07] bg-surface-deep px-3 py-2 text-sm text-content-primary transition-colors hover:bg-surface-hover focus:outline-none"
+              className="bg-surface border border-white/[0.05] rounded-xl text-sm px-4 py-2 text-content-primary focus:ring-2 focus:ring-brand-500 focus:outline-none"
             >
-              <option value="">과목별 전체</option>
+              <option value="">전체 주제</option>
               {[...new Set(dashboardData.accuracy_by_subject.map((s) => s.category_tag))].map((tag) => (
                 <option key={tag} value={tag}>{tag}</option>
               ))}
             </select>
-            <label htmlFor="file-filter" className="sr-only">자료별 필터</label>
             <select
-              id="file-filter"
               value={selectedFileId ?? ''}
               onChange={(e) => setSelectedFileId(e.target.value || null)}
-              className="rounded-xl border border-white/[0.07] bg-surface-deep px-3 py-2 text-sm text-content-primary transition-colors hover:bg-surface-hover focus:outline-none"
+              className="bg-surface border border-white/[0.05] rounded-xl text-sm px-4 py-2 text-content-primary focus:ring-2 focus:ring-brand-500 focus:outline-none"
             >
-              <option value="">자료별 전체</option>
+              <option value="">전체 자료</option>
               {dashboardData.accuracy_by_file.map((f) => (
                 <option key={f.file_id} value={f.file_id}>{f.filename}</option>
               ))}
@@ -348,144 +332,48 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[28rem_minmax(0,1fr)]">
-          <section className="rounded-3xl border border-white/[0.07] bg-surface px-7 py-8">
-            <h3 className="text-xl font-semibold text-content-primary">핵심 지표</h3>
-            <div className="mt-8 space-y-7">
-              <div>
-                <div className="flex items-end justify-between gap-4">
-                  <span className="text-sm text-content-secondary">전체 정답률</span>
-                  <span className="text-3xl font-semibold tabular-nums text-content-primary">{formatPercent(dashboardData.overall_accuracy)}</span>
-                </div>
-                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-surface-deep">
-                  <div
-                    role="progressbar"
-                    aria-valuenow={Math.round(dashboardData.overall_accuracy * 100)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label="전체 정답률"
-                    className="h-full rounded-full bg-brand-500 animate-progress-fill"
-                    style={{ width: `${Math.min(dashboardData.overall_accuracy * 100, 100)}%` }}
-                  />
-                </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="bg-surface border border-white/[0.05] rounded-3xl p-8 space-y-6">
+            <h3 className="text-sm font-semibold text-content-secondary">취약점 분석</h3>
+            {weakConcepts.length === 0 ? (
+              <div className="text-sm text-content-muted">분석할 취약 데이터가 충분하지 않습니다.</div>
+            ) : (
+              <div className="space-y-4">
+                {weakConcepts.map((concept) => (
+                  <div key={concept.concept_key} className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-white truncate">{concept.concept_label}</div>
+                      <div className="text-xs text-content-muted mt-1">
+                        {concept.wrong_count}회 오답 · {concept.partial_count}회 부분정답
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div>
-                <div className="flex items-end justify-between gap-4">
-                  <span className="text-sm text-content-secondary">점수율</span>
-                  <span className="text-3xl font-semibold tabular-nums text-content-primary">{formatPercent(dashboardData.score_rate)}</span>
+            )}
+          </div>
+
+          <div className="bg-surface border border-white/[0.05] rounded-3xl p-8 space-y-6">
+            <h3 className="text-sm font-semibold text-content-secondary">유형별 정답률</h3>
+            <div className="space-y-5">
+              {dashboardData.accuracy_by_type.map((item, index) => (
+                <div key={`${item.question_type}-${index}`} className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-content-primary">{formatQuestionType(item.question_type)}</span>
+                    <span className="font-medium text-white">{formatPercent(item.accuracy)}</span>
+                  </div>
+                  <div className="h-1.5 bg-surface-deep rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-brand-500 rounded-full"
+                      style={{ width: `${Math.max(0, Math.min(item.accuracy * 100, 100))}%` }}
+                    />
+                  </div>
                 </div>
-                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-surface-deep">
-                  <div
-                    role="progressbar"
-                    aria-valuenow={Math.round(dashboardData.score_rate * 100)}
-                    aria-valuemin={0}
-                    aria-valuemax={100}
-                    aria-label="점수율"
-                    className="h-full rounded-full bg-brand-400 animate-progress-fill"
-                    style={{ width: `${Math.min(dashboardData.score_rate * 100, 100)}%` }}
-                  />
-                </div>
-              </div>
-              <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
-                <div className="text-sm text-content-secondary">학습량</div>
-                <div className="mt-2 flex items-baseline gap-2">
-                  <span className="text-4xl font-semibold tabular-nums text-content-primary">{dashboardData.learning_volume}</span>
-                  <span className="text-sm text-content-secondary">문제 풀이</span>
-                </div>
-              </div>
+              ))}
             </div>
-          </section>
-
-          <div className="grid auto-rows-fr gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            <section className="rounded-3xl border border-white/[0.07] bg-surface-deep px-6 py-7">
-              <h3 className="text-lg font-semibold text-content-primary">취약 개념 상위</h3>
-              {weakConcepts.length === 0 ? (
-                <div className="mt-5 rounded-2xl border border-white/[0.07] bg-surface px-4 py-4 text-sm text-content-secondary">
-                  아직 집계할 취약 개념이 없습니다.
-                </div>
-              ) : (
-                <div className="mt-5 space-y-3">
-                  {weakConcepts.map((concept) => (
-                    <div key={concept.concept_key} className="rounded-xl border border-white/[0.07] bg-surface px-4 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-content-primary break-words">
-                            {concept.concept_label}
-                          </div>
-                          <div className="mt-1 text-xs text-content-secondary">
-                            오답 {concept.wrong_count}회 · 부분정답 {concept.partial_count}회
-                          </div>
-                        </div>
-                        <Link to="/retry" className="shrink-0 text-xs font-medium text-brand-300 hover:text-brand-400">
-                          재도전
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="rounded-3xl border border-white/[0.07] bg-surface-deep px-6 py-7">
-              <h3 className="text-lg font-semibold text-content-primary">문제 유형별 흐름</h3>
-              {dashboardData.accuracy_by_type.length === 0 ? (
-                <div className="mt-5 rounded-2xl border border-white/[0.07] bg-surface px-4 py-4 text-sm text-content-secondary">
-                  아직 유형별로 보기엔 데이터가 충분하지 않습니다.
-                </div>
-              ) : (
-                <div className="mt-5 space-y-4">
-                  {dashboardData.accuracy_by_type.map((item, index) => (
-                    <div key={`${item.question_type}-${index}`} className="space-y-2">
-                      <div className="flex items-center justify-between gap-4 text-sm">
-                        <span className="text-content-primary break-words">{formatQuestionType(item.question_type)}</span>
-                        <span className="whitespace-nowrap font-medium text-content-primary">
-                          {formatPercent(item.accuracy)} · {item.count}문제
-                        </span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-surface">
-                        <div
-                          className="h-full rounded-full bg-brand-500"
-                          style={{ width: `${Math.max(0, Math.min(item.accuracy * 100, 100))}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className="rounded-3xl border border-white/[0.07] bg-surface-deep px-6 py-7">
-              <h3 className="text-lg font-semibold text-content-primary">자료별 정확도</h3>
-              {dashboardData.accuracy_by_file.length === 0 ? (
-                <div className="mt-5 rounded-2xl border border-white/[0.07] bg-surface px-4 py-4 text-sm text-content-secondary">
-                  아직 자료별 집계가 없습니다.
-                </div>
-              ) : (
-                <div className="mt-5 space-y-4">
-                  {dashboardData.accuracy_by_file.map((item) => (
-                    <div key={item.file_id} className="space-y-2">
-                      <div className="flex items-center justify-between gap-4 text-sm">
-                        <span className="truncate text-content-primary">{item.filename}</span>
-                        <span className="whitespace-nowrap font-medium text-content-primary">
-                          {formatPercent(item.accuracy)} · {item.count}문제
-                        </span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-surface">
-                        <div
-                          className="h-full rounded-full bg-brand-500"
-                          style={{ width: `${Math.max(0, Math.min(item.accuracy * 100, 100))}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-
           </div>
         </div>
       </section>
-
     </div>
   );
 }

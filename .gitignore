@@ -12,6 +12,7 @@ node_modules/
 frontend/dist/
 storage/
 *.sqlite3
+*.db
 .pytest_cache/
 .coverage
 htmlcov/

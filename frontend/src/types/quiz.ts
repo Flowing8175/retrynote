@@ -6,6 +6,7 @@ export interface QuizSessionCreate {
   difficulty: string | null;
   question_types: string[];
   generation_priority: string | null;
+  preferred_model: string | null;
   source_mode: 'document_based' | 'no_source';
   topic: string | null;
   idempotency_key: string | null;

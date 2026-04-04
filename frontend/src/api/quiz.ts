@@ -79,4 +79,9 @@ export const quizApi = {
   deleteQuizSession: async (sessionId: string): Promise<void> => {
     await apiClient.delete(`/quiz-sessions/${sessionId}`);
   },
+
+  getQuizConfig: async (): Promise<{ default_generation_model: string }> => {
+    const response = await apiClient.get<{ default_generation_model: string }>('/quiz-sessions/config');
+    return response.data;
+  },
 };

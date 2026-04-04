@@ -5,17 +5,37 @@ import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import { LoadingSpinner, StatusBadge } from '@/components';
 import type { AnswerResponse } from '@/types';
+import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, PlayCircle } from 'lucide-react';
 
-const VALIDATION_TIMEOUT_MS = 3000;
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
 
-function isInteractiveShortcutTarget(target: EventTarget | null) {
-  if (!(target instanceof HTMLElement)) {
-    return false;
-  }
+function ParticleEffect() {
+  const particles = Array.from({ length: 8 }).map((_, i) => ({
+    id: i,
+    tx: `${(Math.random() - 0.5) * 200}px`,
+    ty: `${(Math.random() - 0.5) * 200}px`,
+    size: `${Math.random() * 4 + 3}px`,
+    delay: `${Math.random() * 0.1}s`,
+  }));
 
-  const interactiveSelector = 'input, textarea, select, button, a, [contenteditable="true"], [role="radio"], [role="checkbox"], [role="button"]';
-  return Boolean(target.closest(interactiveSelector));
+  return (
+    <div className="particle-container">
+      {particles.map((p) => (
+        <div
+          key={p.id}
+          className="particle"
+          style={{
+            '--tx': p.tx,
+            '--ty': p.ty,
+            width: p.size,
+            height: p.size,
+            animationDelay: p.delay,
+            backgroundColor: 'oklch(0.72 0.12 170)'
+          } as React.CSSProperties}
+        />
+      ))}
+    </div>
+  );
 }
 
 export default function QuizTake() {
@@ -23,6 +43,7 @@ export default function QuizTake() {
   const navigate = useNavigate();
   const { currentSession, currentAnswerMap, setCurrentSession, setCurrentItems, setCurrentAnswer } = useQuizStore();
   const currentAnswerMapRef = useRef(currentAnswerMap);
+  
   useEffect(() => {
     currentAnswerMapRef.current = currentAnswerMap;
   }, [currentAnswerMap]);
@@ -31,7 +52,6 @@ export default function QuizTake() {
   const [userAnswer, setUserAnswer] = useState('');
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [answerResult, setAnswerResult] = useState<AnswerResponse | null>(null);
-  const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [draftAnswers, setDraftAnswers] = useState<Record<string, string>>({});
   const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>({});
   const [answerResultsByItemId, setAnswerResultsByItemId] = useState<Record<string, AnswerResponse>>({});
@@ -45,25 +65,18 @@ export default function QuizTake() {
       query.state.data?.status === 'generating' || query.state.data?.status === 'draft'
         ? QUIZ_REFRESH_INTERVAL_MS
         : false,
-    refetchIntervalInBackground: true,
   });
 
   const { data: itemsData, isLoading: itemsLoading } = useQuery({
     queryKey: ['quizItems', sessionId],
     queryFn: () => quizApi.getQuizItems(sessionId || ''),
     enabled: !!sessionId,
-    refetchInterval: (query) =>
-      query.state.data?.length === 0 && sessionData?.status !== 'failed' && sessionData?.status !== 'generation_failed'
-        ? QUIZ_REFRESH_INTERVAL_MS
-        : false,
-    refetchIntervalInBackground: true,
   });
 
-  const { data: answerLogsData } = useQuery({
-    queryKey: ['quizAnswerLogs', sessionId],
-    queryFn: () => quizApi.getAnswerLogs(sessionId || ''),
-    enabled: !!sessionId,
-  });
+  useEffect(() => {
+    if (sessionData) setCurrentSession(sessionData);
+    if (itemsData) setCurrentItems(itemsData);
+  }, [sessionData, itemsData, setCurrentSession, setCurrentItems]);
 
   const submitAnswerMutation = useMutation({
     mutationFn: (data: { itemId: string; answer: string }) =>
@@ -75,705 +88,235 @@ export default function QuizTake() {
       setDraftAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
       setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
       setAnswerResultsByItemId((prev) => ({ ...prev, [variables.itemId]: result }));
-      setValidationMessage(null);
-      setFurthestAvailableIndex((prev) => {
-        if (!itemsData || itemsData.length === 0) {
-          return prev;
-        }
-
-        return Math.min(itemsData.length - 1, Math.max(prev, currentItemIndex + 1));
-      });
+      setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
     },
   });
 
   const saveDraftAnswerMutation = useMutation({
     mutationFn: (data: { itemId: string; answer: string }) =>
       quizApi.saveDraftAnswer(sessionId || '', { item_id: data.itemId, user_answer: data.answer }),
-    onSuccess: (_result, variables) => {
+    onSuccess: (_, variables) => {
       setCurrentAnswer(variables.itemId, variables.answer);
       setDraftAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
       setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
-      setValidationMessage(null);
-
-      setFurthestAvailableIndex((prev) => {
-        if (!itemsData || itemsData.length === 0) {
-          return prev;
-        }
-
-        return Math.min(itemsData.length - 1, Math.max(prev, currentItemIndex + 1));
-      });
-
+      setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
       if (itemsData && currentItemIndex < itemsData.length - 1) {
-        setCurrentItemIndex((prev) => Math.min(prev + 1, itemsData.length - 1));
+        setCurrentItemIndex((prev) => prev + 1);
+        setUserAnswer(draftAnswers[itemsData[currentItemIndex + 1].id] || '');
       }
-    },
-  });
-
-  const submitExamMutation = useMutation({
-    mutationFn: () => quizApi.submitExam(sessionId || '', { idempotency_key: crypto.randomUUID() }),
-    onSuccess: () => {
-      navigate(`/quiz/${sessionId}/results`);
     },
   });
 
   const currentItem = itemsData?.[currentItemIndex];
   const isExamMode = currentSession?.mode === 'exam';
-  const completedCount = isExamMode
-    ? Object.values(submittedAnswers).filter((answer) => answer.trim()).length
-    : Object.keys(submittedAnswers).length;
-  const progressPercent = itemsData?.length ? (completedCount / itemsData.length) * 100 : 0;
-  const isGeneratingQuiz = sessionData?.status === 'draft' || sessionData?.status === 'generating';
 
-  useEffect(() => {
-    if (sessionData && itemsData && answerLogsData !== undefined) {
-      const snapshot = currentAnswerMapRef.current;
+  const handleOptionSelect = (optionKey: string) => {
+    if (isSubmitted && !isExamMode) return;
+    setUserAnswer(optionKey);
+  };
 
-      const storedAnswerMap = Object.fromEntries(
-        itemsData
-          .filter((item) => snapshot[item.id] != null)
-          .map((item) => [item.id, snapshot[item.id]])
-      );
-
-      const restoredAnswerMap: Record<string, string> = { ...storedAnswerMap };
-      const restoredResults: Record<string, AnswerResponse> = {};
-
-      for (const log of answerLogsData) {
-        restoredAnswerMap[log.item_id] = log.user_answer;
-        restoredResults[log.item_id] = {
-          answer_log_id: log.answer_log_id,
-          judgement: log.judgement,
-          score_awarded: log.score_awarded,
-          max_score: log.max_score,
-          grading_confidence: log.grading_confidence,
-          grading_rationale: log.grading_rationale,
-          explanation: log.explanation,
-          tips: log.tips,
-          missing_points: log.missing_points,
-          error_type: log.error_type,
-          normalized_user_answer: log.normalized_user_answer,
-          suggested_feedback: log.suggested_feedback,
-          next_item_id: null,
-          correct_answer: log.correct_answer,
-        };
-      }
-
-      const restoredIndexes = itemsData
-        .map((item, index) => (restoredAnswerMap[item.id] ? index : -1))
-        .filter((index) => index >= 0);
-      const highestRestoredIndex = restoredIndexes.length > 0 ? Math.max(...restoredIndexes) : -1;
-
-      setCurrentSession(sessionData);
-      setCurrentItems(itemsData);
-      setCurrentItemIndex(0);
-      setUserAnswer(restoredAnswerMap[itemsData[0]?.id] ?? '');
-      setIsSubmitted(false);
-      setAnswerResult(null);
-      setValidationMessage(null);
-      setDraftAnswers(restoredAnswerMap);
-      setSubmittedAnswers(restoredAnswerMap);
-      setAnswerResultsByItemId(restoredResults);
-      setFurthestAvailableIndex(
-        itemsData.length === 0 ? 0 : Math.min(itemsData.length - 1, Math.max(0, highestRestoredIndex + 1))
-      );
-    }
-  }, [sessionData, itemsData, answerLogsData, setCurrentItems, setCurrentSession]);
-
-  useEffect(() => {
-    if (itemsData && itemsData.length > 0) {
-      const currentItem = itemsData[currentItemIndex];
-
-      if (!currentItem) {
-        return;
-      }
-
-      setUserAnswer(
-        submittedAnswers[currentItem.id] ??
-          draftAnswers[currentItem.id] ??
-          currentAnswerMap[currentItem.id] ??
-          ''
-      );
-
-      const storedResult = answerResultsByItemId[currentItem.id] ?? null;
-      setIsSubmitted(isExamMode ? Boolean(storedResult) : Boolean(storedResult || submittedAnswers[currentItem.id]));
-      setAnswerResult(isExamMode ? null : storedResult);
-    }
-  }, [answerResultsByItemId, currentItemIndex, currentAnswerMap, draftAnswers, isExamMode, itemsData, submittedAnswers]);
-
-  useEffect(() => {
-    if (!validationMessage) {
-      return undefined;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setValidationMessage(null);
-    }, VALIDATION_TIMEOUT_MS);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [validationMessage]);
-
-  const handleExit = useCallback(() => {
-    navigate('/');
-  }, [navigate]);
-
-  const isAnyMutationPending =
-    submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending || submitExamMutation.isPending;
-
-  const goToQuestion = useCallback(
-    (nextIndex: number) => {
-      if (!itemsData || isAnyMutationPending) {
-        return;
-      }
-
-      if (
-        nextIndex < 0 ||
-        nextIndex >= itemsData.length ||
-        nextIndex > furthestAvailableIndex ||
-        nextIndex === currentItemIndex
-      ) {
-        return;
-      }
-
-      setCurrentItemIndex(nextIndex);
-      setValidationMessage(null);
-    },
-    [currentItemIndex, furthestAvailableIndex, itemsData, isAnyMutationPending]
-  );
-
-  const handleAnswerChange = useCallback(
-    (answer: string) => {
-      setUserAnswer(answer);
-
-      if (currentItem) {
-        setDraftAnswers((prev) => ({ ...prev, [currentItem.id]: answer }));
-
-        if (isExamMode) {
-          setSubmittedAnswers((prev) => {
-            if (prev[currentItem.id] === answer) {
-              return prev;
-            }
-
-            const next = { ...prev };
-            delete next[currentItem.id];
-            return next;
-          });
-        }
-      }
-
-      if (validationMessage && answer.trim()) {
-        setValidationMessage(null);
-      }
-    },
-    [currentItem, isExamMode, validationMessage]
-  );
-
-  const handleSelectAndSubmit = useCallback(
-    (answer: string) => {
-      if (!currentItem || isAnyMutationPending || isSubmitted) {
-        return;
-      }
-
-      handleAnswerChange(answer);
-
-      if (isExamMode) {
-        saveDraftAnswerMutation.mutate({ itemId: currentItem.id, answer });
-      } else {
-        submitAnswerMutation.mutate({ itemId: currentItem.id, answer });
-      }
-    },
-    [currentItem, isAnyMutationPending, isSubmitted, isExamMode, handleAnswerChange, saveDraftAnswerMutation, submitAnswerMutation]
-  );
-
-  const handleSubmit = useCallback(() => {
-    if (!currentItem || isAnyMutationPending) {
-      return;
-    }
-
-    if (!userAnswer.trim()) {
-      setValidationMessage('답안을 입력해주세요.');
-      return;
-    }
-
-    if (isExamMode) {
-      saveDraftAnswerMutation.mutate({ itemId: currentItem.id, answer: userAnswer });
-      return;
-    }
-
-    submitAnswerMutation.mutate({ itemId: currentItem.id, answer: userAnswer });
-  }, [currentItem, isAnyMutationPending, isExamMode, saveDraftAnswerMutation, submitAnswerMutation, userAnswer]);
-
-  const handleFormSubmit = useCallback(
-    (e: React.FormEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      handleSubmit();
-    },
-    [handleSubmit]
-  );
-
-  const handleNext = useCallback(() => {
-    if (isAnyMutationPending) return;
+  const handleNext = () => {
     if (itemsData && currentItemIndex < itemsData.length - 1) {
-      setCurrentItemIndex(currentItemIndex + 1);
-      setValidationMessage(null);
-    } else {
-      navigate(`/quiz/${sessionId}/results`);
+      const nextIndex = currentItemIndex + 1;
+      setCurrentItemIndex(nextIndex);
+      setIsSubmitted(!!submittedAnswers[itemsData[nextIndex].id]);
+      setAnswerResult(answerResultsByItemId[itemsData[nextIndex].id] || null);
+      setUserAnswer(submittedAnswers[itemsData[nextIndex].id] || draftAnswers[itemsData[nextIndex].id] || '');
     }
-  }, [currentItemIndex, isAnyMutationPending, itemsData, navigate, sessionId]);
+  };
 
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const targetTag = target?.tagName;
-      const isTextArea = targetTag === 'TEXTAREA';
-      const isInteractiveTarget = isInteractiveShortcutTarget(event.target);
+  const handlePrev = () => {
+    if (currentItemIndex > 0) {
+      const prevIndex = currentItemIndex - 1;
+      setCurrentItemIndex(prevIndex);
+      setIsSubmitted(!!submittedAnswers[itemsData[prevIndex].id]);
+      setAnswerResult(answerResultsByItemId[itemsData[prevIndex].id] || null);
+      setUserAnswer(submittedAnswers[itemsData[prevIndex].id] || draftAnswers[itemsData[prevIndex].id] || '');
+    }
+  };
 
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        handleExit();
-        return;
-      }
-
-      if (!itemsData || isAnyMutationPending) {
-        return;
-      }
-
-      if (event.key === 'ArrowLeft' && !isInteractiveTarget) {
-        event.preventDefault();
-        goToQuestion(currentItemIndex - 1);
-        return;
-      }
-
-      if (event.key === 'ArrowRight' && !isInteractiveTarget) {
-        event.preventDefault();
-        goToQuestion(currentItemIndex + 1);
-        return;
-      }
-
-      if (event.key === 'Enter' && !event.altKey && !event.ctrlKey && !event.metaKey) {
-        if (isTextArea) {
-          if (!event.shiftKey) {
-            event.preventDefault();
-            handleSubmit();
-          }
-          return;
-        }
-
-        if (!isInteractiveTarget && targetTag !== 'BUTTON' && targetTag !== 'A') {
-          event.preventDefault();
-          handleSubmit();
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [currentItemIndex, goToQuestion, handleExit, handleSubmit, isAnyMutationPending, itemsData]);
-
-  if (sessionLoading || itemsLoading || isGeneratingQuiz) {
-    return <LoadingSpinner />;
+  if (sessionLoading || itemsLoading || !sessionData) {
+    return <LoadingSpinner message="퀴즈 데이터를 준비하고 있습니다" />;
   }
 
-  if (sessionData?.status === 'generation_failed') {
+  if (sessionData.status === 'generating') {
     return (
-      <section className="overflow-hidden rounded-3xl border border-semantic-error-border bg-gradient-to-b from-semantic-error-bg to-surface shadow-sm">
-        <div className="mx-auto flex max-w-2xl flex-col items-center justify-center px-6 py-12 text-center sm:px-10 sm:py-14">
-          <p className="text-sm font-medium tracking-[0.18em] text-content-secondary">생성 실패</p>
-          <h1 className="mt-3 text-xl font-semibold tracking-tight text-content-primary sm:text-2xl">
-            퀴즈 생성에 실패했습니다.
-          </h1>
-          <p className="mt-4 max-w-xl text-sm leading-7 text-content-secondary sm:text-base">
-            다시 생성해 주세요.
-          </p>
-        </div>
-      </section>
+      <div className="max-w-3xl mx-auto py-32 text-center space-y-8">
+        <PlayCircle size={64} className="mx-auto text-brand-300 animate-pulse" />
+        <h1 className="text-3xl font-semibold text-white">퀴즈 생성 중...</h1>
+        <p className="text-base text-content-secondary leading-relaxed">
+          AI가 학습 자료를 분석하여 문항을 설계하고 있습니다.<br/>잠시만 기다려 주세요.
+        </p>
+      </div>
     );
   }
 
-  if (!itemsData || itemsData.length === 0) {
-    return (
-      <section className="overflow-hidden rounded-3xl border border-white/[0.07] bg-gradient-to-b from-surface to-surface-deep/90 shadow-sm">
-        <div className="mx-auto flex max-w-2xl flex-col items-center justify-center px-6 py-12 text-center sm:px-10 sm:py-14">
-          <p className="text-sm font-medium tracking-[0.18em] text-brand-300">퀴즈 준비 중</p>
-          <h1 className="mt-3 text-xl font-semibold tracking-tight text-content-primary sm:text-2xl">
-            퀴즈 문제를 아직 준비 중입니다.
-          </h1>
-        </div>
-      </section>
-    );
-  }
-
-  if (!currentItem) {
-    return (
-      <section className="overflow-hidden rounded-3xl border border-white/[0.07] bg-gradient-to-b from-surface to-surface-deep/90 shadow-sm">
-        <div className="mx-auto flex max-w-2xl flex-col items-center justify-center px-6 py-12 text-center sm:px-10 sm:py-14">
-          <p className="text-sm font-medium tracking-[0.18em] text-brand-300">불러오기 오류</p>
-          <h1 className="mt-3 text-xl font-semibold tracking-tight text-content-primary sm:text-2xl">
-            현재 문제를 불러오지 못했습니다.
-          </h1>
-        </div>
-      </section>
-    );
-  }
-
-  const activeItem = currentItem;
+  const progress = ((currentItemIndex + 1) / (itemsData?.length || 1)) * 100;
 
   return (
-    <div className={isExamMode ? 'pb-28' : ''}>
-      <div className="mb-6 rounded-3xl border border-white/[0.07] bg-surface px-6 py-5 md:px-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <h1 className="text-3xl font-semibold tracking-tight text-content-primary">
-              퀴즈 풀이
-              {isExamMode && <span className="ml-2 text-sm font-medium text-brand-300">(시험 모드)</span>}
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-3 self-start">
-            <StatusBadge status={currentSession?.status || ''} />
-            <button
-              type="button"
-              onClick={handleExit}
-              className="rounded-xl border border-white/[0.07] px-4 py-2.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover"
-            >
-              나가기 <span className="text-content-muted">Esc</span>
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-content-secondary">
-            문제 {currentItemIndex + 1} / {itemsData.length} · 완료 {completedCount}문제
-          </div>
-        </div>
-
-        <div className="mt-5 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-4">
-          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2 text-sm text-content-secondary">
-              <span>진행률</span>
-              <span className="text-content-muted">{completedCount} / {itemsData.length}</span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-content-muted">
-              <span className="rounded-full border border-white/[0.07] bg-surface px-2 py-1">← 이전</span>
-              <span className="rounded-full border border-white/[0.07] bg-surface px-2 py-1">→ 다음</span>
-              <span className="rounded-full border border-white/[0.07] bg-surface px-2 py-1">Enter 제출</span>
-              {activeItem.question_type !== 'multiple_choice' && activeItem.question_type !== 'ox' ? (
-                <span className="rounded-full border border-white/[0.07] bg-surface px-2 py-1">Shift+Enter 줄바꿈</span>
-              ) : null}
+    <div className="max-w-4xl mx-auto py-8 space-y-12">
+      {/* Progress Header */}
+      <header className="space-y-4">
+        <div className="flex items-end justify-between">
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-content-muted">진행 상황</div>
+            <div className="text-3xl font-semibold tabular-nums text-white">
+              {currentItemIndex + 1} <span className="text-white/30 text-2xl">/ {itemsData?.length}</span>
             </div>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-surface-deep">
-            <div
-              role="progressbar"
-              aria-valuenow={Math.round(progressPercent)}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label="퀴즈 진행률"
-              className="h-full rounded-full bg-brand-500 transition-all duration-200"
-              style={{ width: `${progressPercent}%` }}
-            />
+          <div className="text-right space-y-1">
+            <div className="text-xs font-medium text-content-muted">모드</div>
+            <div className="text-sm font-medium text-white bg-surface border border-white/[0.05] px-3 py-1.5 rounded-lg">
+              {isExamMode ? '시험 모드' : '일반 모드'}
+            </div>
           </div>
         </div>
+        <div className="h-2 bg-surface rounded-full overflow-hidden border border-white/[0.05]">
+          <div 
+            className="h-full bg-brand-500 transition-all duration-500 ease-out"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      </header>
 
-        <div className="mt-4">
-          <div className="mb-2 text-sm text-content-secondary">문제 이동</div>
-          <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-2 py-3">
-            <div className="overflow-x-auto pb-1">
-              <div className="flex min-w-max gap-2 px-1">
-                {itemsData.map((item, index) => {
-                  const isCurrentQuestion = index === currentItemIndex;
-                  const isCompleted = Boolean(submittedAnswers[item.id]);
-                  const isAvailable = index <= furthestAvailableIndex;
-                  const itemResult = answerResultsByItemId[item.id];
-                  const judgement = itemResult?.judgement;
+      {/* Main Question Area */}
+      {currentItem && (
+        <section className="animate-fade-in-up space-y-10">
+          <div className="space-y-6">
+            <div className="flex items-center gap-3">
+              <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2.5 py-1 rounded-md border border-brand-500/20">
+                {currentItem.question_type.replace('_', ' ')}
+              </span>
+              <span className="text-xs font-medium text-content-muted">
+                {currentItem.concept_label || '개념'}
+              </span>
+            </div>
+            <h2 className="text-3xl font-semibold leading-relaxed text-white">
+              {currentItem.question_text}
+            </h2>
+          </div>
 
-                  const pillClass = isCurrentQuestion
-                    ? 'border-brand-500 bg-brand-500 text-content-inverse'
-                    : !isExamMode && judgement === 'correct'
-                    ? 'border-semantic-success-border bg-semantic-success-bg text-semantic-success'
-                    : !isExamMode && judgement === 'incorrect'
-                    ? 'border-semantic-error-border bg-semantic-error-bg text-semantic-error'
-                    : !isExamMode && judgement === 'partial'
-                    ? 'border-semantic-warning-border bg-semantic-warning-bg text-semantic-warning'
-                    : isCompleted
-                    ? 'border-semantic-success-border bg-semantic-success-bg text-semantic-success'
-                    : isAvailable
-                    ? 'border-semantic-warning-border bg-semantic-warning-bg text-semantic-warning'
-                    : 'border-white/[0.07] bg-surface-deep text-content-muted';
-
-                  const stateLabel = isCurrentQuestion
-                    ? '현재 문제'
-                    : !isExamMode && judgement === 'correct'
-                    ? '정답'
-                    : !isExamMode && judgement === 'incorrect'
-                    ? '오답'
-                    : !isExamMode && judgement === 'partial'
-                    ? '부분정답'
-                    : isCompleted
-                    ? '제출 완료'
-                    : isAvailable
-                    ? '이동 가능'
-                    : '잠김';
+          {/* Answer Options */}
+          <div className="space-y-4">
+            {currentItem.question_type === 'multiple_choice' && currentItem.options && (
+              <div className="grid gap-3">
+                {Object.entries(currentItem.options as Record<string, string>).map(([key, text]) => {
+                  const isSelected = userAnswer === key;
+                  const isCorrect = answerResult?.judgement === 'correct' && answerResult.correct_answer === key;
+                  const isWrong = isSubmitted && isSelected && answerResult?.judgement !== 'correct';
+                  const shouldShowCorrect = isSubmitted && !isExamMode && answerResult?.correct_answer === key;
 
                   return (
                     <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => goToQuestion(index)}
-                      disabled={!isAvailable || isAnyMutationPending}
-                      aria-current={isCurrentQuestion ? 'page' : undefined}
-                      aria-label={`${index + 1}번 문제 (${stateLabel})`}
-                      className={`flex h-11 min-w-11 items-center justify-center rounded-full border px-3 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${pillClass}`}
+                      key={key}
+                      onClick={() => handleOptionSelect(key)}
+                      disabled={isSubmitted && !isExamMode}
+                      className={`relative group flex items-start gap-4 p-5 rounded-2xl text-left transition-all border ${
+                        isSelected 
+                          ? 'bg-surface-raised text-white border-white/[0.1] shadow-sm' 
+                          : shouldShowCorrect 
+                            ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
+                            : 'bg-surface text-content-primary border-white/[0.05] hover:bg-surface-hover'
+                      } ${isWrong ? 'bg-semantic-error/10 text-semantic-error border-semantic-error/30' : ''}`}
                     >
-                      {index + 1}
+                      <span className={`text-base font-semibold tabular-nums mt-0.5 ${isSelected ? 'text-white' : 'text-content-muted'}`}>
+                        {key.toUpperCase()}
+                      </span>
+                      <span className="text-base font-medium leading-relaxed">{text}</span>
+                      {isCorrect && !isExamMode && <ParticleEffect />}
                     </button>
                   );
                 })}
               </div>
-            </div>
+            )}
+
+            {(currentItem.question_type === 'short_answer' || currentItem.question_type === 'essay' || currentItem.question_type === 'fill_blank') && (
+              <div className="space-y-4">
+                <textarea
+                  value={userAnswer}
+                  onChange={(e) => setUserAnswer(e.target.value)}
+                  disabled={isSubmitted && !isExamMode}
+                  placeholder="답변을 입력하세요..."
+                  className="w-full bg-surface border border-white/[0.05] rounded-2xl text-base px-6 py-6 placeholder:text-content-muted focus:ring-2 focus:ring-brand-500 transition-shadow min-h-[200px] resize-y"
+                />
+              </div>
+            )}
           </div>
-        </div>
-      </div>
 
-      <form onSubmit={handleFormSubmit} className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-7 md:px-8">
-        {/* Question */}
-        <div className="mb-6">
-          <h2 className="text-xl font-medium text-content-primary mb-4">
-            {activeItem.question_text}
-          </h2>
-
-          {/* Options for multiple choice / OX */}
-          {activeItem.question_type === 'multiple_choice' && activeItem.options != null && (
-            <div className="space-y-3">
-              {Object.entries(activeItem.options as Record<string, string>).map(([key, text]) => {
-                const isCorrectKey = isSubmitted && answerResult && answerResult.judgement !== 'correct' && String(answerResult.correct_answer?.answer) === key;
-                return (
-                <label
-                  key={key}
-                  className={`flex items-center rounded-2xl border px-5 py-4 transition-colors ${
-                    isCorrectKey
-                      ? 'border-semantic-success-border bg-semantic-success-bg text-content-primary'
-                      : isSubmitted && answerResult && userAnswer === key
-                      ? answerResult.judgement === 'correct'
-                        ? 'border-semantic-success-border bg-semantic-success-bg text-content-primary'
-                        : answerResult.judgement === 'partial'
-                        ? 'border-semantic-warning-border bg-semantic-warning-bg text-content-primary'
-                        : 'border-semantic-error-border bg-semantic-error-bg text-content-primary'
-                      : userAnswer === key
-                      ? 'border-brand-500/30 bg-brand-500/10 text-brand-300'
-                      : 'border-white/[0.07] bg-surface-deep text-content-primary hover:bg-surface-hover hover:border-white/[0.14]'
-                   } ${isSubmitted || isAnyMutationPending ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
-                >
-                  <input
-                    type="radio"
-                    value={key}
-                    checked={userAnswer === key}
-                    onChange={(e) => handleSelectAndSubmit(e.target.value)}
-                    disabled={isSubmitted || isAnyMutationPending}
-                    className="mr-3 h-4 w-4 shrink-0 accent-brand-500"
-                  />
-                  <span>{text}</span>
-                </label>
-                );
-              })}
+          {/* Result Feedback (Immediate Mode Only) */}
+          {isSubmitted && !isExamMode && answerResult && (
+            <div className={`animate-fade-in-up p-6 rounded-2xl border ${answerResult.judgement === 'correct' ? 'bg-brand-500/5 border-brand-500/30' : 'bg-semantic-error/5 border-semantic-error/30'}`}>
+              <div className="flex items-center gap-4 mb-4">
+                {answerResult.judgement === 'correct' ? (
+                  <CheckCircle2 size={24} className="text-brand-300" />
+                ) : (
+                  <AlertCircle size={24} className="text-semantic-error" />
+                )}
+                <h3 className={`text-lg font-semibold ${answerResult.judgement === 'correct' ? 'text-brand-300' : 'text-semantic-error'}`}>
+                  {answerResult.judgement === 'correct' ? '정답입니다' : '틀렸습니다'}
+                </h3>
+              </div>
+              <p className="text-base text-content-secondary leading-relaxed">
+                {answerResult.explanation}
+              </p>
             </div>
           )}
+        </section>
+      )}
 
-          {activeItem.question_type === 'ox' && (
-            <div className="space-y-3">
-              {['O', 'X'].map((option) => {
-                const isCorrectKey = isSubmitted && answerResult && answerResult.judgement !== 'correct' && String(answerResult.correct_answer?.answer).toUpperCase() === option;
-                return (
-                <label
-                  key={option}
-                  className={`flex items-center rounded-2xl border px-5 py-4 transition-colors ${
-                    isCorrectKey
-                      ? 'border-semantic-success-border bg-semantic-success-bg text-content-primary'
-                      : isSubmitted && answerResult && userAnswer === option
-                      ? answerResult.judgement === 'correct'
-                        ? 'border-semantic-success-border bg-semantic-success-bg text-content-primary'
-                        : answerResult.judgement === 'partial'
-                        ? 'border-semantic-warning-border bg-semantic-warning-bg text-content-primary'
-                        : 'border-semantic-error-border bg-semantic-error-bg text-content-primary'
-                      : userAnswer === option
-                      ? 'border-brand-500/30 bg-brand-500/10 text-brand-300'
-                      : 'border-white/[0.07] bg-surface-deep text-content-primary hover:bg-surface-hover hover:border-white/[0.14]'
-                   } ${isSubmitted || isAnyMutationPending ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
-                >
-                  <input
-                    type="radio"
-                    value={option}
-                    checked={userAnswer === option}
-                    onChange={(e) => handleSelectAndSubmit(e.target.value)}
-                    disabled={isSubmitted || isAnyMutationPending}
-                    className="mr-3 h-4 w-4 shrink-0 accent-brand-500"
-                  />
-                  <span className="font-medium">{option}</span>
-                </label>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Text input for short answer / fill blank */}
-          {(activeItem.question_type === 'short_answer' || activeItem.question_type === 'fill_blank') && (
-            <textarea
-              value={userAnswer}
-              onChange={(e) => handleAnswerChange(e.target.value)}
-              disabled={isSubmitted || isAnyMutationPending}
-              placeholder="답안을 입력하세요"
-              className="w-full rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-3 text-content-primary placeholder-content-muted transition-colors hover:bg-surface-hover focus:border-brand-500 focus:outline-none focus:shadow-[0_0_0_2px_oklch(0.65_0.15_175_/_0.2)]"
-              rows={3}
-            />
-          )}
-
-          {/* Essay textarea */}
-          {activeItem.question_type === 'essay' && (
-            <textarea
-              value={userAnswer}
-              onChange={(e) => handleAnswerChange(e.target.value)}
-              disabled={isSubmitted || isAnyMutationPending}
-              placeholder="답안을 작성하세요"
-              className="w-full rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-3 text-content-primary placeholder-content-muted transition-colors hover:bg-surface-hover focus:border-brand-500 focus:outline-none focus:shadow-[0_0_0_2px_oklch(0.65_0.15_175_/_0.2)]"
-              rows={8}
-            />
-          )}
-        </div>
-
-        {validationMessage && (
-          <div
-            role="alert"
-            className="mb-4 flex items-start justify-between gap-3 rounded-2xl border border-semantic-error-border bg-semantic-error-bg px-5 py-4"
-          >
-            <div>
-              <div className="font-medium text-content-primary">입력한 답안이 없습니다.</div>
-              <div className="mt-1 text-sm text-content-secondary">{validationMessage}</div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setValidationMessage(null)}
-              className="rounded-xl px-2 py-1 text-sm text-content-secondary transition-colors hover:bg-surface-hover"
-            >
-              닫기
-            </button>
-          </div>
-        )}
-
-        {/* Answer Result */}
-        {isExamMode ? (
-          <div className="mb-4 rounded-2xl border border-brand-500/20 bg-brand-500/10 px-5 py-5 text-content-primary">
-            <div className="text-lg font-semibold text-brand-300">시험 모드: 제출 후 채점</div>
-            <div className="mt-2 text-sm leading-6 text-content-secondary">
-              문항별 답안은 임시 저장됩니다. 전체 제출 후 결과를 확인할 수 있어요.
-            </div>
-          </div>
-         ) : isSubmitted && answerResult ? (
-           <div className={`animate-scale-in mb-4 rounded-2xl border px-5 py-5 ${
-             answerResult.judgement === 'correct'
-               ? 'animate-answer-correct border-semantic-success-border bg-semantic-success-bg'
-               : answerResult.judgement === 'partial'
-               ? 'border-semantic-warning-border bg-semantic-warning-bg'
-               : 'animate-answer-wrong border-semantic-error-border bg-semantic-error-bg'
-           }`}>
-             <div className={`text-lg font-semibold ${
-               answerResult.judgement === 'correct'
-                 ? 'text-semantic-success'
-                 : answerResult.judgement === 'partial'
-                 ? 'text-semantic-warning'
-                 : 'text-semantic-error'
-             }`}>
-               {answerResult.judgement === 'correct'
-                 ? '정답'
-                 : answerResult.judgement === 'partial'
-                 ? '부분정답'
-                 : '오답'}
-             </div>
-             <div className="mt-2 text-sm text-content-secondary">
-               점수: {answerResult.score_awarded} / {answerResult.max_score}
-             </div>
-             {answerResult.grading_rationale && (
-               <div className="text-sm text-content-secondary mt-2">
-                  {answerResult.grading_rationale}
-               </div>
-             )}
-             {answerResult.judgement !== 'correct' && !!answerResult.correct_answer?.answer && (
-               <div className="mt-3 pt-3 border-t border-white/10">
-                 <div className="text-xs font-semibold uppercase tracking-wider text-content-muted mb-1">정답</div>
-                 <div className="text-sm font-medium text-semantic-success">
-                   {String(answerResult.correct_answer.answer)}
-                 </div>
-               </div>
-             )}
-             {answerResult.explanation && (
-               <div className="mt-4 pt-4 border-t border-white/10">
-                 <div className="text-xs font-semibold uppercase tracking-wider text-content-muted mb-2">해설</div>
-                 <div className="text-sm text-content-secondary whitespace-pre-wrap">
-                    {answerResult.explanation}
-                 </div>
-               </div>
-             )}
-             {answerResult.tips && (
-               <div className="mt-3 pt-3 border-t border-white/10">
-                 <div className="text-xs font-semibold uppercase tracking-wider text-content-muted mb-2">팁</div>
-                 <div className="text-sm text-content-secondary whitespace-pre-wrap">
-                    {answerResult.tips}
-                 </div>
-               </div>
-             )}
-           </div>
-         ) : null}
-
-        {/* Action Buttons */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Navigation Controls */}
+      <footer className="pt-8 flex flex-col-reverse sm:flex-row items-center gap-4 justify-between">
+        <div className="flex gap-3 w-full sm:w-auto">
           <button
-            type="button"
-            onClick={() => goToQuestion(currentItemIndex - 1)}
-            disabled={currentItemIndex === 0 || isAnyMutationPending}
-            className="rounded-xl border border-white/[0.07] px-5 py-3 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={handlePrev}
+            disabled={currentItemIndex === 0}
+            className="flex-1 sm:flex-none flex items-center justify-center h-12 w-16 bg-surface border border-white/[0.05] rounded-xl text-content-primary hover:bg-surface-hover disabled:opacity-30 transition-colors"
           >
-            이전 문제
+            <ChevronLeft size={20} />
           </button>
+          <button
+            onClick={handleNext}
+            disabled={currentItemIndex >= furthestAvailableIndex}
+            className="flex-1 sm:flex-none flex items-center justify-center h-12 w-16 bg-surface border border-white/[0.05] rounded-xl text-content-primary hover:bg-surface-hover disabled:opacity-30 transition-colors"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
 
-          {!isSubmitted ? (
+        <div className="w-full sm:w-auto">
+          {!isSubmitted || isExamMode ? (
             <button
-              type="submit"
-              disabled={isAnyMutationPending || !userAnswer.trim()}
-              className="rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-content-inverse transition hover:bg-brand-600 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => {
+                if (isExamMode) {
+                  saveDraftAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                } else {
+                  submitAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                }
+              }}
+              disabled={!userAnswer.trim() || submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending}
+              className="w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0"
             >
-              {isAnyMutationPending ? '처리 중...' : isExamMode ? '임시 저장' : '제출'}
+              {isExamMode ? '저장 후 다음' : '정답 제출'}
             </button>
           ) : (
-            <button
-              type="button"
-              onClick={handleNext}
-              className="rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-content-inverse transition hover:bg-brand-600 hover:-translate-y-px"
-            >
-              {currentItemIndex < itemsData.length - 1 ? '다음 문제' : '결과 보기'}
-            </button>
+            currentItemIndex < (itemsData?.length || 1) - 1 ? (
+              <button
+                onClick={handleNext}
+                className="w-full sm:w-auto bg-surface-raised text-white border border-white/[0.1] px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5"
+              >
+                다음 문제
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate(`/quiz/${sessionId}/results`)}
+                className="w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5"
+              >
+                결과 보기
+              </button>
+            )
           )}
         </div>
-      </form>
-
-      {isExamMode && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.07] bg-surface/95 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-            <div className="text-sm text-content-secondary">
-              {Object.values(draftAnswers).filter((answer) => answer.trim()).length} / {itemsData.length} 문제 답변됨
-            </div>
-            <button
-              type="button"
-              onClick={() => submitExamMutation.mutate()}
-              disabled={submitExamMutation.isPending || completedCount !== itemsData.length}
-              className="rounded-xl bg-brand-500 px-5 py-3 text-sm font-medium text-content-inverse transition hover:bg-brand-600 hover:-translate-y-px disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {submitExamMutation.isPending ? '제출 중...' : '전체 제출'}
-            </button>
-          </div>
-        </div>
-      )}
+      </footer>
     </div>
   );
 }

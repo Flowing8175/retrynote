@@ -13,7 +13,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base, CommonMixin
-from pgvector.sqlalchemy import Vector
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    from sqlalchemy import Text as Vector  # type: ignore[assignment]
 
 
 class EmbeddingStore(CommonMixin, Base):

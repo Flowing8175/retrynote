@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { wrongNotesApi } from '@/api';
 import { EmptyState, LoadingSpinner, Pagination, StatusBadge } from '@/components';
 import type { WrongNoteItem } from '@/types';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 function formatQuestionType(type: string) {
   switch (type) {
@@ -63,6 +64,7 @@ export default function WrongNotes() {
   const [sort, setSort] = useState('concept');
   const [judgementFilter, setJudgementFilter] = useState<string[]>([]);
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
+  const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['wrongNotes', page, sort, judgementFilter],
@@ -77,7 +79,8 @@ export default function WrongNotes() {
       ),
   });
 
-  const handleNoteToggle = (noteId: string) => {
+  const handleNoteToggle = (noteId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     setSelectedNoteIds((prev) => {
       const next = new Set(prev);
       if (next.has(noteId)) {
@@ -87,6 +90,10 @@ export default function WrongNotes() {
       }
       return next;
     });
+  };
+
+  const handleExpandToggle = (noteId: string) => {
+    setExpandedNoteId(expandedNoteId === noteId ? null : noteId);
   };
 
   const handleRetry = () => {
@@ -119,49 +126,55 @@ export default function WrongNotes() {
   }
 
   return (
-    <div className="space-y-8">
-      <section className="animate-fade-in-up px-1">
-        <h1 className="text-3xl font-semibold tracking-tight text-content-primary md:text-4xl">오답노트</h1>
-        <p className="mt-2 text-base leading-7 text-content-secondary">
-          틀린 문제와 부분정답을 개념별로 정리합니다.
-        </p>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className="rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-2.5 text-sm text-content-primary"
-          >
-            <option value="concept">개념순</option>
-            <option value="date">날짜순</option>
-            <option value="question">문제순</option>
-          </select>
-          <label className="inline-flex items-center gap-2 rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-2.5 text-sm text-content-primary">
-            <input
-              type="checkbox"
-              checked={judgementFilter.includes('incorrect')}
-              onChange={(e) => {
-                if (e.target.checked) {
-                  setJudgementFilter([...judgementFilter, 'incorrect']);
-                } else {
-                  setJudgementFilter(judgementFilter.filter((j) => j !== 'incorrect'));
-                }
-              }}
-            />
-            오답만 보기
-          </label>
+    <div className="max-w-4xl mx-auto space-y-12 py-10">
+      <section className="animate-fade-in-up space-y-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">오답노트</h1>
+            <p className="text-base text-content-secondary max-w-xl leading-relaxed">
+              틀린 문제와 부분정답을 개념별로 정리하여 약점을 보완합니다.
+            </p>
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value)}
+              className="bg-surface border border-white/[0.05] rounded-xl text-sm font-medium px-4 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none"
+            >
+              <option value="concept">개념순 정렬</option>
+              <option value="date">날짜순 정렬</option>
+              <option value="question">문제순 정렬</option>
+            </select>
+            <label className="flex items-center gap-2 bg-surface border border-white/[0.05] rounded-xl px-4 py-2.5 cursor-pointer hover:bg-surface-hover transition-colors">
+              <input
+                type="checkbox"
+                checked={judgementFilter.includes('incorrect')}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setJudgementFilter([...judgementFilter, 'incorrect']);
+                  } else {
+                    setJudgementFilter(judgementFilter.filter((j) => j !== 'incorrect'));
+                  }
+                }}
+                className="w-4 h-4 rounded border-white/[0.1] bg-surface-deep text-brand-500 focus:ring-brand-500"
+              />
+              <span className="text-sm font-medium text-white">오답만 보기</span>
+            </label>
+          </div>
         </div>
       </section>
 
       {!data || data.items.length === 0 ? (
         <EmptyState
-          title="오답노트가 없습니다"
-          message="퀴즈를 풀고 나면 틀린 문제가 여기에 정리됩니다."
+          title="오답노트가 비어있습니다"
+          message="퀴즈를 풀고 나면 틀린 문제가 여기에 자동으로 정리됩니다."
           actions={
             <button
               onClick={() => navigate('/quiz/new')}
-              className="rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600"
+              className="bg-brand-500 text-brand-900 rounded-2xl px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5"
             >
-              첫 퀴즈 만들기
+              새 퀴즈 시작하기
             </button>
           }
         />
@@ -170,103 +183,123 @@ export default function WrongNotes() {
           {data.items.map((item: WrongNoteItem) => (
             <article
               key={item.id}
-              onClick={() => handleNoteToggle(item.id)}
-              className={`cursor-pointer rounded-2xl border bg-surface px-6 py-6 transition-colors ${
-                selectedNoteIds.has(item.id)
-                  ? 'border-brand-500/30 bg-brand-500/5'
-                  : 'border-white/[0.07] hover:bg-surface-hover'
+              className={`group relative rounded-3xl border transition-all ${
+                selectedNoteIds.has(item.id) ? 'border-brand-500/30 bg-brand-500/5' : 'border-white/[0.05] bg-surface hover:bg-surface-hover'
               }`}
             >
-              <div className="mb-4 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex flex-1 items-start gap-3">
+              <div 
+                className="flex items-start gap-4 sm:gap-6 px-5 sm:px-8 py-6 cursor-pointer"
+                onClick={() => handleExpandToggle(item.id)}
+              >
+                <div className="pt-1">
                   <input
                     type="checkbox"
                     checked={selectedNoteIds.has(item.id)}
                     onChange={() => handleNoteToggle(item.id)}
                     onClick={(e) => e.stopPropagation()}
-                    className="mt-1.5 h-4 w-4 shrink-0 accent-brand-500"
+                    className="w-5 h-5 rounded border-white/[0.1] bg-surface-deep text-brand-500 focus:ring-brand-500 cursor-pointer"
                   />
-                  <div className="flex-1">
-                    <div className="flex flex-wrap items-center gap-2 text-xs text-content-secondary">
-                      <span className="rounded-full border border-white/[0.07] bg-surface-deep px-3 py-1">
-                        {formatQuestionType(item.question_type)}
-                      </span>
-                      <span>{item.concept_label || '개념 분류 없음'}</span>
-                    </div>
-                    <div className="mt-3 text-xl font-semibold leading-8 text-content-primary">
-                      {item.question_text}
-                    </div>
-                  </div>
                 </div>
-                <StatusBadge status={item.judgement} />
-              </div>
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-                <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-4 text-sm leading-7">
-                  <span className="text-content-secondary">내 답: </span>
-                  <span className="font-medium text-content-primary">
-                    {resolveAnswer(item.user_answer_raw, item.options as Record<string, unknown> | null, item.question_type)}
-                  </span>
-                </div>
-                <div className="rounded-2xl border border-semantic-success-border bg-semantic-success-bg px-4 py-4 text-sm leading-7">
-                  <span className="text-content-secondary">정답: </span>
-                  <span className="font-medium text-semantic-success">
-                    {item.correct_answer?.answer != null
-                      ? resolveAnswer(
-                          String(item.correct_answer.answer),
-                          item.options as Record<string, unknown> | null,
-                          item.question_type
-                        )
-                      : '-'}
-                  </span>
-                </div>
-              </div>
 
-              <div className="mt-4 space-y-3 text-sm">
-                {item.error_type && (
-                  <div className="rounded-2xl border border-semantic-warning-border bg-semantic-warning-bg px-4 py-3">
-                    <span className="text-content-secondary">틀린 이유: </span>
-                    <span className="font-medium text-semantic-warning">{formatErrorType(item.error_type)}</span>
+                <div className="flex-1 space-y-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2 py-1 rounded-md">
+                      {formatQuestionType(item.question_type)}
+                    </span>
+                    <span className="text-xs font-medium text-content-muted">
+                      {item.concept_label || '미분류 개념'}
+                    </span>
+                    <StatusBadge status={item.judgement} />
                   </div>
-                )}
-                {item.explanation && (
-                  <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-4 leading-7 text-content-secondary">
-                    {item.explanation}
-                  </div>
-                )}
+
+                  <h2 className="text-xl font-medium leading-relaxed text-white group-hover:text-brand-300 transition-colors">
+                    {item.question_text}
+                  </h2>
+
+                  {expandedNoteId === item.id && (
+                    <div className="animate-fade-in-up space-y-6 pt-4 mt-4 border-t border-white/[0.05]">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-content-muted">내 답변</div>
+                          <div className="text-sm text-white bg-surface-deep rounded-xl p-4 border border-white/[0.05]">
+                            {resolveAnswer(item.user_answer_raw, item.options as Record<string, unknown> | null, item.question_type)}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-brand-300">정답</div>
+                          <div className="text-sm font-medium text-brand-900 bg-brand-500 rounded-xl p-4">
+                            {item.correct_answer?.answer != null
+                              ? resolveAnswer(
+                                  String(item.correct_answer.answer),
+                                  item.options as Record<string, unknown> | null,
+                                  item.question_type
+                                )
+                              : '-'}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        {item.error_type && (
+                          <div className="flex items-center gap-3">
+                            <span className="text-xs font-medium text-semantic-warning bg-semantic-warning/10 px-2.5 py-1 rounded-md">틀린 이유</span>
+                            <span className="text-sm text-white">{formatErrorType(item.error_type)}</span>
+                          </div>
+                        )}
+                        {item.explanation && (
+                          <div className="text-sm leading-relaxed text-content-secondary bg-surface-deep rounded-2xl p-5 border border-white/[0.05]">
+                            {item.explanation}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-1 text-content-muted group-hover:text-white transition-colors shrink-0">
+                  {expandedNoteId === item.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </div>
               </div>
             </article>
           ))}
+        </div>
+      )}
 
-          {data && data.total > data.size && (
-            <Pagination
-              currentPage={page}
-              totalPages={Math.ceil(data.total / data.size)}
-              onPageChange={setPage}
-            />
-          )}
+      {data && data.total > data.size && (
+        <div className="flex justify-center pt-8">
+          <Pagination
+            currentPage={page}
+            totalPages={Math.ceil(data.total / data.size)}
+            onPageChange={setPage}
+          />
         </div>
       )}
 
       {selectedCount > 0 && (
-        <div className="fixed inset-x-4 bottom-4 z-40 mx-auto flex max-w-3xl flex-col items-stretch gap-3 rounded-2xl border border-white/[0.07] bg-surface px-4 py-3 shadow-2xl shadow-black/20 backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-content-primary">
-            <span className="font-semibold">{selectedCount}개</span> 선택됨
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedNoteIds(new Set())}
-              className="rounded-xl border border-white/[0.07] px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover"
-            >
-              선택 해제
-            </button>
-            <button
-              type="button"
-              onClick={handleRetry}
-              className="rounded-xl bg-brand-500 px-4 py-2 text-sm font-medium text-content-inverse transition-colors hover:bg-brand-600"
-            >
-              재도전
-            </button>
+        <div className="fixed inset-x-0 bottom-0 z-50 animate-fade-in-up">
+          <div className="max-w-4xl mx-auto mb-6 px-4">
+            <div className="bg-surface border border-white/[0.1] rounded-2xl px-6 py-4 flex flex-col sm:flex-row items-center justify-between shadow-2xl shadow-black/50 backdrop-blur-xl gap-4">
+              <div className="text-white flex items-center gap-2">
+                <span className="text-xl font-semibold">{selectedCount}</span>
+                <span className="text-sm text-content-secondary">개 선택됨</span>
+              </div>
+              <div className="flex gap-3 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setSelectedNoteIds(new Set())}
+                  className="flex-1 sm:flex-none text-content-secondary px-4 py-2 text-sm font-medium border border-white/[0.1] rounded-xl hover:bg-white/5 transition-all"
+                >
+                  선택 해제
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRetry}
+                  className="flex-1 sm:flex-none bg-brand-500 text-brand-900 px-6 py-2 text-sm font-semibold rounded-xl hover:-translate-y-0.5 transition-transform"
+                >
+                  재도전 시작
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

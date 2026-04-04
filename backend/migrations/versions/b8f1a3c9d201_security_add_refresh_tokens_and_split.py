@@ -60,9 +60,15 @@ def upgrade() -> None:
         pass  # constraint may not exist or have a different name
 
     # Backfill existing tokens with a random selector so column can be made NOT NULL
-    op.execute(
-        "UPDATE password_reset_tokens SET selector = LEFT(md5(random()::text), 16) WHERE selector IS NULL"
-    )
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute(
+            "UPDATE password_reset_tokens SET selector = LEFT(md5(random()::text), 16) WHERE selector IS NULL"
+        )
+    else:
+        op.execute(
+            "UPDATE password_reset_tokens SET selector = substr(hex(randomblob(8)), 1, 16) WHERE selector IS NULL"
+        )
     op.alter_column("password_reset_tokens", "selector", nullable=False)
 
 

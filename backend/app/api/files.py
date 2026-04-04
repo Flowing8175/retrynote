@@ -1,4 +1,6 @@
+import asyncio
 import hashlib
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -36,6 +38,7 @@ from app.middleware.auth import get_current_user, get_impersonation_context
 from app.workers.celery_app import dispatch_task
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class RenameFileRequest(BaseModel):
@@ -393,6 +396,7 @@ async def retry_file(
 @router.delete("/{file_id}")
 async def delete_file(
     file_id: str,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -422,7 +426,15 @@ async def delete_file(
     db.add(job)
     await db.commit()
 
-    await dispatch_task("file_cleanup", [job.id])
+    import logging
+
+    async def _dispatch():
+        try:
+            await dispatch_task("file_cleanup", [job.id])
+        except Exception as exc:
+            logger.warning("file_cleanup dispatch failed for job %s: %s", job.id, exc)
+
+    background_tasks.add_task(_dispatch)
 
     return {"status": "success"}
 

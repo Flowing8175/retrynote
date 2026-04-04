@@ -43,6 +43,12 @@ from app.workers.celery_app import dispatch_task
 router = APIRouter()
 
 
+@router.get("/config")
+async def get_quiz_config(user: User = Depends(get_current_user)):
+    from app.config import settings as cfg
+    return {"default_generation_model": cfg.openai_generation_model}
+
+
 @router.get("", response_model=list[QuizSessionHistoryItem])
 async def list_quiz_sessions(
     limit: int = Query(10, ge=1, le=20),
@@ -125,7 +131,7 @@ async def create_quiz_session(
         difficulty=req.difficulty,
         question_count=req.question_count,
         generation_priority=req.generation_priority,
-        generation_model_name=cfg.openai_generation_model,
+        generation_model_name=req.preferred_model or cfg.openai_generation_model,
         grading_model_name=cfg.openai_grading_model,
         idempotency_key=req.idempotency_key,
     )
