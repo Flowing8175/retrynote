@@ -108,7 +108,7 @@ export default function Dashboard() {
     return (
       <div className="max-w-4xl mx-auto space-y-16 py-20">
         <div className="animate-fade-in-up">
-          <h1 className="text-4xl font-semibold tracking-tight text-white md:text-5xl leading-snug">
+          <h1 className="text-3xl font-medium tracking-tight text-content-primary md:text-4xl leading-tight">
             성장의 첫 걸음,<br />자료를 올려보세요.
           </h1>
           <p className="mt-6 text-lg text-content-secondary max-w-2xl leading-relaxed">
@@ -169,8 +169,8 @@ export default function Dashboard() {
             </div>
           </div>
 
-          <div className="space-y-4">
-            <h1 className="text-4xl font-semibold tracking-tight text-white lg:text-5xl leading-tight">
+          <div className="max-w-4xl space-y-4">
+            <h1 className="text-2xl font-medium tracking-tight text-content-primary lg:text-3xl leading-snug">
               {coachingMessage}
             </h1>
           </div>
@@ -179,20 +179,20 @@ export default function Dashboard() {
             <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 flex-1 min-w-[140px]">
               <div className="text-xs font-medium uppercase tracking-widest text-content-muted mb-2">학습량</div>
               <div className="flex items-baseline gap-2">
-                <div className="text-4xl font-semibold tabular-nums text-white">{dashboardData.learning_volume}</div>
+                <div className="text-3xl font-medium tabular-nums text-content-primary">{dashboardData.learning_volume}</div>
                 <div className="text-sm font-medium text-content-secondary">문제</div>
               </div>
             </div>
             <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 flex-1 min-w-[140px]">
               <div className="text-xs font-medium uppercase tracking-widest text-content-muted mb-2">정답률</div>
               <div className="flex items-baseline gap-2">
-                <div className="text-4xl font-semibold tabular-nums text-brand-300">{formatPercent(dashboardData.overall_accuracy)}</div>
+                <div className="text-3xl font-medium tabular-nums text-brand-300">{formatPercent(dashboardData.overall_accuracy)}</div>
               </div>
             </div>
             <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 flex-1 min-w-[140px]">
               <div className="text-xs font-medium uppercase tracking-widest text-content-muted mb-2">점수율</div>
               <div className="flex items-baseline gap-2">
-                <div className="text-4xl font-semibold tabular-nums text-white">{formatPercent(dashboardData.score_rate)}</div>
+                <div className="text-3xl font-medium tabular-nums text-content-primary">{formatPercent(dashboardData.score_rate)}</div>
               </div>
             </div>
           </div>
@@ -218,7 +218,7 @@ export default function Dashboard() {
         {/* Left: Retry Recommendations */}
         <section className="space-y-6">
           <div className="flex items-center justify-between border-b border-white/[0.05] pb-4">
-            <h2 className="text-2xl font-semibold text-white">복습이 필요한 개념</h2>
+            <h2 className="text-2xl font-semibold text-content-primary">복습이 필요한 개념</h2>
             <Link to="/retry" className="text-sm font-medium text-brand-300 hover:text-brand-400">
               전체 보기
             </Link>
