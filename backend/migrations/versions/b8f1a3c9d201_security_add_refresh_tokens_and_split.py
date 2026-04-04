@@ -69,11 +69,13 @@ def upgrade() -> None:
         op.execute(
             "UPDATE password_reset_tokens SET selector = substr(hex(randomblob(8)), 1, 16) WHERE selector IS NULL"
         )
-    op.alter_column("password_reset_tokens", "selector", nullable=False)
+    with op.batch_alter_table("password_reset_tokens") as batch_op:
+        batch_op.alter_column("selector", nullable=False)
 
 
 def downgrade() -> None:
-    op.alter_column("password_reset_tokens", "selector", nullable=True)
+    with op.batch_alter_table("password_reset_tokens") as batch_op:
+        batch_op.alter_column("selector", nullable=True)
     op.drop_index(
         "ix_password_reset_tokens_selector",
         table_name="password_reset_tokens",
