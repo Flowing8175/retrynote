@@ -39,6 +39,7 @@ from app.models.objection import Objection, ObjectionStatus
 from app.schemas.objection import ObjectionCreate, ObjectionResponse
 from app.middleware.auth import get_current_user
 from app.workers.celery_app import dispatch_task
+from app.services.quiz_service import _update_weak_point
 
 router = APIRouter()
 
@@ -435,6 +436,8 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
         graded_at=datetime.now(timezone.utc),
     )
     db.add(answer_log)
+
+    await _update_weak_point(db, user.id, item, judgement)
 
     all_items = await db.execute(
         select(QuizItem)
