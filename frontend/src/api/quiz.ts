@@ -4,7 +4,7 @@ import type {
   QuizSessionResponse,
   QuizSessionDetail,
   QuizSessionHistoryItem,
-  QuizItemResponse,
+  QuizItemDetail,
   AnswerSubmit,
   AnswerResponse,
   AnswerLogEntry,
@@ -32,8 +32,8 @@ export const quizApi = {
     return response.data;
   },
 
-  getQuizItems: async (sessionId: string): Promise<QuizItemResponse[]> => {
-    const response = await apiClient.get<QuizItemResponse[]>(`/quiz-sessions/${sessionId}/items`);
+  getQuizItems: async (sessionId: string): Promise<QuizItemDetail[]> => {
+    const response = await apiClient.get<QuizItemDetail[]>(`/quiz-sessions/${sessionId}/items`);
     return response.data;
   },
 

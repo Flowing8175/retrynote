@@ -4,8 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide-react';
 import { filesApi, quizApi } from '@/api';
 import { LoadingSpinner, Modal, StatusBadge } from '@/components';
-import { fileProcessingStatusLabels, isFileProcessingStatus } from '@/types/file';
-import type { FileDetail } from '@/types';
+import { isFileProcessingStatus } from '@/types/file';
 
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: '객관식' },
@@ -142,11 +141,6 @@ export default function QuizNew() {
         ? prev.filter((value) => value !== questionType)
         : [...prev, questionType]
     );
-  };
-
-  const handleQuestionCountChange = (value: string) => {
-    const parsed = Number.parseInt(value, 10);
-    setQuestionCount(Number.isNaN(parsed) ? 1 : parsed);
   };
 
   const handleSubmit = () => {

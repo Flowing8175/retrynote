@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Upload, ChevronRight, Folder, FileText, Trash2, Download, Edit3, RotateCw, Plus } from 'lucide-react';
+import { Upload, Trash2, Download, Edit3, RotateCw, Plus } from 'lucide-react';
 import type { AxiosError } from 'axios';
 import { filesApi } from '@/api';
-import { EmptyState, LoadingSpinner, Modal, Pagination, StatusBadge } from '@/components';
+import { LoadingSpinner, Modal, Pagination, StatusBadge } from '@/components';
 import { isFileProcessingStatus } from '@/types';
 import type { FileDetail } from '@/types';
 
@@ -44,7 +44,6 @@ export default function Files() {
   const [newFolderName, setNewFolderName] = useState('');
   const [moveDialogOpen, setMoveDialogOpen] = useState(false);
   const [moveTargetFolderId, setMoveTargetFolderId] = useState<string | null>(null);
-  const [deleteSelectedOpen, setDeleteSelectedOpen] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [filePendingDelete, setFilePendingDelete] = useState<FileDetail | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -126,7 +125,6 @@ export default function Files() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
       setSelectedFileIds([]);
-      setDeleteSelectedOpen(false);
     },
   });
 
@@ -415,7 +413,7 @@ export default function Files() {
               </div>
             )}
 
-            {data.total > data.size && (
+            {data && data.total > data.size && (
               <div className="flex justify-center pt-8">
                 <Pagination currentPage={page} totalPages={Math.ceil(data.total / data.size)} onPageChange={setPage} />
               </div>
@@ -435,7 +433,7 @@ export default function Files() {
               </div>
               <div className="flex gap-3 w-full sm:w-auto">
                 <button
-                  onClick={() => setDeleteSelectedOpen(true)}
+                  onClick={() => deleteSelectedMutation.mutate(selectedFileIds)}
                   className="flex-1 sm:flex-none text-semantic-error bg-semantic-error/10 px-4 py-2 text-sm font-medium border border-semantic-error/20 rounded-xl hover:bg-semantic-error/20 transition-all"
                 >
                   선택 삭제

@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
-import { LoadingSpinner, StatusBadge } from '@/components';
+import { LoadingSpinner } from '@/components';
 import type { AnswerResponse } from '@/types';
 import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, PlayCircle } from 'lucide-react';
 
@@ -126,7 +126,7 @@ export default function QuizTake() {
   };
 
   const handlePrev = () => {
-    if (currentItemIndex > 0) {
+    if (currentItemIndex > 0 && itemsData) {
       const prevIndex = currentItemIndex - 1;
       setCurrentItemIndex(prevIndex);
       setIsSubmitted(!!submittedAnswers[itemsData[prevIndex].id]);
@@ -202,9 +202,9 @@ export default function QuizTake() {
               <div className="grid gap-3">
                 {Object.entries(currentItem.options as Record<string, string>).map(([key, text]) => {
                   const isSelected = userAnswer === key;
-                  const isCorrect = answerResult?.judgement === 'correct' && answerResult.correct_answer === key;
+                  const isCorrect = answerResult?.judgement === 'correct' && answerResult.correct_answer?.answer === key;
                   const isWrong = isSubmitted && isSelected && answerResult?.judgement !== 'correct';
-                  const shouldShowCorrect = isSubmitted && !isExamMode && answerResult?.correct_answer === key;
+                  const shouldShowCorrect = isSubmitted && !isExamMode && answerResult?.correct_answer?.answer === key;
 
                   return (
                     <button

@@ -1,20 +1,11 @@
-import { useMemo, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { quizApi, retryApi } from '@/api';
-import { objectionsApi } from '@/api/objections';
+import { useParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { quizApi } from '@/api';
 import { StatusBadge, LoadingSpinner } from '@/components';
-import type { QuizItemResponse } from '@/types';
-import { Trophy, ChevronRight, RotateCcw, AlertTriangle, FileText, LayoutDashboard } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 function formatMode(mode: string) {
   return mode === 'exam' ? '시험 모드' : '일반 모드';
-}
-
-function formatDifficulty(difficulty: string | null) {
-  if (!difficulty) return '난이도 무관';
-  const difficultyMap: Record<string, string> = { easy: '쉬움', medium: '보통', hard: '어려움' };
-  return difficultyMap[difficulty] || difficulty;
 }
 
 function getPerformanceTier(scorePercentage: number) {
@@ -53,8 +44,6 @@ function getPerformanceTier(scorePercentage: number) {
 
 export default function QuizResults() {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const navigate = useNavigate();
-  const [selectedItemIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
 
   const { data: session, isLoading: sessionLoading } = useQuery({
     queryKey: ['quizSession', sessionId],
@@ -74,7 +63,8 @@ export default function QuizResults() {
     enabled: !!sessionId,
   });
 
-  const scorePercentage = session?.score_rate ? session.score_rate * 100 : 0;
+  const scoreRate = session && session.max_score ? session.total_score! / session.max_score : 0;
+  const scorePercentage = scoreRate * 100;
   const tier = getPerformanceTier(scorePercentage);
 
   if (sessionLoading || itemsLoading || !session) {
@@ -141,11 +131,11 @@ export default function QuizResults() {
       <section className="grid gap-4 sm:grid-cols-3">
         <div className="bg-surface border border-white/[0.05] rounded-2xl p-6 space-y-2 text-center sm:text-left">
           <div className="text-xs font-medium text-content-muted">학습량</div>
-          <div className="text-3xl font-semibold text-white">{session.learning_volume} <span className="text-sm font-medium text-content-secondary ml-1">문제</span></div>
+          <div className="text-3xl font-semibold text-white">{session.items_count} <span className="text-sm font-medium text-content-secondary ml-1">문제</span></div>
         </div>
         <div className="bg-surface border border-white/[0.05] rounded-2xl p-6 space-y-2 text-center sm:text-left">
           <div className="text-xs font-medium text-content-muted">정답률</div>
-          <div className="text-3xl font-semibold text-brand-300">{(session.overall_accuracy * 100).toFixed(1)}<span className="text-2xl ml-0.5">%</span></div>
+          <div className="text-3xl font-semibold text-brand-300">{(scoreRate * 100).toFixed(1)}<span className="text-2xl ml-0.5">%</span></div>
         </div>
         <div className="bg-surface border border-white/[0.05] rounded-2xl p-6 space-y-2 text-center sm:text-left">
           <div className="text-xs font-medium text-content-muted">학습 모드</div>
@@ -161,7 +151,7 @@ export default function QuizResults() {
 
         <div className="space-y-4">
           {items?.map((item, index) => {
-            const log = answerLogs?.find(l => l.quiz_item_id === item.id);
+            const log = answerLogs?.find(l => l.item_id === item.id);
             const isCorrect = log?.judgement === 'correct';
 
             return (
