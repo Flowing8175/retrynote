@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_, func, exists
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -114,9 +114,21 @@ async def search(
         total += count_result.scalar() or 0
 
     if scope in ("all", "quiz_history"):
+        from sqlalchemy import exists as sa_exists
+
         quiz_query = select(QuizSession).where(
             QuizSession.user_id == user.id,
             QuizSession.deleted_at.is_(None),
+            sa_exists(
+                select(QuizItem.id).where(
+                    QuizItem.quiz_session_id == QuizSession.id,
+                    or_(
+                        QuizItem.question_text.ilike(f"%{q}%"),
+                        QuizItem.concept_label.ilike(f"%{q}%"),
+                        QuizItem.category_tag.ilike(f"%{q}%"),
+                    ),
+                )
+            ),
         )
         quiz_result = await db.execute(
             quiz_query.order_by(QuizSession.created_at.desc())

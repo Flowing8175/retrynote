@@ -36,11 +36,7 @@ export const filesApi = {
       formData.append('folder_id', folderId);
     }
 
-    const response = await apiClient.post<FileUploadResponse>('/files', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await apiClient.post<FileUploadResponse>('/files', formData);
     return response.data;
   },
 

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime, timezone
 from functools import partial
 from celery import Celery
 from app.config import settings
@@ -140,14 +141,91 @@ def admin_regrade_task(self, job_id: str):
                 await db.commit()
                 return
 
-            from app.services.quiz_service import grade_exam
-
-            session_result = await db.execute(
-                select(QuizSession).where(QuizSession.id == item.quiz_session_id)
+            # Find all active answer logs for this item (across all users)
+            logs_result = await db.execute(
+                select(AnswerLog, QuizSession)
+                .join(QuizSession, QuizSession.id == AnswerLog.quiz_session_id)
+                .where(
+                    AnswerLog.quiz_item_id == item.id,
+                    AnswerLog.is_active_result == True,
+                )
             )
-            session = session_result.scalar_one_or_none()
-            if session:
-                job.status = "completed"
-                await db.commit()
+            rows = logs_result.all()
+
+            from app.utils.normalize import normalize_answer
+            from app.utils.ai_client import call_ai_with_fallback, GRADING_SCHEMA
+            from app.config import settings as cfg
+            from app.prompts import SYSTEM_PROMPT_GRADING_SHORT
+            import json as json_mod
+
+            for answer_log, session in rows:
+                try:
+                    user_answer = answer_log.user_answer_raw or ""
+                    normalized = normalize_answer(user_answer) if user_answer else ""
+
+                    if item.question_type.value in ("multiple_choice", "ox"):
+                        correct = item.correct_answer_json or {}
+                        correct_val = normalize_answer(str(correct.get("answer", "")))
+                        if normalized == correct_val:
+                            new_judgement = "correct"
+                            new_score = 1.0
+                        else:
+                            new_judgement = "incorrect"
+                            new_score = 0.0
+                    else:
+                        prompt = f"""채점할 답안:
+문제: {item.question_text}
+정답: {json_mod.dumps(item.correct_answer_json or {}, ensure_ascii=False)}
+사용자 답: {user_answer}
+정규화된 답: {normalized}
+
+다음 필드를 포함한 JSON으로 응답하세요:
+judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, grading_confidence, grading_rationale, missing_points, error_type, suggested_feedback"""
+                        ai_result = await call_ai_with_fallback(
+                            prompt,
+                            GRADING_SCHEMA,
+                            primary_model=session.grading_model_name
+                            or cfg.openai_grading_model,
+                            fallback_model=cfg.openai_fallback_grading_model,
+                            system_message=SYSTEM_PROMPT_GRADING_SHORT,
+                        )
+                        new_judgement = ai_result["judgement"]
+                        new_score = ai_result["score_awarded"]
+
+                    answer_log.judgement = new_judgement
+                    answer_log.score_awarded = new_score
+                    answer_log.graded_at = datetime.now(timezone.utc)
+                except Exception as exc:
+                    logger.warning(
+                        "admin_regrade: failed to regrade log %s: %s",
+                        answer_log.id,
+                        exc,
+                    )
+
+            # Recalculate session totals for all affected sessions
+            affected_session_ids = {row[1].id for row in rows}
+            for sid in affected_session_ids:
+                from sqlalchemy import func
+
+                total_q = await db.execute(
+                    select(
+                        func.sum(AnswerLog.score_awarded), func.sum(AnswerLog.max_score)
+                    ).where(
+                        AnswerLog.quiz_session_id == sid,
+                        AnswerLog.is_active_result == True,
+                    )
+                )
+                agg = total_q.one()
+                sess_upd = await db.execute(
+                    select(QuizSession).where(QuizSession.id == sid)
+                )
+                sess_obj = sess_upd.scalar_one_or_none()
+                if sess_obj:
+                    sess_obj.total_score = float(agg[0] or 0.0)
+                    sess_obj.max_score = float(agg[1] or 0.0)
+
+            job.status = "completed"
+            job.finished_at = datetime.now(timezone.utc)
+            await db.commit()
 
     _run_async_task(_regrade())

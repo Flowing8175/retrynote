@@ -2,7 +2,7 @@ import os
 import json
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -75,6 +75,9 @@ async def process_file(job_id: str):
                 file.status = FileStatus.failed_terminal
                 file.parse_error_code = "empty_content"
                 file.processing_finished_at = datetime.now(timezone.utc)
+                job.status = "failed"
+                job.error_message = "File content is empty"
+                job.finished_at = datetime.now(timezone.utc)
                 await db.commit()
                 return
 
@@ -98,8 +101,8 @@ async def process_file(job_id: str):
             if ocr_required:
                 file.status = FileStatus.ocr_pending
                 file.ocr_required = True
-
-            file.status = FileStatus.embedding_pending
+            else:
+                file.status = FileStatus.embedding_pending
             await db.commit()
 
             chunks = _create_chunks(file.id, parsed_doc.id, normalized)
@@ -377,7 +380,7 @@ async def generate_quiz(job_id: str):
                 tasks_data = []  # (idx, concept_key, quiz_item)
                 batch_items = []  # dicts for build_batch_retry_prompt
                 for idx, concept_key in enumerate(concept_keys):
-                    if idx >= question_count:
+                    if question_count is not None and idx >= question_count:
                         break
 
                     wrong_result = await db.execute(
@@ -399,20 +402,24 @@ async def generate_quiz(job_id: str):
 
                     answer_log, quiz_item = row
                     tasks_data.append((idx, concept_key, quiz_item))
-                    batch_items.append({
-                        "concept_key": concept_key,
-                        "concept_label": quiz_item.concept_label or concept_key,
-                        "previous_question_type": quiz_item.question_type.value,
-                        "previous_question": quiz_item.question_text,
-                        "error_type": answer_log.error_type.value if answer_log.error_type else "unknown",
-                        "user_answer": answer_log.user_answer_raw or "",
-                        "correct_answer": str(
-                            quiz_item.correct_answer_json.get("answer", "")
-                            if isinstance(quiz_item.correct_answer_json, dict)
-                            else quiz_item.correct_answer_json
-                        ),
-                        "retry_count": 1,
-                    })
+                    batch_items.append(
+                        {
+                            "concept_key": concept_key,
+                            "concept_label": quiz_item.concept_label or concept_key,
+                            "previous_question_type": quiz_item.question_type.value,
+                            "previous_question": quiz_item.question_text,
+                            "error_type": answer_log.error_type.value
+                            if answer_log.error_type
+                            else "unknown",
+                            "user_answer": answer_log.user_answer_raw or "",
+                            "correct_answer": str(
+                                quiz_item.correct_answer_json.get("answer", "")
+                                if isinstance(quiz_item.correct_answer_json, dict)
+                                else quiz_item.correct_answer_json
+                            ),
+                            "retry_count": 1,
+                        }
+                    )
 
                 if not batch_items:
                     session.status = QuizSessionStatus.generation_failed
@@ -426,7 +433,8 @@ async def generate_quiz(job_id: str):
                 batch_result = await call_ai_with_fallback(
                     batch_prompt,
                     BATCH_RETRY_GENERATION_SCHEMA,
-                    primary_model=session.generation_model_name or cfg.openai_generation_model,
+                    primary_model=session.generation_model_name
+                    or cfg.openai_generation_model,
                     fallback_model=cfg.openai_fallback_generation_model,
                     system_message=SYSTEM_PROMPT_RETRY_GENERATION,
                 )
@@ -832,14 +840,31 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
                     graded_at=datetime.now(timezone.utc),
                 )
                 db.add(new_log)
-                objection.status = ObjectionStatus.applied
+                await db.flush()
 
+                # Recalculate session totals after applying the objection
                 session_result = await db.execute(
                     select(QuizSession).where(
                         QuizSession.id == objection.quiz_session_id
                     )
                 )
                 session = session_result.scalar_one_or_none()
+                if session:
+                    score_agg = await db.execute(
+                        select(
+                            func.sum(AnswerLog.score_awarded),
+                            func.sum(AnswerLog.max_score),
+                        ).where(
+                            AnswerLog.quiz_session_id == objection.quiz_session_id,
+                            AnswerLog.user_id == objection.user_id,
+                            AnswerLog.is_active_result == True,
+                        )
+                    )
+                    agg_row = score_agg.one()
+                    session.total_score = float(agg_row[0] or 0.0)
+                    session.max_score = float(agg_row[1] or 0.0)
+
+                objection.status = ObjectionStatus.applied
                 if session:
                     session.status = QuizSessionStatus.regraded
             else:
@@ -861,7 +886,10 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
                             Objection.quiz_session_id == objection.quiz_session_id,
                             Objection.id != objection.id,
                             Objection.status.in_(
-                                [ObjectionStatus.submitted, ObjectionStatus.under_review]
+                                [
+                                    ObjectionStatus.submitted,
+                                    ObjectionStatus.under_review,
+                                ]
                             ),
                         )
                     )

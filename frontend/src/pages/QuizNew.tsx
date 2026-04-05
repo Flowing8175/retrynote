@@ -16,17 +16,17 @@ const QUESTION_TYPES = [
 
 const QUESTION_COUNT_PRESETS = [5, 10, 15];
 
+const MODEL_TIER_DESCRIPTIONS: Record<string, string> = {
+  ECO: '저렴한 모델',
+  BALANCED: '균형잡힌 품질과 속도',
+  PERFORMANCE: '최고 품질',
+};
+
 const DIFFICULTY_OPTIONS = [
   { value: '', label: '난이도 무관' },
   { value: 'easy', label: '쉬움' },
   { value: 'medium', label: '보통' },
   { value: 'hard', label: '어려움' },
-];
-
-const AI_MODEL_OPTIONS = [
-  { value: 'gpt-4.1-mini', label: '경제적', description: '빠르고 가벼운 출제' },
-  { value: 'gpt-5.4-mini', label: '표준', description: '균형 잡힌 출제' },
-  { value: 'gpt-4.1', label: '고품질', description: '정확도 높은 출제' },
 ];
 
 function formatFileSource(sourceType: string) {
@@ -52,6 +52,45 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
 }
 
+function getDetailMessage(detail: unknown, fallbackMessage: string) {
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail;
+  }
+
+  if (Array.isArray(detail) && detail.length > 0) {
+    const firstDetail = detail[0];
+
+    if (typeof firstDetail === 'string' && firstDetail.trim()) {
+      return firstDetail;
+    }
+
+    if (typeof firstDetail === 'object' && firstDetail !== null) {
+      const maybeMessage = firstDetail as { msg?: unknown; loc?: unknown };
+      const msg = typeof maybeMessage.msg === 'string' ? maybeMessage.msg : null;
+      const loc = Array.isArray(maybeMessage.loc)
+        ? maybeMessage.loc.filter((part): part is string | number => typeof part === 'string' || typeof part === 'number').join(' > ')
+        : null;
+
+      if (msg && loc) {
+        return `${loc}: ${msg}`;
+      }
+
+      if (msg) {
+        return msg;
+      }
+    }
+  }
+
+  if (typeof detail === 'object' && detail !== null) {
+    const maybeDetail = detail as { msg?: unknown };
+    if (typeof maybeDetail.msg === 'string' && maybeDetail.msg.trim()) {
+      return maybeDetail.msg;
+    }
+  }
+
+  return fallbackMessage;
+}
+
 export default function QuizNew() {
   const navigate = useNavigate();
   const [sourceMode, setSourceMode] = useState<'document_based' | 'no_source'>('document_based');
@@ -62,7 +101,7 @@ export default function QuizNew() {
   const [difficulty, setDifficulty] = useState('');
   const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>([]);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
-  const [preferredModel, setPreferredModel] = useState<string | null>(null);
+  const [preferredTier, setPreferredTier] = useState<string | null>(null);
   const [showNoSourceModal, setShowNoSourceModal] = useState(false);
   const [noSourceConfirmed, setNoSourceConfirmed] = useState(false);
   const [topic, setTopic] = useState('');
@@ -75,8 +114,26 @@ export default function QuizNew() {
     staleTime: Infinity,
   });
 
-  const defaultModel = quizConfig?.default_generation_model ?? null;
-  const activeModel = preferredModel ?? defaultModel;
+  const generationModelOptions = Array.isArray(quizConfig?.generation_model_options)
+    ? quizConfig.generation_model_options.filter(
+        (option): option is { tier: string; value: string; label: string; is_default: boolean } =>
+          typeof option?.tier === 'string' &&
+          typeof option?.value === 'string' &&
+          typeof option?.label === 'string' &&
+          typeof option?.is_default === 'boolean'
+      )
+    : [];
+
+  const defaultModel = typeof quizConfig?.default_generation_model === 'string'
+    ? quizConfig.default_generation_model
+    : null;
+  const defaultTier =
+    generationModelOptions.find((o) => o.is_default)?.tier ??
+    generationModelOptions.find((o) => o.value === defaultModel)?.tier ??
+    null;
+  const activeTier = preferredTier ?? defaultTier;
+  const activeModel =
+    generationModelOptions.find((o) => o.tier === activeTier)?.value ?? defaultModel;
 
   const { data: foldersData } = useQuery({
     queryKey: ['folders'],
@@ -87,8 +144,11 @@ export default function QuizNew() {
     queryKey: ['quiz-new-files'],
     queryFn: () => filesApi.listFiles(1, 100),
     refetchInterval: (query) =>
-      query.state.data?.files.some((file) => isFileProcessingStatus(file.status)) ? 2000 : false,
+      (query.state.data?.files ?? []).some((file) => isFileProcessingStatus(file.status)) ? 2000 : false,
   });
+
+  const folders = Array.isArray(foldersData) ? foldersData : [];
+  const allFiles = Array.isArray(filesData?.files) ? filesData.files : [];
 
   const createQuizMutation = useMutation({
     mutationFn: () =>
@@ -105,25 +165,18 @@ export default function QuizNew() {
         topic: sourceMode === 'no_source' ? (topic.trim() || null) : null,
         idempotency_key: crypto.randomUUID(),
       }),
-    onSuccess: (response) => {
-      navigate(`/quiz/${response.quiz_session_id}`);
-    },
-    onError: (error: unknown) => {
-      const axiosError = error as { response?: { data?: { detail?: string } } };
-      setFormMessage(axiosError.response?.data?.detail || '퀴즈 생성에 실패했습니다.');
-    },
   });
 
   const fileGroups = useMemo(() => {
-    const allFiles = (filesData?.files ?? []).filter(
+    const visibleFiles = allFiles.filter(
       (file) => selectedFolderId === null || file.folder_id === selectedFolderId
     );
-    const readyFiles = allFiles.filter((file) => file.is_quiz_eligible && (file.status === 'ready' || file.status === 'failed_partial'));
-    const processingFiles = allFiles.filter((file) => file.is_quiz_eligible && isFileProcessingStatus(file.status));
-    const unavailableFiles = allFiles.filter((file) => !file.is_quiz_eligible || (!isFileProcessingStatus(file.status) && file.status !== 'ready' && file.status !== 'failed_partial'));
+    const readyFiles = visibleFiles.filter((file) => file.is_quiz_eligible && (file.status === 'ready' || file.status === 'failed_partial'));
+    const processingFiles = visibleFiles.filter((file) => file.is_quiz_eligible && isFileProcessingStatus(file.status));
+    const unavailableFiles = visibleFiles.filter((file) => !file.is_quiz_eligible || (!isFileProcessingStatus(file.status) && file.status !== 'ready' && file.status !== 'failed_partial'));
 
     return { readyFiles, processingFiles, unavailableFiles };
-  }, [filesData?.files, selectedFolderId]);
+  }, [allFiles, selectedFolderId]);
 
   const canSubmitDocumentBased = sourceMode === 'document_based' && selectedFileIds.length > 0;
   const primaryActionLabel = createQuizMutation.isPending ? '생성 중...' : '퀴즈 생성하기';
@@ -143,6 +196,32 @@ export default function QuizNew() {
     );
   };
 
+  const resetNoSourceModal = () => {
+    setShowNoSourceModal(false);
+    setNoSourceConfirmed(false);
+  };
+
+  const createQuiz = async () => {
+    setFormMessage(null);
+
+    try {
+      const response = await createQuizMutation.mutateAsync();
+
+      if (!response?.quiz_session_id) {
+        throw new Error('Missing quiz session id');
+      }
+
+      if (sourceMode === 'no_source') {
+        resetNoSourceModal();
+      }
+
+      navigate(`/quiz/${response.quiz_session_id}`);
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { detail?: unknown } } };
+      setFormMessage(getDetailMessage(axiosError.response?.data?.detail, '퀴즈 생성에 실패했습니다.'));
+    }
+  };
+
   const handleSubmit = () => {
     setFormMessage(null);
     if (sourceMode === 'document_based' && selectedFileIds.length === 0) {
@@ -153,7 +232,7 @@ export default function QuizNew() {
       setShowNoSourceModal(true);
       return;
     }
-    createQuizMutation.mutate();
+    void createQuiz();
   };
 
   const handleConfirmNoSource = () => {
@@ -161,8 +240,8 @@ export default function QuizNew() {
       setFormMessage('경고 사항을 확인해 주세요.');
       return;
     }
-    setShowNoSourceModal(false);
-    createQuizMutation.mutate();
+
+    void createQuiz();
   };
 
   if (filesLoading) {
@@ -241,7 +320,7 @@ export default function QuizNew() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap gap-2">
                 <button
-                  onClick={() => setSelectedFolderId(null)}
+                  onClick={() => { setSelectedFolderId(null); setSelectedFileIds([]); }}
                   className={`text-xs font-medium px-4 py-2 rounded-xl transition-colors border ${
                     selectedFolderId === null 
                       ? 'bg-surface-raised text-white border-white/[0.1]' 
@@ -250,10 +329,10 @@ export default function QuizNew() {
                 >
                   전체
                 </button>
-                {foldersData?.map((folder) => (
+                {folders.map((folder) => (
                   <button
                     key={folder.id}
-                    onClick={() => setSelectedFolderId(folder.id)}
+                    onClick={() => { setSelectedFolderId(folder.id); setSelectedFileIds([]); }}
                     className={`text-xs font-medium px-4 py-2 rounded-xl transition-colors border ${
                       selectedFolderId === folder.id 
                         ? 'bg-surface-raised text-white border-white/[0.1]' 
@@ -407,20 +486,23 @@ export default function QuizNew() {
                 <div className="space-y-4">
                   <div className="text-xs font-medium text-content-muted">AI 모델</div>
                   <div className="grid grid-cols-2 gap-2">
-                    {AI_MODEL_OPTIONS.map((opt) => (
+                    {generationModelOptions.map((option) => {
+                      return (
                       <button
-                        key={opt.value}
-                        onClick={() => setPreferredModel(opt.value)}
+                        key={option.value}
+                        onClick={() => setPreferredTier(option.tier)}
                         className={`text-left px-4 py-3 rounded-xl transition-colors border ${
-                          activeModel === opt.value
-                            ? 'bg-surface-raised text-white border-white/[0.1]'
+                          activeTier === option.tier
+                            ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
                             : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
                         }`}
                       >
-                        <div className="text-xs font-medium">{opt.label}</div>
-                        <div className="text-xs text-content-muted mt-0.5">{opt.description}</div>
+                        <div className="text-xs font-medium">{option.tier}</div>
+                        <div className="text-xs text-content-muted mt-0.5">{MODEL_TIER_DESCRIPTIONS[option.tier] ?? option.tier}</div>
+                        <div className="mt-1 text-[11px] text-content-muted">{option.value}</div>
                       </button>
-                    ))}
+                    );
+                    })}
                   </div>
                 </div>
 
@@ -513,8 +595,11 @@ export default function QuizNew() {
       <Modal
         isOpen={showNoSourceModal}
         onClose={() => {
-          setShowNoSourceModal(false);
-          setNoSourceConfirmed(false);
+          if (createQuizMutation.isPending) {
+            return;
+          }
+
+          resetNoSourceModal();
         }}
         title="AI 배경지식 퀴즈 안내"
       >
@@ -540,10 +625,14 @@ export default function QuizNew() {
           <div className="flex gap-3 pt-4">
             <button
               onClick={() => {
-                setShowNoSourceModal(false);
-                setNoSourceConfirmed(false);
+                if (createQuizMutation.isPending) {
+                  return;
+                }
+
+                resetNoSourceModal();
               }}
-              className="flex-1 py-3 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover transition-colors"
+              disabled={createQuizMutation.isPending}
+              className="flex-1 py-3 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               취소
             </button>
@@ -552,7 +641,7 @@ export default function QuizNew() {
               disabled={!noSourceConfirmed || createQuizMutation.isPending}
               className="flex-1 bg-brand-500 text-brand-900 py-3 text-sm font-semibold rounded-xl disabled:opacity-50 transition-colors"
             >
-              이대로 진행하기
+              {createQuizMutation.isPending ? '생성 중...' : '이대로 진행하기'}
             </button>
           </div>
         </div>

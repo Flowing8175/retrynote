@@ -14,13 +14,22 @@ export const wrongNotesApi = {
     page: number = 1,
     size: number = 20
   ): Promise<WrongNoteListResponse> => {
-    const params: Record<string, string | number | string[]> = { sort, page, size };
-    if (judgement && judgement.length > 0) params.judgement = judgement;
-    if (errorType && errorType.length > 0) params.error_type = errorType;
-    if (fileId) params.file_id = fileId;
-    if (categoryTag) params.category_tag = categoryTag;
+    const searchParams = new URLSearchParams();
+    searchParams.set('sort', sort);
+    searchParams.set('page', String(page));
+    searchParams.set('size', String(size));
+    if (judgement && judgement.length > 0) {
+      judgement.forEach((j) => searchParams.append('judgement', j));
+    }
+    if (errorType && errorType.length > 0) {
+      errorType.forEach((e) => searchParams.append('error_type', e));
+    }
+    if (fileId) searchParams.set('file_id', fileId);
+    if (categoryTag) searchParams.set('category_tag', categoryTag);
 
-    const response = await apiClient.get<WrongNoteListResponse>('/wrong-notes', { params });
+    const response = await apiClient.get<WrongNoteListResponse>(
+      `/wrong-notes?${searchParams.toString()}`
+    );
     return response.data;
   },
 

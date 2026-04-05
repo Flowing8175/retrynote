@@ -1,3 +1,9 @@
+export interface RetryLocationState {
+  conceptKeys: string[];
+  conceptLabels: Record<string, string>;
+  selectedCount?: number;
+}
+
 export interface RetrySetCreate {
   source: 'wrong_notes' | 'dashboard_recommendation' | 'concept_manual' | 'quiz_session';
   concept_keys: string[] | null;

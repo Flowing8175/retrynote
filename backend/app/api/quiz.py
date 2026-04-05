@@ -154,7 +154,8 @@ async def create_quiz_session(
     if req.idempotency_key:
         existing = await db.execute(
             select(QuizSession).where(
-                QuizSession.idempotency_key == req.idempotency_key
+                QuizSession.idempotency_key == req.idempotency_key,
+                QuizSession.user_id == user.id,
             )
         )
         existing_session = existing.scalar_one_or_none()
@@ -344,7 +345,12 @@ async def submit_answer(
     if session.status not in (QuizSessionStatus.ready, QuizSessionStatus.in_progress):
         raise HTTPException(status_code=400, detail="Session is not in progress")
 
-    item_result = await db.execute(select(QuizItem).where(QuizItem.id == item_id))
+    item_result = await db.execute(
+        select(QuizItem).where(
+            QuizItem.id == item_id,
+            QuizItem.quiz_session_id == session_id,
+        )
+    )
     item = item_result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -472,11 +478,14 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
             judgement = Judgement.incorrect
 
     existing_active = await db.execute(
-        select(AnswerLog).where(
+        select(AnswerLog)
+        .where(
             AnswerLog.quiz_item_id == item_id,
+            AnswerLog.quiz_session_id == session_id,
             AnswerLog.user_id == user.id,
             AnswerLog.is_active_result == True,
         )
+        .with_for_update()
     )
     for old_log in existing_active.scalars().all():
         old_log.is_active_result = False
@@ -603,6 +612,17 @@ async def save_draft_answer(
     if session.status not in (QuizSessionStatus.ready, QuizSessionStatus.in_progress):
         raise HTTPException(status_code=400, detail="Session is not in progress")
 
+    item_check = await db.execute(
+        select(QuizItem).where(
+            QuizItem.id == req.item_id,
+            QuizItem.quiz_session_id == session_id,
+        )
+    )
+    if not item_check.scalar_one_or_none():
+        raise HTTPException(
+            status_code=404, detail="Item not found or does not belong to this session"
+        )
+
     existing = await db.execute(
         select(DraftAnswer).where(
             DraftAnswer.quiz_session_id == session_id,
@@ -653,6 +673,10 @@ async def submit_exam(
         QuizSessionStatus.graded,
     ):
         return ExamSubmitResponse(status=session.status.value, job_id=None)
+    if session.status not in (QuizSessionStatus.ready, QuizSessionStatus.in_progress):
+        raise HTTPException(
+            status_code=400, detail="Session is not ready for submission"
+        )
 
     if req.idempotency_key:
         if session.idempotency_key and session.idempotency_key != req.idempotency_key:

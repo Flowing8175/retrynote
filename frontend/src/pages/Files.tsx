@@ -202,7 +202,7 @@ export default function Files() {
             <h2 className="text-xs font-semibold text-content-muted px-2">폴더</h2>
             <div className="space-y-1">
               <button
-                onClick={() => { setSelectedFolderId(null); setPage(1); }}
+                onClick={() => { setSelectedFolderId(null); setPage(1); setSelectedFileIds([]); }}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                   selectedFolderId === null ? 'bg-surface-raised text-white shadow-sm border border-white/[0.05]' : 'text-content-secondary hover:bg-surface-hover hover:text-white border border-transparent'
                 }`}
@@ -212,7 +212,7 @@ export default function Files() {
               {folders.map((folder) => (
                 <button
                   key={folder.id}
-                  onClick={() => { setSelectedFolderId(folder.id); setPage(1); }}
+                  onClick={() => { setSelectedFolderId(folder.id); setPage(1); setSelectedFileIds([]); }}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                     selectedFolderId === folder.id ? 'bg-surface-raised text-white shadow-sm border border-white/[0.05]' : 'text-content-secondary hover:bg-surface-hover hover:text-white border border-transparent'
                   }`}
@@ -323,7 +323,7 @@ export default function Files() {
               <div className="flex items-center gap-3">
                 <select
                   value={statusFilter}
-                  onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+                  onChange={(e) => { setStatusFilter(e.target.value); setPage(1); setSelectedFileIds([]); }}
                   className="bg-surface border border-white/[0.05] rounded-xl text-sm px-4 py-2 text-content-primary focus:ring-2 focus:ring-brand-500 focus:outline-none"
                 >
                   <option value="">모든 상태</option>
@@ -415,7 +415,7 @@ export default function Files() {
 
             {data && data.total > data.size && (
               <div className="flex justify-center pt-8">
-                <Pagination currentPage={page} totalPages={Math.ceil(data.total / data.size)} onPageChange={setPage} />
+                <Pagination currentPage={page} totalPages={Math.ceil(data.total / data.size)} onPageChange={(p) => { setPage(p); setSelectedFileIds([]); }} />
               </div>
             )}
           </div>

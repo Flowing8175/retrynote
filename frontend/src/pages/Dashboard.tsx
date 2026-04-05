@@ -83,7 +83,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const handleStartQuiz = () => navigate('/quiz/new');
 
-  const { data: dashboardData, isLoading } = useQuery({
+  const { data: dashboardData, isLoading, isError } = useQuery({
     queryKey: ['dashboard', range, selectedFileId, selectedCategoryTag],
     queryFn: () => dashboardApi.getDashboard(range, selectedFileId, selectedCategoryTag),
   });
@@ -92,8 +92,19 @@ export default function Dashboard() {
     return <LoadingSpinner message="학습 데이터를 불러오는 중입니다" />;
   }
 
-  if (!dashboardData) {
-    return null;
+  if (isError || !dashboardData) {
+    return (
+      <div className="max-w-4xl mx-auto py-32 text-center space-y-4">
+        <h1 className="text-2xl font-semibold text-white">대시보드를 불러오지 못했습니다</h1>
+        <p className="text-base text-content-secondary">잠시 후 다시 시도해 주세요.</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="inline-flex items-center justify-center bg-surface-raised text-white border border-white/[0.1] px-6 h-12 rounded-xl text-sm font-semibold"
+        >
+          새로고침
+        </button>
+      </div>
+    );
   }
 
   const hasData = dashboardData.learning_volume > 0;

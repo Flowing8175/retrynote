@@ -258,7 +258,46 @@ class TestGetDashboard:
     async def test_dashboard_weak_concepts(
         self, auth_client: AsyncClient, db_session, test_user
     ):
-        # Create WeakPoint entries
+        # weak_concepts is now filtered to concepts present in the filtered answers,
+        # so we need both a WeakPoint and a matching answer log.
+        session = QuizSession(
+            id=str(uuid.uuid4()),
+            user_id=test_user.id,
+            mode=QuizMode.normal,
+            source_mode=SourceMode.document_based,
+            status=QuizSessionStatus.graded,
+            question_count=1,
+        )
+        db_session.add(session)
+        await db_session.flush()
+
+        item = QuizItem(
+            id=str(uuid.uuid4()),
+            quiz_session_id=session.id,
+            item_order=1,
+            question_type=QuestionType.multiple_choice,
+            question_text="Test weak concept question",
+            correct_answer_json={"answer": "A"},
+            concept_key="weak_concept_1",
+            concept_label="Weak Concept 1",
+            category_tag="weak_category",
+        )
+        db_session.add(item)
+        await db_session.flush()
+
+        answer_log = AnswerLog(
+            id=str(uuid.uuid4()),
+            user_id=test_user.id,
+            quiz_session_id=session.id,
+            quiz_item_id=item.id,
+            judgement=Judgement.incorrect,
+            score_awarded=0.0,
+            max_score=1.0,
+            is_active_result=True,
+            graded_at=datetime.now(timezone.utc),
+        )
+        db_session.add(answer_log)
+
         weak = WeakPoint(
             id=str(uuid.uuid4()),
             user_id=test_user.id,

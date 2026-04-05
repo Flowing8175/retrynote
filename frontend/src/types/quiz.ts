@@ -18,6 +18,17 @@ export interface QuizSessionResponse {
   job_id: string | null;
 }
 
+export interface QuizConfig {
+  default_generation_model: string;
+  available_generation_models: string[];
+  generation_model_options: Array<{
+    tier: string;
+    value: string;
+    label: string;
+    is_default: boolean;
+  }>;
+}
+
 export interface QuizSessionDetail {
   id: string;
   mode: string;
@@ -53,7 +64,7 @@ export interface QuizItemResponse {
   item_order: number;
   question_type: string;
   question_text: string;
-  options: Record<string, unknown> | null;
+  options: Record<string, unknown> | unknown[] | null;
   difficulty: string | null;
   concept_label: string | null;
   category_tag: string | null;
@@ -79,7 +90,7 @@ export interface AnswerResponse {
   grading_rationale: string | null;
   explanation: string | null;
   tips: string | null;
-  missing_points: Record<string, unknown> | null;
+  missing_points: string[] | null;
   error_type: string | null;
   normalized_user_answer: string | null;
   suggested_feedback: string | null;
@@ -116,7 +127,7 @@ export interface AnswerLogEntry {
   grading_rationale: string | null;
   explanation: string | null;
   tips: string | null;
-  missing_points: Record<string, unknown> | null;
+  missing_points: string[] | null;
   error_type: string | null;
   normalized_user_answer: string | null;
   suggested_feedback: string | null;

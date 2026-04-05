@@ -33,6 +33,7 @@ export default function Admin() {
   const [activeTab, setActiveTab] = useState<TabKey>('users');
   const [masterPassword, setMasterPassword] = useState('');
   const [isVerified, setIsVerified] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const [auditPage, setAuditPage] = useState(1);
 
@@ -92,6 +93,9 @@ export default function Admin() {
         setAdminToken(data.admin_token);
       }
       setIsVerified(true);
+    },
+    onError: () => {
+      setVerifyError('비밀번호가 올바르지 않습니다.');
     },
   });
 
@@ -160,7 +164,7 @@ export default function Admin() {
                 id="master-password"
                 type="password"
                 value={masterPassword}
-                onChange={(e) => setMasterPassword(e.target.value)}
+                onChange={(e) => { setMasterPassword(e.target.value); setVerifyError(null); }}
                 placeholder="비밀번호 입력"
                 className="mt-3 w-full rounded-2xl border border-white/[0.10] bg-surface px-4 py-3 text-content-primary placeholder-content-muted focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
               />
@@ -172,6 +176,9 @@ export default function Admin() {
               >
                 {verifyMutation.isPending ? '인증 중…' : '관리자 화면 열기'}
               </button>
+              {verifyError && (
+                <p className="mt-3 text-sm text-semantic-error">{verifyError}</p>
+              )}
             </div>
           </div>
         </section>

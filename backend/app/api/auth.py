@@ -55,8 +55,15 @@ async def signup(
         password_hash=hash_password(req.password),
     )
     db.add(user)
-    await db.commit()
-    await db.refresh(user)
+    try:
+        await db.commit()
+        await db.refresh(user)
+    except Exception:
+        await db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Registration failed. Please try different credentials.",
+        )
     return SignupResponse(
         user_id=user.id, username=user.username, created_at=user.created_at
     )
@@ -167,6 +174,17 @@ async def password_reset_confirm(
 
     user.password_hash = hash_password(req.new_password)
     token_record.used_at = datetime.now(timezone.utc)
+
+    # Revoke all existing refresh tokens so old sessions cannot persist after a reset
+    active_tokens = await db.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    for rt in active_tokens.scalars().all():
+        rt.revoked_at = datetime.now(timezone.utc)
+
     await db.commit()
     return {"status": "success"}
 
@@ -190,9 +208,9 @@ async def refresh_token(req: RefreshTokenRequest, db: AsyncSession = Depends(get
         jti = payload.get("jti")
         if jti:
             stored_result = await db.execute(
-                select(RefreshToken).where(
-                    RefreshToken.id == jti, RefreshToken.revoked_at.is_(None)
-                )
+                select(RefreshToken)
+                .where(RefreshToken.id == jti, RefreshToken.revoked_at.is_(None))
+                .with_for_update()
             )
             stored_token = stored_result.scalar_one_or_none()
             if not stored_token:

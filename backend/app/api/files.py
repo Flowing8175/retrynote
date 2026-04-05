@@ -98,6 +98,16 @@ async def upload_file(
 ):
     effective_user, _ = await get_impersonation_context(request, user, db)
 
+    if folder_id:
+        folder_check = await db.execute(
+            select(Folder).where(
+                Folder.id == folder_id,
+                Folder.user_id == effective_user.id,
+            )
+        )
+        if not folder_check.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Folder not accessible")
+
     source_type = FileSourceType.upload
     original_filename = None
     stored_path = None
@@ -124,7 +134,10 @@ async def upload_file(
                 break
             total_size += len(chunk)
             if total_size > max_size:
-                raise HTTPException(status_code=413, detail=f"File too large. Maximum size is {settings.max_upload_size_mb}MB.")
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File too large. Maximum size is {settings.max_upload_size_mb}MB.",
+                )
             chunks.append(chunk)
         content = b"".join(chunks)
         file_size = total_size
@@ -170,12 +183,13 @@ async def upload_file(
                 detail=f"동일한 파일이 이미 존재합니다: '{name}'",
             )
 
-        save_dir = os.path.join(settings.upload_dir, str(user.id))
+        save_dir = os.path.join(settings.upload_dir, str(effective_user.id))
         os.makedirs(save_dir, exist_ok=True)
         stored_name = f"{uuid.uuid4().hex}.{ext}"
         stored_path = os.path.join(save_dir, stored_name)
-        with open(stored_path, "wb") as f:
-            f.write(content)
+        import asyncio as _asyncio
+
+        await _asyncio.to_thread(lambda: open(stored_path, "wb").write(content))
 
     elif manual_text:
         source_type = FileSourceType.manual_text

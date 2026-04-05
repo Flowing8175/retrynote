@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, false
 from sqlalchemy.ext.asyncio import AsyncSession
 import redis.asyncio as redis
 
@@ -136,15 +136,23 @@ async def get_dashboard(
     overall_accuracy = correct_count / total_count if total_count > 0 else 0.0
     score_rate = total_score / max_score_total if max_score_total > 0 else 0.0
 
+    seen_concept_keys = {
+        quiz_items_by_id[a.quiz_item_id].concept_key
+        for a in answers
+        if a.quiz_item_id in quiz_items_by_id
+        and quiz_items_by_id[a.quiz_item_id].concept_key
+    }
+    weak_query = select(WeakPoint).where(WeakPoint.user_id == user.id)
+    if seen_concept_keys:
+        weak_query = weak_query.where(WeakPoint.concept_key.in_(seen_concept_keys))
+    else:
+        weak_query = weak_query.where(false())
     weak_result = await db.execute(
-        select(WeakPoint)
-        .where(WeakPoint.user_id == user.id)
-        .order_by(
+        weak_query.order_by(
             (
                 WeakPoint.wrong_count + WeakPoint.partial_count + WeakPoint.skip_count
             ).desc()
-        )
-        .limit(10)
+        ).limit(10)
     )
     weak_concepts = [
         {
@@ -203,26 +211,31 @@ async def get_dashboard(
     from app.models.quiz import QuizSessionFile
 
     file_accuracy: dict[str, dict] = {}
-    for a in answers:
-        session_files_result = await db.execute(
-            select(QuizSessionFile).where(
-                QuizSessionFile.quiz_session_id == a.quiz_session_id
-            )
+    if answers:
+        answer_session_ids = {a.quiz_session_id for a in answers}
+        sf_batch = await db.execute(
+            select(QuizSessionFile, File)
+            .join(File, File.id == QuizSessionFile.file_id)
+            .where(QuizSessionFile.quiz_session_id.in_(answer_session_ids))
         )
-        for sf in session_files_result.scalars().all():
-            fid = sf.file_id
-            if fid not in file_accuracy:
-                f_result = await db.execute(select(File).where(File.id == fid))
-                f = f_result.scalar_one_or_none()
-                file_accuracy[fid] = {
-                    "file_id": fid,
-                    "filename": f.original_filename if f else fid,
-                    "correct": 0,
-                    "total": 0,
-                }
-            file_accuracy[fid]["total"] += 1
-            if a.judgement == Judgement.correct:
-                file_accuracy[fid]["correct"] += 1
+        session_to_files: dict[str, list[tuple[str, str | None]]] = {}
+        for sf, f in sf_batch.all():
+            session_to_files.setdefault(sf.quiz_session_id, []).append(
+                (sf.file_id, f.original_filename if f else None)
+            )
+
+        for a in answers:
+            for fid, fname in session_to_files.get(a.quiz_session_id, []):
+                if fid not in file_accuracy:
+                    file_accuracy[fid] = {
+                        "file_id": fid,
+                        "filename": fname or fid,
+                        "correct": 0,
+                        "total": 0,
+                    }
+                file_accuracy[fid]["total"] += 1
+                if a.judgement == Judgement.correct:
+                    file_accuracy[fid]["correct"] += 1
 
     accuracy_by_file = [
         {

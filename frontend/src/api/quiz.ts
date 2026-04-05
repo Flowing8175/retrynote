@@ -1,6 +1,7 @@
 import apiClient from './client';
 import type {
   QuizSessionCreate,
+  QuizConfig,
   QuizSessionResponse,
   QuizSessionDetail,
   QuizSessionHistoryItem,
@@ -80,8 +81,8 @@ export const quizApi = {
     await apiClient.delete(`/quiz-sessions/${sessionId}`);
   },
 
-  getQuizConfig: async (): Promise<{ default_generation_model: string }> => {
-    const response = await apiClient.get<{ default_generation_model: string }>('/quiz-sessions/config');
+  getQuizConfig: async (): Promise<QuizConfig> => {
+    const response = await apiClient.get<QuizConfig>('/quiz-sessions/config');
     return response.data;
   },
 };

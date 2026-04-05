@@ -192,7 +192,7 @@ class AnswerLog(CommonMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     regraded_from_answer_log_id: Mapped[str | None] = mapped_column(
-        String(36), nullable=True
+        String(36), ForeignKey("answer_logs.id"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(50), default="active")
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)

@@ -17,7 +17,7 @@ export default function Search() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ['search', debouncedQuery, scope],
     queryFn: () => searchApi.search(debouncedQuery, scope),
     enabled: debouncedQuery.length > 0,
@@ -86,6 +86,11 @@ export default function Search() {
           eyebrow="통합 검색"
           title="검색어를 입력하세요"
           message="개념명, 파일명, 문제 문장 등을 입력하면 자료·오답노트·퀴즈 기록을 한 번에 찾아줍니다."
+        />
+      ) : isError ? (
+        <EmptyState
+          title="검색 중 오류가 발생했습니다"
+          message="잠시 후 다시 시도해 주세요."
         />
       ) : resultCount === 0 ? (
         <EmptyState

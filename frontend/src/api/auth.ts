@@ -1,4 +1,5 @@
 import apiClient from './client';
+import { useAuthStore } from '@/stores/authStore';
 import type {
   SignupRequest,
   SignupResponse,
@@ -23,7 +24,10 @@ export const authApi = {
   },
 
   logout: async (): Promise<void> => {
-    await apiClient.post('/auth/logout');
+    const refreshToken = useAuthStore.getState().refreshToken;
+    if (refreshToken) {
+      await apiClient.post('/auth/logout', { refresh_token: refreshToken });
+    }
   },
 
   passwordResetRequest: async (data: PasswordResetRequest): Promise<{ status: string; detail?: string }> => {

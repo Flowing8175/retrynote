@@ -102,13 +102,14 @@ class TestSearch:
     async def test_search_quiz_history_scope(
         self, auth_client: AsyncClient, db_session, test_user
     ):
+        # Quiz history search now filters by item text — sessions need matching items.
         session1 = QuizSession(
             id=str(uuid.uuid4()),
             user_id=test_user.id,
             mode=QuizMode.normal,
             source_mode=SourceMode.document_based,
             status=QuizSessionStatus.graded,
-            question_count=5,
+            question_count=1,
         )
         session2 = QuizSession(
             id=str(uuid.uuid4()),
@@ -116,13 +117,36 @@ class TestSearch:
             mode=QuizMode.exam,
             source_mode=SourceMode.no_source,
             status=QuizSessionStatus.graded,
-            question_count=10,
+            question_count=1,
         )
         db_session.add_all([session1, session2])
+        await db_session.flush()
+
+        item1 = QuizItem(
+            id=str(uuid.uuid4()),
+            quiz_session_id=session1.id,
+            item_order=1,
+            question_type=QuestionType.multiple_choice,
+            question_text="What is photosynthesis?",
+            correct_answer_json={"answer": "A"},
+            concept_key="photosynthesis",
+            concept_label="Photosynthesis",
+        )
+        item2 = QuizItem(
+            id=str(uuid.uuid4()),
+            quiz_session_id=session2.id,
+            item_order=1,
+            question_type=QuestionType.multiple_choice,
+            question_text="Describe photosynthesis in plants.",
+            correct_answer_json={"answer": "B"},
+            concept_key="photosynthesis_plants",
+            concept_label="Photosynthesis in Plants",
+        )
+        db_session.add_all([item1, item2])
         await db_session.commit()
 
         resp = await auth_client.get(
-            "/search", params={"q": "quiz", "scope": "quiz_history"}
+            "/search", params={"q": "photosynthesis", "scope": "quiz_history"}
         )
         assert resp.status_code == 200
         data = resp.json()

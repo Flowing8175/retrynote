@@ -9,7 +9,7 @@ class QuizSessionCreate(BaseModel):
     mode: Literal["normal", "exam"]
     selected_file_ids: list[str] = Field(default=[], max_length=50)
     manual_text: str | None = Field(default=None, max_length=50000)
-    question_count: int | None = Field(default=None)
+    question_count: int | None = Field(default=None, ge=1, le=200)
     difficulty: str | None = Field(default=None, max_length=50)
     question_types: list[str] = Field(default=[], max_length=10)
     generation_priority: str | None = Field(default=None, max_length=50)

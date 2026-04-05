@@ -12,6 +12,24 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
+  const focusElementSafely = (element: HTMLElement | null) => {
+    if (!element || !element.isConnected) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      if (!element.isConnected) {
+        return;
+      }
+
+      try {
+        element.focus();
+      } catch (error) {
+        console.error('Failed to restore modal focus', error);
+      }
+    });
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -30,7 +48,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
-      previousFocusRef.current?.focus();
+      focusElementSafely(previousFocusRef.current);
     }
 
     return () => {
@@ -44,7 +62,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
     const focusableElements = modalRef.current.querySelectorAll<HTMLElement>(focusableSelectors);
     const firstElement = focusableElements[0];
     const lastElement = focusableElements[focusableElements.length - 1];
-    firstElement?.focus();
+    focusElementSafely(firstElement);
     const handleTab = (e: KeyboardEvent) => {
       if (e.key !== 'Tab') return;
       if (e.shiftKey) {

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import AppErrorBoundary from '@/components/AppErrorBoundary';
 import { useAuthStore } from '@/stores';
 import { Layout } from '@/components';
 import Login from '@/pages/Login';
@@ -44,8 +45,9 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
         <Routes>
           {/* Public Routes */}
           <Route
@@ -165,8 +167,9 @@ function App() {
             </ProtectedRoute>
           } />
         </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   );
 }
 

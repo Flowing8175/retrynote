@@ -63,7 +63,7 @@ export default function WrongNotes() {
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState('concept');
   const [judgementFilter, setJudgementFilter] = useState<string[]>([]);
-  const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set());
+  const [selectedNotes, setSelectedNotes] = useState<Map<string, { concept_key: string | null; concept_label: string | null }>>(new Map());
   const [expandedNoteId, setExpandedNoteId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -79,14 +79,14 @@ export default function WrongNotes() {
       ),
   });
 
-  const handleNoteToggle = (noteId: string, e?: React.MouseEvent) => {
+  const handleNoteToggle = (note: WrongNoteItem, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setSelectedNoteIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(noteId)) {
-        next.delete(noteId);
+    setSelectedNotes((prev) => {
+      const next = new Map(prev);
+      if (next.has(note.id)) {
+        next.delete(note.id);
       } else {
-        next.add(noteId);
+        next.set(note.id, { concept_key: note.concept_key, concept_label: note.concept_label });
       }
       return next;
     });
@@ -97,16 +97,15 @@ export default function WrongNotes() {
   };
 
   const handleRetry = () => {
-    if (selectedNoteIds.size === 0) {
+    if (selectedNotes.size === 0) {
       navigate('/retry');
       return;
     }
 
-    const selectedNotes = (data?.items ?? []).filter((item) => selectedNoteIds.has(item.id));
     const conceptMap = new Map<string, string>();
-    for (const note of selectedNotes) {
-      if (note.concept_key) {
-        conceptMap.set(note.concept_key, note.concept_label || note.concept_key);
+    for (const [, noteData] of selectedNotes) {
+      if (noteData.concept_key) {
+        conceptMap.set(noteData.concept_key, noteData.concept_label || noteData.concept_key);
       }
     }
 
@@ -114,12 +113,12 @@ export default function WrongNotes() {
       state: {
         conceptKeys: Array.from(conceptMap.keys()),
         conceptLabels: Object.fromEntries(conceptMap.entries()),
-        selectedCount: selectedNoteIds.size,
+        selectedCount: selectedNotes.size,
       },
     });
   };
 
-  const selectedCount = selectedNoteIds.size;
+  const selectedCount = selectedNotes.size;
 
   if (isLoading) {
     return <LoadingSpinner message="오답 기록 불러오는 중" />;
@@ -184,7 +183,7 @@ export default function WrongNotes() {
             <article
               key={item.id}
               className={`group relative rounded-3xl border transition-all ${
-                selectedNoteIds.has(item.id) ? 'border-brand-500/30 bg-brand-500/5' : 'border-white/[0.05] bg-surface hover:bg-surface-hover'
+                selectedNotes.has(item.id) ? 'border-brand-500/30 bg-brand-500/5' : 'border-white/[0.05] bg-surface hover:bg-surface-hover'
               }`}
             >
               <div 
@@ -194,8 +193,8 @@ export default function WrongNotes() {
                 <div className="pt-1">
                   <input
                     type="checkbox"
-                    checked={selectedNoteIds.has(item.id)}
-                    onChange={() => handleNoteToggle(item.id)}
+                    checked={selectedNotes.has(item.id)}
+                    onChange={() => handleNoteToggle(item)}
                     onClick={(e) => e.stopPropagation()}
                     className="w-5 h-5 rounded border-white/[0.1] bg-surface-deep text-brand-500 focus:ring-brand-500 cursor-pointer"
                   />
@@ -286,7 +285,7 @@ export default function WrongNotes() {
               <div className="flex gap-3 w-full sm:w-auto">
                 <button
                   type="button"
-                  onClick={() => setSelectedNoteIds(new Set())}
+                  onClick={() => setSelectedNotes(new Map())}
                   className="flex-1 sm:flex-none text-content-secondary px-4 py-2 text-sm font-medium border border-white/[0.1] rounded-xl hover:bg-white/5 transition-all"
                 >
                   선택 해제

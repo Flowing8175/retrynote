@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { StatusBadge, LoadingSpinner } from '@/components';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, AlertCircle } from 'lucide-react';
 
 function formatMode(mode: string) {
   return mode === 'exam' ? '시험 모드' : '일반 모드';
@@ -45,13 +45,13 @@ function getPerformanceTier(scorePercentage: number) {
 export default function QuizResults() {
   const { sessionId } = useParams<{ sessionId: string }>();
 
-  const { data: session, isLoading: sessionLoading } = useQuery({
+  const { data: session, isLoading: sessionLoading, isError: sessionIsError } = useQuery({
     queryKey: ['quizSession', sessionId],
     queryFn: () => quizApi.getQuizSession(sessionId || ''),
     enabled: !!sessionId,
   });
 
-  const { data: items, isLoading: itemsLoading } = useQuery({
+  const { data: items, isLoading: itemsLoading, isError: itemsIsError } = useQuery({
     queryKey: ['quizItems', sessionId],
     queryFn: () => quizApi.getQuizItems(sessionId || ''),
     enabled: !!sessionId,
@@ -66,6 +66,26 @@ export default function QuizResults() {
   const scoreRate = session && session.max_score ? session.total_score! / session.max_score : 0;
   const scorePercentage = scoreRate * 100;
   const tier = getPerformanceTier(scorePercentage);
+
+  if (sessionIsError || itemsIsError) {
+    return (
+      <div className="max-w-3xl mx-auto py-32 text-center space-y-6">
+        <AlertCircle size={64} className="mx-auto text-semantic-error" />
+        <div className="space-y-3">
+          <h1 className="text-3xl font-semibold text-white">결과를 불러오지 못했습니다</h1>
+          <p className="text-base text-content-secondary leading-relaxed">
+            잠시 후 다시 시도해 주세요.
+          </p>
+        </div>
+        <button
+          onClick={() => window.location.reload()}
+          className="inline-flex items-center justify-center bg-surface-raised text-white border border-white/[0.1] px-6 h-12 rounded-xl text-sm font-semibold"
+        >
+          다시 불러오기
+        </button>
+      </div>
+    );
+  }
 
   if (sessionLoading || itemsLoading || !session) {
     return <LoadingSpinner message="결과를 분석하고 있습니다" />;

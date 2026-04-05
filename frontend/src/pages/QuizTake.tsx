@@ -416,7 +416,7 @@ export default function QuizTake() {
                     <button
                       key={key}
                       onClick={() => handleOptionSelect(key)}
-                      disabled={isSubmitted && !isExamMode}
+                      disabled={(isSubmitted && !isExamMode) || isCompleted}
                       className={`relative group flex items-start gap-4 p-5 rounded-2xl text-left transition-all border ${
                         isSelected 
                           ? 'bg-brand-500/15 text-brand-200 border-brand-500/30 ring-1 ring-inset ring-brand-500/30 shadow-sm shadow-brand-900/20' 
@@ -441,7 +441,7 @@ export default function QuizTake() {
                 <textarea
                   value={userAnswer}
                   onChange={(e) => setUserAnswer(e.target.value)}
-                  disabled={isSubmitted && !isExamMode}
+                  disabled={(isSubmitted && !isExamMode) || isCompleted}
                   placeholder="답변을 입력하세요..."
                   className="w-full bg-surface border border-white/[0.05] rounded-2xl text-base px-6 py-6 placeholder:text-content-muted focus:ring-2 focus:ring-brand-500 transition-shadow min-h-[200px] resize-y"
                 />
@@ -490,7 +490,7 @@ export default function QuizTake() {
         </div>
 
         <div className="w-full sm:w-auto">
-          {!isSubmitted || isExamMode ? (
+          {(!isSubmitted || isExamMode) && !isCompleted ? (
             <button
               onClick={() => {
                 if (isExamMode) {

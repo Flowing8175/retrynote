@@ -41,18 +41,22 @@ async def list_wrong_notes(
         )
     )
 
-    if judgement:
-        query = query.where(AnswerLog.judgement.in_([Judgement(j) for j in judgement]))
+    try:
+        judgement_enums = [Judgement(j) for j in judgement] if judgement else None
+        error_type_enums = [ErrorType(e) for e in error_type] if error_type else None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    if judgement_enums:
+        query = query.where(AnswerLog.judgement.in_(judgement_enums))
     else:
         query = query.where(
             AnswerLog.judgement.in_(
                 [Judgement.incorrect, Judgement.partial, Judgement.skipped]
             )
         )
-    if error_type:
-        query = query.where(
-            AnswerLog.error_type.in_([ErrorType(e) for e in error_type])
-        )
+    if error_type_enums:
+        query = query.where(AnswerLog.error_type.in_(error_type_enums))
     if file_id:
         from app.models.quiz import QuizSessionFile
 
@@ -77,49 +81,51 @@ async def list_wrong_notes(
     rows = result.all()
 
     items = []
-    for answer_log, quiz_item, quiz_session in rows:
-        file_id_val = None
-        filename = None
+    if rows:
+        session_ids = {qs.id for _, _, qs in rows}
         from app.models.quiz import QuizSessionFile
 
         sf_result = await db.execute(
-            select(QuizSessionFile)
-            .where(QuizSessionFile.quiz_session_id == quiz_session.id)
-            .limit(1)
+            select(QuizSessionFile, File)
+            .join(File, File.id == QuizSessionFile.file_id)
+            .where(QuizSessionFile.quiz_session_id.in_(session_ids))
         )
-        sf = sf_result.scalar_one_or_none()
-        if sf:
-            file_id_val = sf.file_id
-            f_result = await db.execute(select(File).where(File.id == sf.file_id))
-            f = f_result.scalar_one_or_none()
-            filename = f.original_filename if f else None
+        session_file_map: dict[str, tuple[str, str | None]] = {}
+        for sf, f in sf_result.all():
+            if sf.quiz_session_id not in session_file_map:
+                session_file_map[sf.quiz_session_id] = (
+                    sf.file_id,
+                    f.original_filename if f else None,
+                )
 
-        items.append(
-            WrongNoteItem(
-                id=answer_log.id,
-                question_text=quiz_item.question_text,
-                question_type=quiz_item.question_type.value,
-                options=quiz_item.options_json,
-                correct_answer=quiz_item.correct_answer_json,
-                user_answer_raw=answer_log.user_answer_raw,
-                user_answer_normalized=answer_log.user_answer_normalized,
-                judgement=answer_log.judgement.value,
-                score_awarded=answer_log.score_awarded,
-                max_score=answer_log.max_score,
-                explanation=quiz_item.explanation_text,
-                concept_key=quiz_item.concept_key,
-                concept_label=quiz_item.concept_label,
-                category_tag=quiz_item.category_tag,
-                error_type=answer_log.error_type.value
-                if answer_log.error_type
-                else None,
-                missing_points=answer_log.missing_points_json,
-                graded_at=answer_log.graded_at,
-                file_id=file_id_val,
-                original_filename=filename,
-                created_at=answer_log.created_at,
+        for answer_log, quiz_item, quiz_session in rows:
+            file_id_val, filename = session_file_map.get(quiz_session.id, (None, None))
+            items.append(
+                WrongNoteItem(
+                    id=answer_log.id,
+                    question_text=quiz_item.question_text,
+                    question_type=quiz_item.question_type.value,
+                    options=quiz_item.options_json,
+                    correct_answer=quiz_item.correct_answer_json,
+                    user_answer_raw=answer_log.user_answer_raw,
+                    user_answer_normalized=answer_log.user_answer_normalized,
+                    judgement=answer_log.judgement.value,
+                    score_awarded=answer_log.score_awarded,
+                    max_score=answer_log.max_score,
+                    explanation=quiz_item.explanation_text,
+                    concept_key=quiz_item.concept_key,
+                    concept_label=quiz_item.concept_label,
+                    category_tag=quiz_item.category_tag,
+                    error_type=answer_log.error_type.value
+                    if answer_log.error_type
+                    else None,
+                    missing_points=answer_log.missing_points_json,
+                    graded_at=answer_log.graded_at,
+                    file_id=file_id_val,
+                    original_filename=filename,
+                    created_at=answer_log.created_at,
+                )
             )
-        )
 
     return WrongNoteListResponse(items=items, total=total, page=page, size=size)
 

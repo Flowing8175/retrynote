@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from datetime import datetime
 
+from app.models.quiz import ErrorType
 from app.schemas._normalizers import (
     normalize_correct_answer_payload,
     normalize_options_payload,
@@ -51,3 +52,12 @@ class WrongNoteListResponse(BaseModel):
 
 class WrongNoteErrorTypeUpdate(BaseModel):
     error_type: str = Field(max_length=100)
+
+    @field_validator("error_type")
+    @classmethod
+    def _validate_error_type(cls, v: str) -> str:
+        try:
+            ErrorType(v)
+        except ValueError:
+            raise ValueError(f"Invalid error_type '{v}'")
+        return v
