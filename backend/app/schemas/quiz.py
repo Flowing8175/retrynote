@@ -13,10 +13,49 @@ class QuizSessionCreate(BaseModel):
     difficulty: str | None = Field(default=None, max_length=50)
     question_types: list[str] = Field(default=[], max_length=10)
     generation_priority: str | None = Field(default=None, max_length=50)
-    preferred_model: Literal["gpt-4.1-mini", "gpt-5.4-mini", "gpt-4.1"] | None = None
+    preferred_model: str | None = Field(default=None, max_length=100)
     source_mode: Literal["document_based", "no_source"]
     topic: str | None = Field(default=None, max_length=200)
     idempotency_key: str | None = Field(default=None, max_length=255)
+
+    @field_validator("preferred_model")
+    @classmethod
+    def _validate_preferred_model(cls, value: str | None):
+        if value is None:
+            return value
+
+        from app.config import settings as cfg
+
+        allowed_models = {
+            model_name
+            for model_name in [
+                cfg.eco_generation_model,
+                cfg.balanced_generation_model,
+                cfg.performance_generation_model,
+            ]
+            if model_name
+        }
+
+        if not allowed_models:
+            allowed_models = {
+                cfg.openai_generation_model,
+                cfg.openai_fallback_generation_model,
+                cfg.gemini_generation_model,
+                cfg.gemini_fallback_generation_model,
+            } - {""}  # exclude unconfigured empty strings
+
+        if value not in allowed_models:
+            raise ValueError(
+                f"preferred_model must be one of the server-configured generation models: {', '.join(sorted(allowed_models))}"
+            )
+
+        return value
+
+
+class QuizConfigResponse(BaseModel):
+    default_generation_model: str
+    available_generation_models: list[str]
+    generation_model_options: list[dict[str, str | bool]]
 
 
 class QuizSessionResponse(BaseModel):

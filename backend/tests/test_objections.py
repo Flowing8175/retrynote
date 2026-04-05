@@ -71,7 +71,7 @@ class TestCreateObjection:
 
         # Submit objection
         resp = await auth_client.post(
-            f"/objections/quiz-sessions/{session.id}/items/{item.id}/objections",
+            f"/quiz-sessions/{session.id}/items/{item.id}/objections",
             json={
                 "answer_log_id": answer_log.id,
                 "objection_reason": "I believe my answer should be accepted.",
@@ -92,7 +92,7 @@ class TestCreateObjection:
         fake_answer_log_id = str(uuid.uuid4())
 
         resp = await auth_client.post(
-            f"/objections/quiz-sessions/{fake_session_id}/items/{fake_item_id}/objections",
+            f"/quiz-sessions/{fake_session_id}/items/{fake_item_id}/objections",
             json={
                 "answer_log_id": fake_answer_log_id,
                 "objection_reason": "Test reason",
@@ -158,7 +158,7 @@ class TestCreateObjection:
         # Test user tries to object to other user's session
         token = create_access_token(test_user.id, test_user.role.value)
         resp = await client.post(
-            f"/objections/quiz-sessions/{session.id}/items/{item.id}/objections",
+            f"/quiz-sessions/{session.id}/items/{item.id}/objections",
             json={
                 "answer_log_id": answer_log.id,
                 "objection_reason": "Test",
@@ -196,7 +196,7 @@ class TestCreateObjection:
 
         fake_answer_log_id = str(uuid.uuid4())
         resp = await auth_client.post(
-            f"/objections/quiz-sessions/{session.id}/items/{item.id}/objections",
+            f"/quiz-sessions/{session.id}/items/{item.id}/objections",
             json={
                 "answer_log_id": fake_answer_log_id,
                 "objection_reason": "Test",
@@ -249,7 +249,7 @@ class TestCreateObjection:
 
         # First objection
         resp1 = await auth_client.post(
-            f"/objections/quiz-sessions/{session.id}/items/{item.id}/objections",
+            f"/quiz-sessions/{session.id}/items/{item.id}/objections",
             json={
                 "answer_log_id": answer_log.id,
                 "objection_reason": "First objection",
@@ -259,7 +259,7 @@ class TestCreateObjection:
 
         # Second objection for same answer_log
         resp2 = await auth_client.post(
-            f"/objections/quiz-sessions/{session.id}/items/{item.id}/objections",
+            f"/quiz-sessions/{session.id}/items/{item.id}/objections",
             json={
                 "answer_log_id": answer_log.id,
                 "objection_reason": "Second objection",
@@ -273,7 +273,7 @@ class TestCreateObjection:
         fake_answer_log_id = str(uuid.uuid4())
 
         resp = await client.post(
-            f"/objections/quiz-sessions/{fake_session_id}/items/{fake_item_id}/objections",
+            f"/quiz-sessions/{fake_session_id}/items/{fake_item_id}/objections",
             json={
                 "answer_log_id": fake_answer_log_id,
                 "objection_reason": "Test",
@@ -325,7 +325,7 @@ class TestCreateObjection:
         await db_session.commit()
 
         resp = await auth_client.post(
-            f"/objections/quiz-sessions/{session.id}/items/{item.id}/objections",
+            f"/quiz-sessions/{session.id}/items/{item.id}/objections",
             json={
                 "answer_log_id": answer_log.id,
                 "objection_reason": "Test",
