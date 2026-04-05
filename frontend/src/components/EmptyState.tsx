@@ -10,8 +10,8 @@ interface EmptyStateProps {
 
 export default function EmptyState({ icon, eyebrow, title, message, actions }: EmptyStateProps) {
   return (
-    <div className="py-20 flex flex-col items-center justify-center text-center rounded-3xl border border-white/[0.05] bg-surface/30">
-      <div className="max-w-md px-6 space-y-6">
+    <div className="py-12 flex flex-col items-center justify-center text-center rounded-3xl border border-white/[0.05] bg-surface/30">
+      <div className="max-w-sm mx-auto px-6 space-y-6">
         {icon && (
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-300">
             {icon}

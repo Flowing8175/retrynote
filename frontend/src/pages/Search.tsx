@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import { Search as SearchIcon } from 'lucide-react';
 import { searchApi } from '@/api';
 import { EmptyState, LoadingSpinner } from '@/components';
 import type { SearchResultItem } from '@/types/search';
@@ -83,6 +84,7 @@ export default function Search() {
         <LoadingSpinner message="검색 결과 정리 중" />
       ) : !hasQuery ? (
         <EmptyState
+          icon={<SearchIcon size={28} />}
           eyebrow="통합 검색"
           title="검색어를 입력하세요"
           message="개념명, 파일명, 문제 문장 등을 입력하면 자료·오답노트·퀴즈 기록을 한 번에 찾아줍니다."

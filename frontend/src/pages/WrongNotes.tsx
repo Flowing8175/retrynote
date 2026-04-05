@@ -173,7 +173,7 @@ export default function WrongNotes() {
               onClick={() => navigate('/quiz/new')}
               className="bg-brand-500 text-brand-900 rounded-2xl px-6 py-3 text-sm font-semibold transition-transform hover:-translate-y-0.5"
             >
-              새 퀴즈 시작하기
+              퀴즈 풀고 오답 모으기
             </button>
           }
         />

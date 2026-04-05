@@ -336,8 +336,24 @@ export default function Files() {
             </div>
 
             {files.length === 0 ? (
-              <div className="py-16 text-center bg-surface border border-white/[0.05] rounded-3xl">
-                <p className="text-sm text-content-muted">조건에 맞는 자료가 없습니다.</p>
+              <div className="py-12 flex flex-col items-center gap-4 text-center bg-surface border border-white/[0.05] rounded-3xl">
+                <p className="text-sm text-content-secondary">조건에 맞는 자료가 없습니다.</p>
+                {statusFilter || selectedFolderId ? (
+                  <button
+                    onClick={() => { setStatusFilter(''); setSelectedFolderId(null); }}
+                    className="text-xs font-medium text-brand-300 hover:text-white transition-colors underline underline-offset-2"
+                  >
+                    필터 초기화
+                  </button>
+                ) : (
+                  <label
+                    htmlFor="file-upload"
+                    className="inline-flex items-center gap-2 bg-brand-500 text-brand-900 rounded-xl px-5 py-2.5 text-sm font-semibold cursor-pointer hover:-translate-y-0.5 transition-transform"
+                  >
+                    <Upload size={14} />
+                    첫 자료 업로드하기
+                  </label>
+                )}
               </div>
             ) : (
               <div className="space-y-3">
