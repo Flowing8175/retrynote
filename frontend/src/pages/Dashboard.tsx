@@ -5,6 +5,76 @@ import { dashboardApi } from '@/api';
 import type { DashboardResponse, RetryLocationState } from '@/types';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-20 py-8 animate-pulse" aria-hidden="true">
+      {/* Hero Section */}
+      <section className="grid gap-12 lg:grid-cols-[1fr_300px] items-start">
+        <div className="space-y-10">
+          {/* Range picker */}
+          <div className="skeleton h-8 w-48 rounded-md" />
+          {/* Headline */}
+          <div className="space-y-3">
+            <div className="skeleton h-10 w-64 rounded-md" />
+            <div className="skeleton h-5 w-96 max-w-full rounded-md" />
+          </div>
+          {/* Metrics */}
+          <div className="flex items-start gap-8 pt-2">
+            <div className="space-y-2">
+              <div className="skeleton h-12 w-20 rounded-md" />
+              <div className="skeleton h-3 w-16 rounded-md" />
+            </div>
+            <div className="w-px self-stretch bg-white/[0.08]" />
+            <div className="space-y-2">
+              <div className="skeleton h-12 w-24 rounded-md" />
+              <div className="skeleton h-3 w-12 rounded-md" />
+            </div>
+            <div className="w-px self-stretch bg-white/[0.08]" />
+            <div className="space-y-2">
+              <div className="skeleton h-12 w-24 rounded-md" />
+              <div className="skeleton h-3 w-12 rounded-md" />
+            </div>
+          </div>
+        </div>
+        {/* Primary action card */}
+        <div className="bg-surface-deep border border-white/[0.05] rounded-xl p-7 space-y-4">
+          <div className="skeleton h-3 w-24 rounded-md" />
+          <div className="skeleton h-6 w-40 rounded-md" />
+          <div className="skeleton h-4 w-full rounded-md" />
+          <div className="skeleton h-4 w-3/4 rounded-md" />
+          <div className="skeleton h-12 w-full rounded-lg mt-4" />
+        </div>
+      </section>
+
+      {/* Two-column content */}
+      <div className="grid gap-12 lg:grid-cols-[1fr_1fr]">
+        <section className="space-y-1">
+          <div className="skeleton h-3 w-32 mb-4 rounded-md" />
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center justify-between py-4 border-b border-white/[0.05]">
+              <div className="space-y-1.5">
+                <div className="skeleton h-4 w-48 rounded-md" />
+                <div className="skeleton h-3 w-32 rounded-md" />
+              </div>
+              <div className="skeleton h-3 w-16 rounded-md" />
+            </div>
+          ))}
+        </section>
+        <section className="space-y-1">
+          <div className="skeleton h-3 w-32 mb-4 rounded-md" />
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="py-4 border-b border-white/[0.05]">
+              <div className="skeleton h-3 w-24 mb-2 rounded-md" />
+              <div className="skeleton h-4 w-full mb-1 rounded-md" />
+              <div className="skeleton h-3 w-28 rounded-md" />
+            </div>
+          ))}
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function formatPercent(value: number) {
   return `${(value * 100).toFixed(1)}%`;
 }
@@ -99,7 +169,7 @@ export default function Dashboard() {
   });
 
   if (isLoading) {
-    return <LoadingSpinner message="학습 데이터를 불러오는 중입니다" />;
+    return <DashboardSkeleton />;
   }
 
   if (isError || !dashboardData) {
