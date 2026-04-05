@@ -3,6 +3,8 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuthStore } from '@/stores';
 import { authApi } from '@/api';
 
+const INPUT_CLASS = "w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-secondary transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none";
+
 export default function Login() {
   const navigate = useNavigate();
   const { setUser, setTokens } = useAuthStore();
@@ -77,10 +79,10 @@ export default function Login() {
                   name="usernameOrEmail"
                   type="text"
                   required
-                  placeholder="사용자명 또는 이메일"
+                  placeholder="student@school.edu 또는 사용자명"
                   value={usernameOrEmail}
                   onChange={(e) => setUsernameOrEmail(e.target.value)}
-                  className="w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-muted/50 transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none"
+                  className={INPUT_CLASS}
                 />
               </div>
 
@@ -93,10 +95,10 @@ export default function Login() {
                   name="password"
                   type="password"
                   required
-                  placeholder="비밀번호"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-muted/50 transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none"
+                  className={INPUT_CLASS}
                 />
               </div>
 

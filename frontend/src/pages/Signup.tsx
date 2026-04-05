@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authApi } from '@/api';
 
+const INPUT_CLASS = "w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-secondary transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none";
+
 export default function Signup() {
   const navigate = useNavigate();
   const [username, setUsername] = useState('');
@@ -9,6 +11,7 @@ export default function Signup() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isPasswordFocused, setIsPasswordFocused] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,10 +66,10 @@ export default function Signup() {
                   name="username"
                   type="text"
                   required
-                  placeholder="사용자명"
+                  placeholder="영문, 숫자 조합"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-muted/50 transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none"
+                  className={INPUT_CLASS}
                 />
               </div>
 
@@ -79,10 +82,10 @@ export default function Signup() {
                   name="email"
                   type="email"
                   required
-                  placeholder="이메일"
+                  placeholder="student@school.edu"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-muted/50 transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none"
+                  className={INPUT_CLASS}
                 />
               </div>
 
@@ -95,11 +98,18 @@ export default function Signup() {
                   name="password"
                   type="password"
                   required
-                  placeholder="비밀번호"
+                  placeholder="영문+숫자 조합, 8자 이상"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-muted/50 transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none"
+                  onFocus={() => setIsPasswordFocused(true)}
+                  onBlur={() => setIsPasswordFocused(false)}
+                  className={INPUT_CLASS}
                 />
+                {isPasswordFocused && (
+                  <p className="text-xs mt-0.5" style={{ color: '#A0AEC0' }}>
+                    영문 + 숫자 조합, 8자 이상
+                  </p>
+                )}
               </div>
 
               <button
