@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { retryApi, wrongNotesApi } from '@/api';
@@ -25,30 +25,63 @@ export default function Retry() {
   const selectedConceptLabels = hasSelectedConcepts ? locationState!.conceptLabels : {};
   const selectedCount = hasSelectedConcepts ? locationState!.selectedCount : 0;
 
-  const [conceptMode, setConceptMode] = useState<'manual' | 'ai'>('manual');
+  const [conceptMode, setConceptMode] = useState<'manual' | 'ai'>('ai');
   const [questionCount, setQuestionCount] = useState(5);
   const [autoCount, setAutoCount] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedManualConceptKey, setSelectedManualConceptKey] = useState('');
 
   const { data: wrongNotesData } = useQuery({
-    queryKey: ['wrongNotes-count'],
-    queryFn: () => wrongNotesApi.listWrongNotes('date', undefined, undefined, undefined, undefined, 1),
+    queryKey: ['wrongNotes-manual-options'],
+    queryFn: () => wrongNotesApi.listWrongNotes('concept', undefined, undefined, undefined, undefined, 1, 100),
   });
 
   const wrongNotesTotal = wrongNotesData?.total;
+  const manualConceptOptions = useMemo(() => {
+    if (hasSelectedConcepts) {
+      return selectedConceptKeys.map((key) => ({
+        key,
+        label: selectedConceptLabels[key] || key,
+      }));
+    }
+
+    const conceptMap = new Map<string, string>();
+
+    for (const item of wrongNotesData?.items ?? []) {
+      if (!item.concept_key) continue;
+      conceptMap.set(item.concept_key, item.concept_label || item.concept_key);
+    }
+
+    return Array.from(conceptMap.entries()).map(([key, label]) => ({ key, label }));
+  }, [hasSelectedConcepts, selectedConceptKeys, selectedConceptLabels, wrongNotesData?.items]);
+
+  useEffect(() => {
+    if (manualConceptOptions.length === 0) {
+      if (selectedManualConceptKey !== '') {
+        setSelectedManualConceptKey('');
+      }
+      return;
+    }
+
+    const hasSelectedOption = manualConceptOptions.some(({ key }) => key === selectedManualConceptKey);
+
+    if (!hasSelectedOption) {
+      setSelectedManualConceptKey(manualConceptOptions[0].key);
+    }
+  }, [manualConceptOptions, selectedManualConceptKey]);
 
   const createRetryMutation = useMutation({
     mutationFn: () => {
       const source =
         conceptMode === 'ai'
           ? 'dashboard_recommendation'
-          : hasSelectedConcepts
+          : selectedManualConceptKey
             ? 'concept_manual'
             : 'wrong_notes';
 
       return retryApi.createRetrySet({
         source,
-        concept_keys: conceptMode === 'manual' && hasSelectedConcepts ? selectedConceptKeys : null,
+        concept_keys: conceptMode === 'manual' && selectedManualConceptKey ? [selectedManualConceptKey] : null,
         size: autoCount ? null : Math.max(1, Math.min(questionCount, 20)),
       });
     },
@@ -109,28 +142,42 @@ export default function Retry() {
 
             <div className="mt-6">
               {conceptMode === 'manual' ? (
-                hasSelectedConcepts ? (
-                  <div>
-                    <p className="text-sm font-medium text-content-secondary">선택된 오답노트</p>
-                    <p className="mt-1 text-3xl font-bold tracking-tight text-content-primary">
-                      {selectedCount}건
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      {selectedConceptKeys.map((key) => (
-                        <span
-                          key={key}
-                          className="rounded-full border border-brand-500/20 bg-brand-500/10 px-4 py-1.5 text-sm font-medium text-brand-300"
-                        >
-                          {selectedConceptLabels[key] || key}
-                        </span>
-                      ))}
+                manualConceptOptions.length > 0 ? (
+                  <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-content-primary">키워드 선택</p>
+                        <p className="mt-2 text-sm leading-6 text-content-secondary">
+                          {hasSelectedConcepts
+                            ? `${selectedCount}건의 선택된 오답노트에서 재도전할 개념을 골라 주세요.`
+                            : '오답노트에서 재도전할 개념 키워드를 직접 선택할 수 있습니다.'}
+                        </p>
+                      </div>
+                      {hasSelectedConcepts ? (
+                        <p className="text-xs font-medium text-content-muted">선택된 오답노트 {selectedCount}건</p>
+                      ) : null}
+                    </div>
+                    <div className="mt-4 max-w-xs">
+                      <select
+                        value={selectedManualConceptKey}
+                        onChange={(e) => setSelectedManualConceptKey(e.target.value)}
+                        className="w-full rounded-xl border border-white/[0.05] bg-surface px-4 py-2.5 text-sm font-medium text-content-primary focus:ring-2 focus:ring-brand-500 focus:outline-none"
+                      >
+                        {manualConceptOptions.map((option) => (
+                          <option key={option.key} value={option.key}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    <p className="text-sm font-medium text-content-secondary">오답노트 전체 기준</p>
-                    <p className="mt-1 text-3xl font-bold tracking-tight text-content-primary">
-                      {wrongNotesTotal !== undefined ? `${wrongNotesTotal}건` : '—'}
+                  <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
+                    <p className="text-sm font-medium text-content-primary">선택 가능한 개념이 없습니다</p>
+                    <p className="mt-2 text-sm leading-6 text-content-secondary">
+                      {wrongNotesTotal !== undefined && wrongNotesTotal > 0
+                        ? '개념 정보가 있는 오답노트를 찾지 못했습니다.'
+                        : '오답노트를 먼저 만든 뒤 내가 고른 개념으로 재도전할 수 있습니다.'}
                     </p>
                   </div>
                 )
