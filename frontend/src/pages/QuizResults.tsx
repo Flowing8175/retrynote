@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { StatusBadge, LoadingSpinner } from '@/components';
-import { ChevronRight, AlertCircle } from 'lucide-react';
+import { ChevronRight, AlertCircle, Flame } from 'lucide-react';
 
 function formatMode(mode: string) {
   return mode === 'exam' ? '시험 모드' : '일반 모드';
@@ -130,6 +130,12 @@ export default function QuizResults() {
             </p>
           </div>
 
+          {/* Effort badge — always shown regardless of score */}
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm">
+            <Flame size={16} className="shrink-0" />
+            <span>오늘도 공부했어요! 꾸준함이 실력이 됩니다.</span>
+          </div>
+
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto pt-4">
             <Link
               to={tier.primaryAction.to}
@@ -194,14 +200,18 @@ export default function QuizResults() {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
                         <div className="text-xs font-medium text-content-muted">제출한 답안</div>
-                        <div className={`p-4 rounded-xl text-sm font-medium border ${isCorrect ? 'bg-brand-500/5 border-brand-500/30 text-brand-300' : 'bg-surface-deep border-white/[0.05] text-white'}`}>
+                        <div className={`p-4 rounded-xl text-sm font-medium border ${
+                          isCorrect
+                            ? 'bg-brand-500/10 border-brand-500/30 text-brand-300'
+                            : 'bg-semantic-error/10 border-semantic-error/30 text-semantic-error'
+                        }`}>
                           {log?.user_answer || '미응답'}
                         </div>
                       </div>
                       {!isCorrect && (
                         <div className="space-y-2">
                           <div className="text-xs font-medium text-brand-300">정답</div>
-                          <div className="p-4 bg-brand-500 text-brand-900 rounded-xl text-sm font-medium">
+                          <div className="p-4 bg-brand-500/15 border border-brand-500/40 text-brand-200 rounded-xl text-sm font-medium">
                             {String(item.correct_answer?.answer || '알 수 없음')}
                           </div>
                         </div>
