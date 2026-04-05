@@ -28,7 +28,7 @@ const tabs: { key: TabKey; label: string; helper: string }[] = [
 
 export default function Admin() {
   const queryClient = useQueryClient();
-  const { setImpersonation, endImpersonation: storeEndImpersonation } = useAuthStore();
+  const { setImpersonation, endImpersonation: storeEndImpersonation, setAdminToken } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<TabKey>('users');
   const [masterPassword, setMasterPassword] = useState('');
@@ -87,7 +87,12 @@ export default function Admin() {
 
   const verifyMutation = useMutation({
     mutationFn: () => adminApi.verifyMasterPassword({ master_password: masterPassword }),
-    onSuccess: () => setIsVerified(true),
+    onSuccess: (data) => {
+      if (data.admin_token) {
+        setAdminToken(data.admin_token);
+      }
+      setIsVerified(true);
+    },
   });
 
   const createAnnouncementMutation = useMutation({

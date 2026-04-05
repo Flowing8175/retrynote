@@ -56,11 +56,6 @@ def create_refresh_token(user_id: str, role: str, jti: str | None = None) -> str
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
     )
-    return jwt.encode(
-        {"sub": user_id, "role": role, "exp": expire, "type": "refresh"},
-        settings.jwt_secret_key,
-        algorithm=settings.jwt_algorithm,
-    )
 
 
 def create_admin_token(user_id: str) -> str:
