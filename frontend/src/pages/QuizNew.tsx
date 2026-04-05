@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide-react';
@@ -107,6 +107,7 @@ export default function QuizNew() {
   const [topic, setTopic] = useState('');
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const { data: quizConfig } = useQuery({
     queryKey: ['quiz-config'],
@@ -151,21 +152,33 @@ export default function QuizNew() {
   const allFiles = Array.isArray(filesData?.files) ? filesData.files : [];
 
   const createQuizMutation = useMutation({
-    mutationFn: () =>
-      quizApi.createQuizSession({
-        mode,
-        selected_file_ids: sourceMode === 'document_based' ? selectedFileIds : [],
-        manual_text: null,
-        question_count: autoCount ? null : Math.max(1, Math.min(questionCount, 20)),
-        difficulty: difficulty || null,
-        question_types: selectedQuestionTypes,
-        generation_priority: null,
-        preferred_model: activeModel,
-        source_mode: sourceMode,
-        topic: sourceMode === 'no_source' ? (topic.trim() || null) : null,
-        idempotency_key: crypto.randomUUID(),
-      }),
+    mutationFn: () => {
+      abortControllerRef.current = new AbortController();
+      return quizApi.createQuizSession(
+        {
+          mode,
+          selected_file_ids: sourceMode === 'document_based' ? selectedFileIds : [],
+          manual_text: null,
+          question_count: autoCount ? null : Math.max(1, Math.min(questionCount, 20)),
+          difficulty: difficulty || null,
+          question_types: selectedQuestionTypes,
+          generation_priority: null,
+          preferred_model: activeModel,
+          source_mode: sourceMode,
+          topic: sourceMode === 'no_source' ? (topic.trim() || null) : null,
+          idempotency_key: crypto.randomUUID(),
+        },
+        abortControllerRef.current.signal
+      );
+    },
   });
+
+  const handleCancelGeneration = () => {
+    abortControllerRef.current?.abort();
+    createQuizMutation.reset();
+    resetNoSourceModal();
+    setFormMessage(null);
+  };
 
   const fileGroups = useMemo(() => {
     const visibleFiles = allFiles.filter(
@@ -571,12 +584,23 @@ export default function QuizNew() {
         )}
 
         <div className="flex flex-col sm:flex-row items-center gap-4 justify-end">
-          <button
-            onClick={() => navigate('/')}
-            className="text-sm font-medium text-content-secondary hover:text-white px-6 py-4 transition-colors"
-          >
-            취소
-          </button>
+          {createQuizMutation.isPending ? (
+            <button
+              type="button"
+              onClick={handleCancelGeneration}
+              className="text-sm font-medium underline underline-offset-2 transition-colors px-6 py-4"
+              style={{ color: '#A0AEC0' }}
+            >
+              취소하고 돌아가기
+            </button>
+          ) : (
+            <button
+              onClick={() => navigate('/')}
+              className="text-sm font-medium text-content-secondary hover:text-white px-6 py-4 transition-colors"
+            >
+              취소
+            </button>
+          )}
           
           <button
             onClick={handleSubmit}
@@ -626,15 +650,14 @@ export default function QuizNew() {
             <button
               onClick={() => {
                 if (createQuizMutation.isPending) {
+                  handleCancelGeneration();
                   return;
                 }
-
                 resetNoSourceModal();
               }}
-              disabled={createQuizMutation.isPending}
-              className="flex-1 py-3 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 py-3 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover transition-colors"
             >
-              취소
+              {createQuizMutation.isPending ? '취소하고 돌아가기' : '취소'}
             </button>
             <button
               onClick={handleConfirmNoSource}

@@ -16,8 +16,8 @@ import type {
 } from '@/types';
 
 export const quizApi = {
-  createQuizSession: async (data: QuizSessionCreate): Promise<QuizSessionResponse> => {
-    const response = await apiClient.post<QuizSessionResponse>('/quiz-sessions', data);
+  createQuizSession: async (data: QuizSessionCreate, signal?: AbortSignal): Promise<QuizSessionResponse> => {
+    const response = await apiClient.post<QuizSessionResponse>('/quiz-sessions', data, { signal });
     return response.data;
   },
 
