@@ -26,13 +26,13 @@ export default function LoadingSpinner({ message }: LoadingSpinnerProps) {
 
   return (
     <div className="flex flex-col items-center justify-center py-14 text-center" role="status" aria-live="polite">
-      <div className="relative h-16 w-16">
+      <div className="relative h-16 w-16" style={{ filter: 'drop-shadow(0 0 6px rgba(0, 193, 154, 0.4))' }}>
         <div className="absolute inset-0 rounded-full border-4 border-white/[0.08]"></div>
         <div className="absolute inset-0 animate-spin rounded-full border-4 border-brand-500 border-t-transparent"></div>
         <div className="absolute inset-[0.9rem] rounded-full bg-surface"></div>
       </div>
       <div className="mt-5 text-center">
-        <p className="text-lg font-semibold text-content-primary">
+        <p className="text-lg font-semibold" style={{ color: '#A0AEC0' }}>
           {message || loadingPhrases[currentPhrase]}
         </p>
       </div>
