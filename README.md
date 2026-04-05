@@ -117,12 +117,22 @@ docker run -d -p 6379:6379 redis:7-alpine
 | `REFRESH_TOKEN_EXPIRE_DAYS` | Refresh Token 만료 시간 (일) | `7` |
 | `ADMIN_SESSION_EXPIRE_MINUTES` | 관리자 세션 만료 시간 (분) | `30` |
 | `ADMIN_MASTER_PASSWORD` | 관리자 마스터 비밀번호 (최초 사용 시 해시되어 DB에 저장) | |
-| **AI** | | |
+| **AI — OpenAI** | | |
 | `OPENAI_API_KEY` | OpenAI API Key | (필수) |
-| `OPENAI_GENERATION_MODEL` | 문제 생성 모델 | `gpt-4o` |
+| `OPENAI_GENERATION_MODEL` | 문제 생성 기본 모델 | `gpt-4o` |
 | `OPENAI_GRADING_MODEL` | 채점 모델 | `gpt-4o-mini` |
 | `OPENAI_FALLBACK_GENERATION_MODEL` | 문제 생성 fallback 모델 | `gpt-4o-mini` |
 | `OPENAI_FALLBACK_GRADING_MODEL` | 채점 fallback 모델 | `gpt-3.5-turbo` |
+| **AI — Gemini** | | |
+| `GEMINI_API_KEY` | Gemini API Key (선택) | |
+| `GEMINI_GENERATION_MODEL` | Gemini 문제 생성 기본 모델 | `gemini-2.0-flash` |
+| `GEMINI_GRADING_MODEL` | Gemini 채점 모델 | `gemini-2.0-flash` |
+| `GEMINI_FALLBACK_GENERATION_MODEL` | Gemini 문제 생성 fallback 모델 | `gemini-1.5-flash` |
+| `GEMINI_FALLBACK_GRADING_MODEL` | Gemini 채점 fallback 모델 | `gemini-1.5-flash` |
+| **AI — 모델 티어 (공통)** | | |
+| `ECO_GENERATION_MODEL` | 절약형 티어 모델 (OpenAI 또는 Gemini 모델명 지정) | `gpt-4o-mini` |
+| `BALANCED_GENERATION_MODEL` | 균형형 티어 모델 (OpenAI 또는 Gemini 모델명 지정) | `gpt-4o` |
+| `PERFORMANCE_GENERATION_MODEL` | 고성능 티어 모델 (OpenAI 또는 Gemini 모델명 지정) | `gpt-4.1` |
 | **File Storage** | | |
 | `UPLOAD_DIR` | 파일 업로드 경로 | `./storage/uploads` |
 | `MAX_UPLOAD_SIZE_MB` | 최대 업로드 크기 (MB) | `100` |

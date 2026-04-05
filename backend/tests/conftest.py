@@ -459,7 +459,6 @@ async def mock_dispatch_task():
         patch("app.workers.celery_app.dispatch_task", mock),
         patch("app.api.files.dispatch_task", mock),
         patch("app.api.quiz.dispatch_task", mock),
-        patch("app.api.objections.dispatch_task", mock),
         patch("app.api.retry.dispatch_task", mock),
         patch("app.api.admin.dispatch_task", mock),
     ):

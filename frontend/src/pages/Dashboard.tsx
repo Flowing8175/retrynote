@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { dashboardApi } from '@/api';
-import type { DashboardResponse } from '@/types';
+import type { DashboardResponse, RetryLocationState } from '@/types';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 function formatPercent(value: number) {
@@ -103,6 +103,11 @@ export default function Dashboard() {
   const weakConcepts = dashboardData.weak_concepts.slice(0, 5);
   const primaryAction = getPrimaryAction(dashboardData);
   const rangeLabel = range === '7d' ? '최근 7일' : range === '30d' ? '최근 30일' : '전체 기간';
+
+  const allRetryState: RetryLocationState = {
+    conceptKeys: dashboardData.retry_recommendations.map((r) => r.concept_key),
+    conceptLabels: Object.fromEntries(dashboardData.retry_recommendations.map((r) => [r.concept_key, r.concept_label])),
+  };
 
   if (!hasData) {
     return (
@@ -206,6 +211,7 @@ export default function Dashboard() {
           </p>
           <Link
             to={primaryAction.to}
+            state={primaryAction.to === '/retry' ? allRetryState : undefined}
             className="w-full inline-flex items-center justify-center bg-brand-500 text-brand-900 rounded-2xl px-6 py-4 text-sm font-semibold transition-transform hover:-translate-y-0.5"
           >
             {primaryAction.buttonLabel}
@@ -219,7 +225,7 @@ export default function Dashboard() {
         <section className="space-y-6">
           <div className="flex items-center justify-between border-b border-white/[0.05] pb-4">
             <h2 className="text-2xl font-semibold text-content-primary">복습이 필요한 개념</h2>
-            <Link to="/retry" className="text-sm font-medium text-brand-300 hover:text-brand-400">
+            <Link to="/retry" state={allRetryState} className="text-sm font-medium text-brand-300 hover:text-brand-400">
               전체 보기
             </Link>
           </div>
@@ -251,6 +257,7 @@ export default function Dashboard() {
                     </div>
                     <Link
                       to="/retry"
+                      state={{ conceptKeys: [concept.concept_key], conceptLabels: { [concept.concept_key]: concept.concept_label } } satisfies RetryLocationState}
                       className="shrink-0 inline-flex items-center justify-center bg-surface-deep border border-white/[0.05] rounded-xl px-4 py-2 text-sm font-medium text-white hover:bg-white/5 transition-colors"
                     >
                       복습하기

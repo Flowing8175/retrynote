@@ -2,14 +2,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { retryApi, wrongNotesApi } from '@/api';
+import type { RetryLocationState } from '@/types';
 
 const QUESTION_COUNT_PRESETS = [5, 10, 15];
-
-interface RetryLocationState {
-  conceptKeys: string[];
-  conceptLabels: Record<string, string>;
-  selectedCount: number;
-}
 
 export default function Retry() {
   const navigate = useNavigate();
@@ -23,7 +18,7 @@ export default function Retry() {
 
   const selectedConceptKeys = hasSelectedConcepts ? locationState!.conceptKeys : [];
   const selectedConceptLabels = hasSelectedConcepts ? locationState!.conceptLabels : {};
-  const selectedCount = hasSelectedConcepts ? locationState!.selectedCount : 0;
+  const selectedCount = selectedConceptKeys.length;
 
   const [conceptMode, setConceptMode] = useState<'manual' | 'ai'>('ai');
   const [questionCount, setQuestionCount] = useState(5);

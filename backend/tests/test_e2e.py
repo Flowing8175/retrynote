@@ -510,7 +510,7 @@ class TestE2EScenario4ObjectionFlow:
 
         # Step 1: Submit objection
         obj_resp = await client.post(
-            f"/objections/quiz-sessions/{session.id}/items/{item.id}/objections",
+            f"/quiz-sessions/{session.id}/items/{item.id}/objections",
             json={
                 "answer_log_id": answer_log.id,
                 "objection_reason": "정답은 X가 맞습니다. 근거 자료를 확인해주세요.",

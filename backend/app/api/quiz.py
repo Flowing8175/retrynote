@@ -22,6 +22,7 @@ from app.models.file import File, FileStatus
 from app.models.search import Job, DraftAnswer
 from app.schemas.quiz import (
     QuizSessionCreate,
+    QuizConfigResponse,
     QuizSessionResponse,
     QuizSessionDetail,
     QuizSessionHistoryItem,
@@ -44,10 +45,71 @@ from app.services.quiz_service import _update_weak_point
 router = APIRouter()
 
 
-@router.get("/config")
+def _describe_generation_model(
+    tier: str, model_name: str, default_model_name: str
+) -> dict[str, str | bool]:
+    return {
+        "tier": tier,
+        "value": model_name,
+        "label": tier,
+        "is_default": model_name == default_model_name,
+    }
+
+
+@router.get("/config", response_model=QuizConfigResponse)
 async def get_quiz_config(user: User = Depends(get_current_user)):
     from app.config import settings as cfg
-    return {"default_generation_model": cfg.openai_generation_model}
+
+    # Determine the default: prefer BALANCED tier, fall back to provider defaults.
+    default_model = cfg.balanced_generation_model or cfg.openai_generation_model
+
+    configured_tiers = [
+        ("ECO", cfg.eco_generation_model),
+        ("BALANCED", cfg.balanced_generation_model),
+        ("PERFORMANCE", cfg.performance_generation_model),
+    ]
+
+    generation_model_options = [
+        _describe_generation_model(tier, model_name, default_model)
+        for tier, model_name in configured_tiers
+        if model_name
+    ]
+
+    if not generation_model_options:
+        # Fall back to raw provider defaults when no tiers are configured.
+        openai_fallback = cfg.openai_generation_model
+        generation_model_options = [
+            _describe_generation_model("BALANCED", openai_fallback, openai_fallback),
+            _describe_generation_model(
+                "ECO", cfg.openai_fallback_generation_model, openai_fallback
+            ),
+        ]
+        if cfg.gemini_generation_model:
+            generation_model_options.append(
+                _describe_generation_model(
+                    "BALANCED",
+                    cfg.gemini_generation_model,
+                    cfg.gemini_generation_model,
+                )
+            )
+
+    available_generation_models = [
+        option["value"] for option in generation_model_options
+    ]
+    default_generation_model = next(
+        (
+            option["value"]
+            for option in generation_model_options
+            if option["is_default"]
+        ),
+        default_model,
+    )
+
+    return {
+        "default_generation_model": default_generation_model,
+        "available_generation_models": available_generation_models,
+        "generation_model_options": generation_model_options,
+    }
 
 
 @router.get("", response_model=list[QuizSessionHistoryItem])
