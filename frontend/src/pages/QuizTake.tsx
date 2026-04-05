@@ -262,11 +262,30 @@ export default function QuizTake() {
   if (sessionData.status === 'draft' || sessionData.status === 'generating') {
     return (
       <div className="max-w-3xl mx-auto py-32 text-center space-y-8">
-        <PlayCircle size={64} className="mx-auto text-brand-300 animate-pulse" />
-        <h1 className="text-3xl font-semibold text-white">퀴즈 생성 중...</h1>
-        <p className="text-base text-content-secondary leading-relaxed">
-          AI가 학습 자료를 분석하여 문항을 설계하고 있습니다.<br/>잠시만 기다려 주세요.
-        </p>
+        <div
+          className="mx-auto w-16 h-16 relative"
+          style={{ filter: 'drop-shadow(0 0 6px rgba(0, 193, 154, 0.4))' }}
+        >
+          <div className="absolute inset-0 rounded-full border-4 border-white/[0.08]" />
+          <div className="absolute inset-0 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+          <div className="absolute inset-[0.9rem] rounded-full bg-surface" />
+        </div>
+        <div className="space-y-4">
+          <h1 className="text-3xl font-semibold text-white">퀴즈 생성 중...</h1>
+          <p className="text-base text-content-secondary leading-relaxed">
+            AI가 학습 자료를 분석하여 문항을 설계하고 있습니다.<br/>잠시만 기다려 주세요.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/quiz/new')}
+          className="mt-2 text-sm underline underline-offset-2 transition-colors"
+          style={{ color: '#A0AEC0' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#FFFFFF'; }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#A0AEC0'; }}
+        >
+          취소하고 돌아가기
+        </button>
       </div>
     );
   }
@@ -361,7 +380,8 @@ export default function QuizTake() {
           <div className="space-y-1">
             <div className="text-xs font-medium text-content-muted">진행 상황</div>
             <div className="text-3xl font-semibold tabular-nums text-white">
-              {currentItemIndex + 1} <span className="text-white/30 text-2xl">/ {itemsData?.length}</span>
+              <span className="text-white font-semibold">{currentItemIndex + 1}</span>
+              <span className="text-content-secondary text-2xl font-normal"> / {itemsData?.length}</span>
             </div>
           </div>
           <div className="text-right space-y-1">
