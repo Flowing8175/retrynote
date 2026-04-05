@@ -49,6 +49,7 @@ export interface QuizSessionDetail {
 
 export interface QuizSessionHistoryItem {
   id: string;
+  title: string | null;
   mode: string;
   source_mode: string;
   status: string;

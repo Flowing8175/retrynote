@@ -14,12 +14,39 @@ function formatHistoryDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatRelativeDate(value: string) {
+  const diff = Date.now() - new Date(value).getTime();
+  const minutes = Math.floor(diff / 60000);
+  const hours = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  if (minutes < 1) return '방금 전';
+  if (minutes < 60) return `${minutes}분 전`;
+  if (hours < 24) return `${hours}시간 전`;
+  if (days < 7) return `${days}일 전`;
+  return formatHistoryDate(value);
+}
+
 function formatHistorySource(sourceMode: string) {
   return sourceMode === 'document_based' ? '자료 기반' : '자료 없이 생성';
 }
 
 function formatHistoryMode(mode: string) {
   return mode === 'exam' ? '시험 모드' : '일반 모드';
+}
+
+function getSessionTitle(session: { title: string | null; source_mode: string; mode: string; question_count: number | null }) {
+  if (session.title) return session.title;
+  const sourceLabel = session.source_mode === 'document_based' ? '자료 기반' : 'AI 배경지식';
+  const modeLabel = session.mode === 'exam' ? '시험' : '학습';
+  return `${sourceLabel} ${modeLabel} 퀴즈`;
+}
+
+function getSessionSubtitle(session: { question_count: number | null; mode: string; created_at: string }) {
+  const parts: string[] = [];
+  if (session.question_count != null) parts.push(`${session.question_count}문제`);
+  parts.push(formatHistoryMode(session.mode));
+  parts.push(formatRelativeDate(session.created_at));
+  return parts.join(' · ');
 }
 
 export default function QuizHistory() {
@@ -94,17 +121,13 @@ export default function QuizHistory() {
                       <span className="rounded-full border border-brand-500/20 bg-brand-500/10 px-3 py-1 text-xs font-medium text-brand-300">
                         {formatHistorySource(session.source_mode)}
                       </span>
-                      <span className="rounded-full border border-white/[0.07] bg-surface px-3 py-1 text-xs text-content-secondary">
-                        {formatHistoryMode(session.mode)}
-                      </span>
                       <StatusBadge status={session.status} />
                     </div>
                     <div className="mt-3 text-lg font-semibold text-content-primary">
-                      {session.question_count ?? '?'}문제 세트
+                      {getSessionTitle(session)}
                     </div>
-                    <div className="mt-2 text-sm leading-6 text-content-secondary">
-                      생성 시각 {formatHistoryDate(session.created_at)}
-                      {session.difficulty ? ` · 난이도 ${session.difficulty}` : ''}
+                    <div className="mt-1.5 text-sm text-content-secondary">
+                      {getSessionSubtitle(session)}
                       {session.total_score != null && session.max_score != null
                         ? ` · ${session.total_score}/${session.max_score}점`
                         : ''}
