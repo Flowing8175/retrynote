@@ -60,10 +60,10 @@ async def checkout_subscription(
         raise HTTPException(status_code=422, detail="Invalid billing_cycle")
 
     price_id_map = {
-        ("learner", "monthly"): settings.paddle_learner_monthly_price_id,
-        ("learner", "quarterly"): settings.paddle_learner_quarterly_price_id,
-        ("pro", "monthly"): settings.paddle_pro_monthly_price_id,
-        ("pro", "quarterly"): settings.paddle_pro_quarterly_price_id,
+        ("learner", "monthly"): settings.paddle_learner_lite_monthly_price_id,
+        ("learner", "quarterly"): settings.paddle_learner_lite_quarterly_price_id,
+        ("pro", "monthly"): settings.paddle_learner_pro_monthly_price_id,
+        ("pro", "quarterly"): settings.paddle_learner_pro_quarterly_price_id,
     }
     price_id = price_id_map[(req.plan, req.billing_cycle)]
     if not price_id:
