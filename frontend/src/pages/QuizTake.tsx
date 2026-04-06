@@ -5,7 +5,7 @@ import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import { LoadingSpinner } from '@/components';
 import type { AnswerLogEntry, AnswerResponse } from '@/types';
-import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, PlayCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded', 'closed']);
 const AUTO_SUBMIT_QUESTION_TYPES = new Set(['multiple_choice', 'ox']);

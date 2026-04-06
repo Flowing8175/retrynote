@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { dashboardApi } from '@/api';
 import type { DashboardResponse, RetryLocationState } from '@/types';
-import LoadingSpinner from '@/components/LoadingSpinner';
 
 function DashboardSkeleton() {
   return (
