@@ -51,7 +51,6 @@ class Settings(BaseSettings):
     balanced_generation_model: str = "gpt-5.4-mini"
     performance_generation_model: str = "gemini-3-flash"
 
-    upload_dir: str = "./storage/uploads"
     max_upload_size_mb: int = 5
     allowed_file_types: str = "pdf,docx,pptx,txt,md,png,jpg,jpeg"
 
