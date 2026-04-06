@@ -30,6 +30,7 @@ REMOTE_NGINX_TARGET="${REMOTE_NGINX_TARGET:-/tmp/retrynote.nginx.conf}"
 BACKEND_HEALTHCHECK_URL="${BACKEND_HEALTHCHECK_URL:-http://127.0.0.1:8001/docs}"
 FRONTEND_API_URL="${FRONTEND_API_URL:-https://retrynote.cloud/api}"
 RETRIES="${DEPLOY_RETRIES:-15}"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-$(git -C "$SCRIPT_DIR" rev-parse --abbrev-ref HEAD)}"
 
 SSH_TARGET="$DEPLOY_USER@$DEPLOY_HOST"
 
@@ -74,7 +75,7 @@ set -e
 APP_DIR=$REMOTE_APP_DIR
 
 sudo -u retrynote git -C "\$APP_DIR" fetch origin
-sudo -u retrynote git -C "\$APP_DIR" reset --hard origin/main
+sudo -u retrynote git -C "\$APP_DIR" reset --hard origin/$DEPLOY_BRANCH
 sudo -u retrynote "\$APP_DIR/backend/.venv/bin/pip" install -q -r "\$APP_DIR/backend/requirements.txt"
 cd "\$APP_DIR/backend"
 sudo -u retrynote PYTHONPATH="\$APP_DIR/backend" "\$APP_DIR/backend/.venv/bin/alembic" upgrade head
