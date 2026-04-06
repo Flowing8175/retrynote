@@ -26,6 +26,7 @@ export interface QuizConfig {
     value: string;
     label: string;
     is_default: boolean;
+    is_trial?: boolean;
   }>;
 }
 

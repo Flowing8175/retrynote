@@ -39,6 +39,7 @@ from app.schemas.quiz import (
 from app.models.objection import Objection, ObjectionStatus
 from app.schemas.objection import ObjectionCreate, ObjectionResponse
 from app.middleware.auth import get_current_user
+from app.middleware.rate_limit_pro import pro_rate_limit
 from app.workers.celery_app import dispatch_task
 from app.services.quiz_service import _update_weak_point
 
@@ -57,8 +58,22 @@ def _describe_generation_model(
 
 
 @router.get("/config", response_model=QuizConfigResponse)
-async def get_quiz_config(user: User = Depends(get_current_user)):
+async def get_quiz_config(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     from app.config import settings as cfg
+    from app.tier_config import (
+        TIER_LIMITS,
+        UserTier,
+        MODEL_ECO,
+        MODEL_BALANCED,
+        MODEL_PERFORMANCE,
+    )
+    from app.services.usage_service import UsageService
+
+    tier = UserTier(user.tier)
+    allowed_models = TIER_LIMITS[tier].allowed_models
 
     # Determine the default: prefer BALANCED tier, fall back to provider defaults.
     default_model = cfg.balanced_generation_model or cfg.openai_generation_model
@@ -70,10 +85,24 @@ async def get_quiz_config(user: User = Depends(get_current_user)):
     ]
 
     generation_model_options = [
-        _describe_generation_model(tier, model_name, default_model)
-        for tier, model_name in configured_tiers
-        if model_name
+        _describe_generation_model(tier_label, model_name, default_model)
+        for tier_label, model_name in configured_tiers
+        if model_name and tier_label in allowed_models
     ]
+
+    usage_svc = UsageService()
+    usage_status = await usage_svc.get_usage_status(db, user)
+    for opt in generation_model_options:
+        opt["free_trial_available"] = False
+    if tier == UserTier.free and usage_status.free_trial_available:
+        for tier_label, model_name in configured_tiers:
+            if model_name and tier_label not in allowed_models:
+                trial_opt = _describe_generation_model(
+                    tier_label, model_name, default_model
+                )
+                trial_opt["is_trial"] = True
+                trial_opt["free_trial_available"] = True
+                generation_model_options.append(trial_opt)
 
     if not generation_model_options:
         # Fall back to raw provider defaults when no tiers are configured.
@@ -100,7 +129,7 @@ async def get_quiz_config(user: User = Depends(get_current_user)):
         (
             option["value"]
             for option in generation_model_options
-            if option["is_default"]
+            if option.get("is_default")
         ),
         default_model,
     )
@@ -150,6 +179,7 @@ async def create_quiz_session(
     req: QuizSessionCreate,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
+    _rate_limit: None = Depends(pro_rate_limit),
 ):
     if req.idempotency_key:
         existing = await db.execute(
@@ -183,6 +213,67 @@ async def create_quiz_session(
                 )
 
     from app.config import settings as cfg
+    from app.services.usage_service import UsageService
+    from app.tier_config import (
+        TIER_LIMITS,
+        UserTier,
+        MODEL_ECO,
+        MODEL_BALANCED,
+        MODEL_PERFORMANCE,
+    )
+    from app.schemas.billing import LimitExceededError
+    from datetime import datetime, timezone, timedelta
+
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed_models = TIER_LIMITS[tier].allowed_models
+
+    preferred = req.preferred_model or cfg.openai_generation_model
+    model_tier_label = None
+    if preferred == cfg.eco_generation_model:
+        model_tier_label = MODEL_ECO
+    elif preferred == cfg.balanced_generation_model:
+        model_tier_label = MODEL_BALANCED
+    elif preferred == cfg.performance_generation_model:
+        model_tier_label = MODEL_PERFORMANCE
+
+    if model_tier_label and model_tier_label not in allowed_models:
+        now = datetime.now(timezone.utc)
+        trial_ok = False
+        if user.free_trial_used_at is None:
+            trial_ok = True
+        else:
+            trial_at = user.free_trial_used_at
+            if trial_at.tzinfo is None:
+                trial_at = trial_at.replace(tzinfo=timezone.utc)
+            trial_ok = (now - trial_at) > timedelta(days=7)
+
+        if trial_ok:
+            user.free_trial_used_at = now
+        else:
+            raise HTTPException(
+                status_code=402,
+                detail=LimitExceededError(
+                    detail="이 AI 모델은 현재 요금제에서 사용할 수 없습니다.",
+                    limit_type="model_access",
+                    current_usage=0,
+                    limit=0,
+                    upgrade_url="/pricing",
+                ).model_dump(),
+            )
+
+    allowed, remaining, source = await usage_svc.check_and_consume(db, user, "quiz", 1)
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="퀴즈 생성 한도를 초과했습니다. 요금제를 업그레이드하거나 크레딧을 구매하세요.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+                upgrade_url="/pricing",
+            ).model_dump(),
+        )
 
     session_status = QuizSessionStatus.draft
     job_id = None

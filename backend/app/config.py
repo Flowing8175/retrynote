@@ -47,9 +47,9 @@ class Settings(BaseSettings):
 
     # Provider-agnostic model tiers — set to any model string; provider is
     # auto-detected from the model name prefix (e.g. "gemini-" → Gemini API).
-    eco_generation_model: str = ""
+    eco_generation_model: str = "gpt-5.4-nano"
     balanced_generation_model: str = "gpt-5.4-mini"
-    performance_generation_model: str = ""
+    performance_generation_model: str = "gemini-3-flash"
 
     upload_dir: str = "./storage/uploads"
     max_upload_size_mb: int = 5
@@ -73,6 +73,19 @@ class Settings(BaseSettings):
     max_retry_count: int = 3
     daily_quiz_generation_limit: int = 50
     daily_ocr_page_limit: int = 100
+
+    # Stripe
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_learner_monthly_price_id: str = ""
+    stripe_learner_quarterly_price_id: str = ""
+    stripe_pro_monthly_price_id: str = ""
+    stripe_pro_quarterly_price_id: str = ""
+    stripe_storage_5gb_price_id: str = ""
+    stripe_storage_20gb_price_id: str = ""
+    stripe_ai_credits_100_price_id: str = ""
+    stripe_ai_credits_500_price_id: str = ""
 
 
 @lru_cache()

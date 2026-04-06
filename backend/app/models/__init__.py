@@ -28,6 +28,13 @@ from app.models.search import (
     DraftAnswer,
     Job,
 )
+from app.models.billing import (
+    Subscription,
+    UsageRecord,
+    CreditBalance,
+    CreditPurchase,
+    WebhookEvent,
+)
 
 __all__ = [
     "User",
@@ -61,4 +68,9 @@ __all__ = [
     "ImpersonationSession",
     "DraftAnswer",
     "Job",
+    "Subscription",
+    "UsageRecord",
+    "CreditBalance",
+    "CreditPurchase",
+    "WebhookEvent",
 ]

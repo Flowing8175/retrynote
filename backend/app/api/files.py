@@ -35,6 +35,7 @@ from app.schemas.file import (
     FolderDetail,
 )
 from app.middleware.auth import get_current_user, get_impersonation_context
+from app.middleware.rate_limit_pro import pro_rate_limit
 from app.workers.celery_app import dispatch_task
 
 router = APIRouter()
@@ -95,6 +96,7 @@ async def upload_file(
     folder_id: str | None = Form(default=None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
+    _rate_limit: None = Depends(pro_rate_limit),
 ):
     effective_user, _ = await get_impersonation_context(request, user, db)
 
@@ -114,6 +116,7 @@ async def upload_file(
     file_size = 0
     file_type = None
     content_hash = None
+    content = None
 
     if file:
         source_type = FileSourceType.upload
@@ -187,9 +190,6 @@ async def upload_file(
         os.makedirs(save_dir, exist_ok=True)
         stored_name = f"{uuid.uuid4().hex}.{ext}"
         stored_path = os.path.join(save_dir, stored_name)
-        import asyncio as _asyncio
-
-        await _asyncio.to_thread(lambda: open(stored_path, "wb").write(content))
 
     elif manual_text:
         source_type = FileSourceType.manual_text
@@ -202,6 +202,41 @@ async def upload_file(
         raise HTTPException(
             status_code=400, detail="Must provide file, manual_text, or source_url"
         )
+
+    # Enforce storage quota BEFORE writing to disk
+    from app.schemas.billing import LimitExceededError
+    from app.tier_config import TIER_LIMITS, UserTier
+
+    if file_size > 0:
+        _tier = UserTier(effective_user.tier)
+        _limits = TIER_LIMITS[_tier]
+        from app.models.billing import CreditBalance
+        from sqlalchemy import select as _select
+
+        _credit_result = await db.execute(
+            _select(CreditBalance).where(CreditBalance.user_id == effective_user.id)
+        )
+        _credits = _credit_result.scalar_one_or_none()
+        _credit_storage = _credits.storage_credits_bytes if _credits else 0
+        _total_quota = _limits.storage_bytes + _credit_storage
+
+        if effective_user.storage_used_bytes + file_size > _total_quota:
+            raise HTTPException(
+                status_code=402,
+                detail=LimitExceededError(
+                    detail="저장 공간이 부족합니다. 요금제를 업그레이드하거나 저장 공간 크레딧을 구매하세요.",
+                    limit_type="storage",
+                    current_usage=effective_user.storage_used_bytes,
+                    limit=_total_quota,
+                    upgrade_url="/pricing",
+                ).model_dump(),
+            )
+
+    # Write file to disk AFTER quota check passes
+    if stored_path is not None and content is not None:
+        import asyncio as _asyncio
+
+        await _asyncio.to_thread(lambda: open(stored_path, "wb").write(content))
 
     file_record = File(
         user_id=effective_user.id,
@@ -429,6 +464,11 @@ async def delete_file(
     file.deleted_at = datetime.now(timezone.utc)
     file.is_searchable = False
     file.is_quiz_eligible = False
+
+    # Decrement storage used — guard against negative
+    user.storage_used_bytes = max(
+        0, user.storage_used_bytes - (file.file_size_bytes or 0)
+    )
 
     job = Job(
         id=str(uuid.uuid4()),

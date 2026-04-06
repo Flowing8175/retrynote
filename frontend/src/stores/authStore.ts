@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { UserProfile } from '@/types';
+import type { UsageStatus } from '../types/billing';
 
 interface AuthState {
   user: UserProfile | null;
@@ -17,6 +18,8 @@ interface AuthState {
   setImpersonation: (userId: string, username: string) => void;
   endImpersonation: () => void;
   setAdminToken: (token: string | null) => void;
+  usageStatus: UsageStatus | null;
+  setUsageStatus: (status: UsageStatus | null) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -30,6 +33,7 @@ export const useAuthStore = create<AuthState>()(
       impersonatingUserId: null,
       impersonatingUsername: null,
       adminToken: null,
+      usageStatus: null,
 
       setUser: (user) => set({ user, isAuthenticated: !!user, isAdmin: user?.role === 'admin' || user?.role === 'super_admin' }),
 
@@ -44,6 +48,7 @@ export const useAuthStore = create<AuthState>()(
         impersonatingUserId: null,
         impersonatingUsername: null,
         adminToken: null,
+        usageStatus: null,
       }),
 
       setImpersonation: (userId, username) => set({
@@ -57,6 +62,8 @@ export const useAuthStore = create<AuthState>()(
       }),
 
       setAdminToken: (adminToken) => set({ adminToken }),
+
+      setUsageStatus: (status) => set({ usageStatus: status }),
     }),
     {
       name: 'auth-storage',

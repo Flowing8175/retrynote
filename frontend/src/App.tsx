@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { Suspense } from 'react';
 import AppErrorBoundary from '@/components/AppErrorBoundary';
 import { useAuthStore } from '@/stores';
 import { Layout } from '@/components';
@@ -17,6 +18,14 @@ import Retry from '@/pages/Retry';
 import Search from '@/pages/Search';
 import Admin from '@/pages/Admin';
 import Settings from '@/pages/Settings';
+import UpgradeModal from '@/components/UpgradeModal';
+import LoadingSpinner from '@/components/LoadingSpinner';
+
+const PricingPage = React.lazy(() => import('@/pages/PricingPage'));
+const BillingPage = React.lazy(() => import('@/pages/BillingPage'));
+const Terms = React.lazy(() => import('@/pages/Terms'));
+const Privacy = React.lazy(() => import('@/pages/Privacy'));
+const Refund = React.lazy(() => import('@/pages/Refund'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -66,16 +75,29 @@ function App() {
               </PublicRoute>
             }
           />
-          <Route
-            path="/password-reset"
-            element={
-              <PublicRoute>
-                <PasswordReset />
-              </PublicRoute>
-            }
-          />
+           <Route
+             path="/password-reset"
+             element={
+               <PublicRoute>
+                 <PasswordReset />
+               </PublicRoute>
+             }
+           />
+           <Route
+             path="/pricing"
+             element={
+               <Layout>
+                 <Suspense fallback={<LoadingSpinner />}>
+                   <PricingPage />
+                 </Suspense>
+               </Layout>
+             }
+           />
+           <Route path="/terms" element={<Suspense fallback={<LoadingSpinner />}><Terms /></Suspense>} />
+           <Route path="/privacy" element={<Suspense fallback={<LoadingSpinner />}><Privacy /></Suspense>} />
+           <Route path="/refund" element={<Suspense fallback={<LoadingSpinner />}><Refund /></Suspense>} />
 
-          {import.meta.env.DEV && (
+           {import.meta.env.DEV && (
             <Route
               path="/preview/quiz/new"
               element={
@@ -150,14 +172,23 @@ function App() {
               </Layout>
             </ProtectedRoute>
           } />
-          <Route path="/settings" element={
-            <ProtectedRoute>
-              <Layout>
-                <Settings />
-              </Layout>
-            </ProtectedRoute>
-          } />
-          <Route path="/admin" element={
+           <Route path="/settings" element={
+             <ProtectedRoute>
+               <Layout>
+                 <Settings />
+               </Layout>
+             </ProtectedRoute>
+           } />
+           <Route path="/settings/billing" element={
+             <ProtectedRoute>
+               <Layout>
+                 <Suspense fallback={<LoadingSpinner />}>
+                   <BillingPage />
+                 </Suspense>
+               </Layout>
+             </ProtectedRoute>
+           } />
+           <Route path="/admin" element={
             <ProtectedRoute>
               <AdminRoute>
                 <Layout showSidebar={false}>
@@ -167,6 +198,7 @@ function App() {
             </ProtectedRoute>
           } />
         </Routes>
+          <UpgradeModal />
         </BrowserRouter>
       </QueryClientProvider>
     </AppErrorBoundary>

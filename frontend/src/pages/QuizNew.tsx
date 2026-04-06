@@ -5,6 +5,7 @@ import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide
 import { filesApi, quizApi } from '@/api';
 import { LoadingSpinner, Modal, StatusBadge } from '@/components';
 import { isFileProcessingStatus } from '@/types/file';
+import { useUsageStatus } from '../lib/useUsageStatus';
 
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: '객관식' },
@@ -16,10 +17,10 @@ const QUESTION_TYPES = [
 
 const QUESTION_COUNT_PRESETS = [5, 10, 15];
 
-const MODEL_TIER_DESCRIPTIONS: Record<string, string> = {
-  ECO: '저렴한 모델',
-  BALANCED: '균형잡힌 품질과 속도',
-  PERFORMANCE: '최고 품질',
+const MODEL_TIER_LABELS: Record<string, string> = {
+  ECO: 'ECO (빠름, 경제적)',
+  BALANCED: '균형형',
+  PERFORMANCE: '고성능',
 };
 
 const DIFFICULTY_OPTIONS = [
@@ -93,6 +94,11 @@ function getDetailMessage(detail: unknown, fallbackMessage: string) {
 
 export default function QuizNew() {
   const navigate = useNavigate();
+  const { data: usageStatus } = useUsageStatus();
+  const isFree = usageStatus?.tier === 'free';
+  const freeTrialAvailable = usageStatus?.freeTrialAvailable ?? false;
+  const freeTrialUsedAt = usageStatus?.freeTrialUsedAt ?? null;
+
   const [sourceMode, setSourceMode] = useState<'document_based' | 'no_source'>('document_based');
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [mode, setMode] = useState<'normal' | 'exam'>('normal');
@@ -117,7 +123,7 @@ export default function QuizNew() {
 
   const generationModelOptions = Array.isArray(quizConfig?.generation_model_options)
     ? quizConfig.generation_model_options.filter(
-        (option): option is { tier: string; value: string; label: string; is_default: boolean } =>
+        (option): option is { tier: string; value: string; label: string; is_default: boolean; is_trial?: boolean } =>
           typeof option?.tier === 'string' &&
           typeof option?.value === 'string' &&
           typeof option?.label === 'string' &&
@@ -179,6 +185,12 @@ export default function QuizNew() {
     resetNoSourceModal();
     setFormMessage(null);
   };
+
+  const daysUntilTrial = useMemo(() => {
+    if (!freeTrialUsedAt) return 7;
+    const daysSince = Math.floor((Date.now() - new Date(freeTrialUsedAt).getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(0, 7 - daysSince);
+  }, [freeTrialUsedAt]);
 
   const fileGroups = useMemo(() => {
     const visibleFiles = allFiles.filter(
@@ -499,8 +511,7 @@ export default function QuizNew() {
                 <div className="space-y-4">
                   <div className="text-xs font-medium text-content-muted">AI 모델</div>
                   <div className="grid grid-cols-2 gap-2">
-                    {generationModelOptions.map((option) => {
-                      return (
+                    {generationModelOptions.map((option) => (
                       <button
                         key={option.value}
                         onClick={() => setPreferredTier(option.tier)}
@@ -510,13 +521,41 @@ export default function QuizNew() {
                             : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
                         }`}
                       >
-                        <div className="text-xs font-medium">{option.tier}</div>
-                        <div className="text-xs text-content-muted mt-0.5">{MODEL_TIER_DESCRIPTIONS[option.tier] ?? option.tier}</div>
+                        <div className="text-xs font-semibold">
+                          {MODEL_TIER_LABELS[option.tier] ?? option.tier}
+                        </div>
                         <div className="mt-1 text-[11px] text-content-muted">{option.value}</div>
                       </button>
-                    );
-                    })}
+                    ))}
                   </div>
+
+                  {isFree && (
+                    <div className="mt-1">
+                      {freeTrialAvailable ? (
+                        <button
+                          type="button"
+                          onClick={() => setPreferredTier('BALANCED')}
+                          className="w-full text-left px-4 py-3 rounded-xl bg-brand-500/5 border border-brand-500/20 hover:bg-brand-500/10 transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm leading-none">💡</span>
+                            <span className="text-xs font-medium text-brand-300">
+                              고급 모델 무료 체험 가능 (주 1회)
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-content-muted mt-1.5 pl-5">
+                            클릭하면 균형형 모델로 한 번 무료 체험할 수 있습니다.
+                          </p>
+                        </button>
+                      ) : freeTrialUsedAt ? (
+                        <div className="px-4 py-3 rounded-xl bg-surface-deep border border-white/[0.05]">
+                          <span className="text-xs text-content-muted">
+                            다음 체험: {daysUntilTrial}일 후
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-4">

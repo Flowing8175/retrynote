@@ -33,6 +33,7 @@ class UserProfile(BaseModel):
     username: str
     email: str
     role: str
+    tier: str
     is_active: bool
     storage_used_bytes: int
     storage_quota_bytes: int

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
-import { LoadingSpinner } from '@/components';
+import { LoadingSpinner, PillShimmer } from '@/components';
 import type { AnswerLogEntry, AnswerResponse } from '@/types';
 import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
 
@@ -262,13 +262,10 @@ export default function QuizTake() {
   if (sessionData.status === 'draft' || sessionData.status === 'generating') {
     return (
       <div className="max-w-3xl mx-auto py-32 text-center space-y-8">
-        <div
-          className="mx-auto w-16 h-16 relative"
-          style={{ filter: 'drop-shadow(0 0 6px rgba(0, 193, 154, 0.4))' }}
-        >
-          <div className="absolute inset-0 rounded-full border-4 border-white/[0.08]" />
-          <div className="absolute inset-0 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
-          <div className="absolute inset-[0.9rem] rounded-full bg-surface" />
+        <div className="flex flex-col items-center gap-2.5 mx-auto">
+          <PillShimmer width={200} />
+          <PillShimmer width={140} delay={0.4} opacity={0.65} />
+          <PillShimmer width={88} delay={0.75} opacity={0.38} />
         </div>
         <div className="space-y-4">
           <h1 className="text-3xl font-semibold text-white">퀴즈 생성 중...</h1>

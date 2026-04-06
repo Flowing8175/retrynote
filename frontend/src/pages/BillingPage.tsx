@@ -1,0 +1,420 @@
+import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { X, CreditCard, HardDrive, Zap, CheckCircle } from 'lucide-react';
+import { billingApi } from '@/api/billing';
+import { useUsageStatus } from '@/lib/useUsageStatus';
+import type { ResourceType } from '@/types/billing';
+
+function formatBytes(bytes: number): string {
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(1)}GB`;
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}년 ${m}월 ${day}일`;
+}
+
+function formatWindowTime(iso: string): string {
+  const d = new Date(iso);
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${h}:${min}`;
+}
+
+const RESOURCE_LABELS: Record<ResourceType, string> = {
+  quiz: '퀴즈 생성',
+  ocr: 'OCR 처리',
+  storage: '저장소',
+};
+
+const TIER_LABELS: Record<string, string> = {
+  free: 'Free',
+  learner: 'Learner Lite',
+  pro: 'Learner Pro',
+};
+
+const TIER_BADGE: Record<string, string> = {
+  free: 'bg-surface text-content-muted border border-white/[0.08]',
+  learner: 'bg-brand-500/15 text-brand-300 border border-brand-500/30',
+  pro: 'bg-purple-500/15 text-purple-300 border border-purple-500/30',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  active: '활성',
+  past_due: '연체',
+  canceled: '취소됨',
+  trialing: '체험 중',
+};
+
+const STATUS_BADGE: Record<string, string> = {
+  active:
+    'bg-semantic-success-bg text-semantic-success border border-semantic-success-border',
+  past_due:
+    'bg-semantic-warning-bg text-semantic-warning border border-semantic-warning-border',
+  canceled:
+    'bg-semantic-error-bg text-semantic-error border border-semantic-error-border',
+  trialing: 'bg-brand-500/10 text-brand-300 border border-brand-500/20',
+};
+
+interface CreditPack {
+  label: string;
+  description: string;
+  creditType: string;
+  packSize: string;
+  icon: React.ReactNode;
+}
+
+const CREDIT_PACKS: CreditPack[] = [
+  {
+    label: '+5GB 저장소',
+    description: '저장 공간 5GB 추가',
+    creditType: 'storage',
+    packSize: '5gb',
+    icon: <HardDrive size={16} />,
+  },
+  {
+    label: '+20GB 저장소',
+    description: '저장 공간 20GB 추가',
+    creditType: 'storage',
+    packSize: '20gb',
+    icon: <HardDrive size={16} />,
+  },
+  {
+    label: '+100 퀴즈 크레딧',
+    description: '퀴즈 생성 100회 추가',
+    creditType: 'ai',
+    packSize: '100',
+    icon: <Zap size={16} />,
+  },
+  {
+    label: '+500 퀴즈 크레딧',
+    description: '퀴즈 생성 500회 추가',
+    creditType: 'ai',
+    packSize: '500',
+    icon: <Zap size={16} />,
+  },
+];
+
+function UsageBar({ consumed, limit }: { consumed: number; limit: number }) {
+  const pct = limit > 0 ? Math.min((consumed / limit) * 100, 100) : 0;
+  const danger = pct >= 90;
+  const warning = pct >= 70 && !danger;
+
+  return (
+    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.08]">
+      <div
+        className={`h-full rounded-full transition-all duration-500 ${
+          danger
+            ? 'bg-semantic-error'
+            : warning
+              ? 'bg-semantic-warning'
+              : 'bg-brand-500'
+        }`}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  );
+}
+
+function SectionCard({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border border-white/[0.06] bg-surface p-6 space-y-5 ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="text-xs font-semibold uppercase tracking-widest text-content-muted">
+      {children}
+    </h2>
+  );
+}
+
+function BillingSkeleton() {
+  return (
+    <div className="space-y-4 animate-pulse" aria-hidden="true">
+      <div className="skeleton h-6 w-40 rounded-lg" />
+      <div className="rounded-2xl border border-white/[0.06] bg-surface p-6 space-y-4">
+        <div className="skeleton h-3 w-24 rounded" />
+        <div className="flex items-center gap-3">
+          <div className="skeleton h-6 w-20 rounded-full" />
+          <div className="skeleton h-6 w-16 rounded-full" />
+        </div>
+        <div className="skeleton h-3 w-48 rounded" />
+      </div>
+      <div className="rounded-2xl border border-white/[0.06] bg-surface p-6 space-y-4">
+        <div className="skeleton h-3 w-16 rounded" />
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="space-y-2">
+            <div className="flex justify-between">
+              <div className="skeleton h-3 w-24 rounded" />
+              <div className="skeleton h-3 w-16 rounded" />
+            </div>
+            <div className="skeleton h-1.5 w-full rounded-full" />
+            <div className="skeleton h-2.5 w-28 rounded" />
+          </div>
+        ))}
+      </div>
+      <div className="rounded-2xl border border-white/[0.06] bg-surface p-6 space-y-4">
+        <div className="skeleton h-3 w-20 rounded" />
+        <div className="flex gap-4">
+          <div className="skeleton h-16 w-36 rounded-xl" />
+          <div className="skeleton h-16 w-36 rounded-xl" />
+        </div>
+      </div>
+      <div className="rounded-2xl border border-white/[0.06] bg-surface p-6 space-y-4">
+        <div className="skeleton h-3 w-20 rounded" />
+        <div className="skeleton h-10 w-32 rounded-xl" />
+      </div>
+      <div className="rounded-2xl border border-white/[0.06] bg-surface p-6 space-y-4">
+        <div className="skeleton h-3 w-24 rounded" />
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="skeleton h-16 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function BillingPage() {
+  const location = useLocation();
+  const queryClient = useQueryClient();
+
+  const searchParams = new URLSearchParams(location.search);
+  const isSuccess = searchParams.get('success') === '1';
+
+  const [bannerVisible, setBannerVisible] = useState(isSuccess);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [purchasingPack, setPurchasingPack] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isSuccess) {
+      queryClient.invalidateQueries({ queryKey: ['usageStatus'] });
+    }
+  }, [isSuccess, queryClient]);
+
+  const { data: usageData, isLoading: usageLoading } = useUsageStatus();
+
+  const { data: subscription, isLoading: subLoading } = useQuery({
+    queryKey: ['subscription'],
+    queryFn: billingApi.getSubscription,
+    staleTime: 60_000,
+  });
+
+  const isLoading = usageLoading || subLoading;
+
+  async function handleOpenPortal() {
+    setPortalLoading(true);
+    try {
+      const result = await billingApi.openPortal();
+      window.location.href = result.portal_url;
+    } finally {
+      setPortalLoading(false);
+    }
+  }
+
+  async function handlePurchasePack(pack: CreditPack) {
+    const key = `${pack.creditType}:${pack.packSize}`;
+    setPurchasingPack(key);
+    try {
+      const result = await billingApi.checkoutCredits(pack.creditType, pack.packSize);
+      window.location.href = result.sessionUrl;
+    } finally {
+      setPurchasingPack(null);
+    }
+  }
+
+  const tier = usageData?.tier ?? 'free';
+  const credits = usageData?.credits;
+  const windows = usageData?.windows ?? [];
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6 animate-fade-in">
+      {bannerVisible && (
+        <div className="flex items-start gap-3 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm text-brand-300">
+          <CheckCircle size={16} className="mt-0.5 shrink-0 text-brand-400" />
+          <p className="flex-1 leading-relaxed">
+            결제가 완료되었습니다. 사용량이 업데이트되었습니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => setBannerVisible(false)}
+            className="shrink-0 text-brand-400 hover:text-brand-300 transition-colors"
+            aria-label="닫기"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      <div>
+        <h1 className="text-2xl font-bold text-content-primary">요금제 및 결제</h1>
+        <p className="mt-1 text-sm text-content-secondary">
+          구독 상태와 사용량을 확인하고 관리하세요.
+        </p>
+      </div>
+
+      {isLoading ? (
+        <BillingSkeleton />
+      ) : (
+        <div className="space-y-4">
+          <SectionCard>
+            <SectionTitle>현재 요금제</SectionTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${TIER_BADGE[tier] ?? TIER_BADGE.free}`}
+              >
+                {TIER_LABELS[tier] ?? tier}
+              </span>
+              {subscription ? (
+                <span
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${STATUS_BADGE[subscription.status] ?? ''}`}
+                >
+                  {STATUS_LABELS[subscription.status] ?? subscription.status}
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium bg-surface text-content-muted border border-white/[0.08]">
+                  무료 플랜
+                </span>
+              )}
+            </div>
+            {subscription?.currentPeriodEnd && (
+              <p className="text-sm text-content-secondary">
+                다음 갱신일:{' '}
+                <span className="font-medium text-content-primary">
+                  {formatDate(subscription.currentPeriodEnd)}
+                </span>
+              </p>
+            )}
+            {subscription?.billingCycle && (
+              <p className="text-xs text-content-muted">
+                {subscription.billingCycle === 'monthly' ? '월간 구독' : '분기 구독'}
+              </p>
+            )}
+          </SectionCard>
+
+          {windows.length > 0 && (
+            <SectionCard>
+              <SectionTitle>사용량</SectionTitle>
+              <div className="space-y-5">
+                {windows.map((win) => (
+                  <div key={win.resourceType} className="space-y-2">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-medium text-content-primary">
+                        {RESOURCE_LABELS[win.resourceType] ?? win.resourceType}
+                      </span>
+                      <span className="text-xs tabular-nums text-content-muted">
+                        {win.resourceType === 'storage'
+                          ? `${formatBytes(win.consumed)} / ${formatBytes(win.limit)}`
+                          : `${win.consumed.toLocaleString()} / ${win.limit.toLocaleString()}`}
+                      </span>
+                    </div>
+                    <UsageBar consumed={win.consumed} limit={win.limit} />
+                    <p className="text-xs text-content-muted">
+                      창 만료: {formatWindowTime(win.windowEndsAt)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </SectionCard>
+          )}
+
+          {credits && (
+            <SectionCard>
+              <SectionTitle>크레딧 잔액</SectionTitle>
+              <div className="flex flex-wrap gap-3">
+                <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-surface-deep px-4 py-3">
+                  <HardDrive size={18} className="text-brand-400 shrink-0" />
+                  <div>
+                    <p className="text-xs text-content-muted">저장소 크레딧</p>
+                    <p className="text-base font-semibold text-content-primary">
+                      {formatBytes(credits.storageCreditsBytes)}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-surface-deep px-4 py-3">
+                  <Zap size={18} className="text-brand-400 shrink-0" />
+                  <div>
+                    <p className="text-xs text-content-muted">AI 크레딧</p>
+                    <p className="text-base font-semibold text-content-primary">
+                      {credits.aiCreditsCount.toLocaleString()}회
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </SectionCard>
+          )}
+
+          <SectionCard>
+            <SectionTitle>구독 관리</SectionTitle>
+            <p className="text-sm text-content-secondary leading-relaxed">
+              결제 수단 변경, 구독 취소 및 청구 내역은 고객 포털에서 관리할 수 있습니다.
+            </p>
+            <button
+              type="button"
+              onClick={handleOpenPortal}
+              disabled={portalLoading}
+              className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-content-inverse transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <CreditCard size={16} />
+              {portalLoading ? '이동 중…' : '구독 관리'}
+            </button>
+          </SectionCard>
+
+          <SectionCard>
+            <SectionTitle>크레딧 구매</SectionTitle>
+            <p className="text-sm text-content-secondary">
+              추가 사용량이 필요하면 크레딧을 구매하세요. 구독 용량에 더해집니다.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {CREDIT_PACKS.map((pack) => {
+                const key = `${pack.creditType}:${pack.packSize}`;
+                const buying = purchasingPack === key;
+                return (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-surface-deep p-4"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="shrink-0 text-brand-400">{pack.icon}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-content-primary truncate">
+                          {pack.label}
+                        </p>
+                        <p className="text-xs text-content-muted">{pack.description}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handlePurchasePack(pack)}
+                      disabled={buying || purchasingPack !== null}
+                      className="shrink-0 rounded-lg border border-brand-500/40 px-3 py-1.5 text-xs font-semibold text-brand-300 transition-colors hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {buying ? '…' : '구매'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -36,8 +36,8 @@ class User(CommonMixin, Base):
     )
     storage_used_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
     storage_quota_bytes: Mapped[int] = mapped_column(
-        BigInteger, default=1073741824
-    )  # 1GB
+        BigInteger, default=104857600
+    )  # 100MB (Free tier default)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -45,6 +45,11 @@ class User(CommonMixin, Base):
     status: Mapped[str] = mapped_column(String(50), default="active")
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
     updated_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    tier: Mapped[str] = mapped_column(String(20), default="free", nullable=False)
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    free_trial_used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     folders = relationship("Folder", back_populates="user", lazy="selectin")
     files = relationship("File", back_populates="user", lazy="selectin")

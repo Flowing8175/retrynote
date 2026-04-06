@@ -131,6 +131,23 @@ textarea:focus-visible,
   border-radius: 8px;
 }
 
+@keyframes pill-wave {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+
+.pill-shimmer-wave {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    oklch(0.38 0.065 175 / 0.45) 35%,
+    oklch(0.44 0.075 175 / 0.62) 50%,
+    oklch(0.38 0.065 175 / 0.45) 65%,
+    transparent 100%
+  );
+  animation: pill-wave 2.2s ease-in-out infinite;
+}
+
 /* ── Entrance & feedback animations ── */
 
 @keyframes fade-in-up {
@@ -252,7 +269,8 @@ textarea:focus-visible,
   .animate-progress-fill,
   .animate-ring-reveal,
   .animate-answer-correct,
-  .animate-answer-wrong {
+  .animate-answer-wrong,
+  .pill-shimmer-wave {
     animation: none;
   }
 }

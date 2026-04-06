@@ -11,11 +11,14 @@ from contextlib import asynccontextmanager
 from app.rate_limit import limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
+import redis.asyncio as aioredis
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    app.state.redis = aioredis.from_url(settings.redis_url, decode_responses=False)
     yield
+    await app.state.redis.aclose()
 
 
 app = FastAPI(
@@ -60,6 +63,7 @@ from app.api import (
     search,
     admin,
 )
+from app.api.billing import router as billing_router
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(files.router, prefix="/files", tags=["files"])
@@ -70,6 +74,7 @@ app.include_router(retry.router, prefix="/retry-sets", tags=["retry-sets"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
+app.include_router(billing_router, prefix="/api/billing", tags=["billing"])
 
 
 @app.get("/health")

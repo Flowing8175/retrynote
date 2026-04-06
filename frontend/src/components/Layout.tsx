@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu, X } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu, X, CreditCard } from 'lucide-react';
 import Navbar from './Navbar';
+import UsageBar from './UsageBar';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -22,6 +23,7 @@ const navItems: NavItem[] = [
   { path: '/wrong-notes', label: '오답노트', icon: <TriangleAlert size={18} /> },
   { path: '/retry', label: '재도전', icon: <RefreshCw size={18} /> },
   { path: '/search', label: '검색', icon: <Search size={18} /> },
+  { path: '/pricing', label: '요금제', icon: <CreditCard size={18} /> },
 ];
 
 export default function Layout({ children, showSidebar = true }: LayoutProps) {
@@ -66,6 +68,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
                     );
                   })}
                 </nav>
+                <UsageBar expanded={true} />
               </div>
             </aside>
 
@@ -101,6 +104,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
                     );
                   })}
                 </nav>
+                <UsageBar expanded={sidebarExpanded} />
               </div>
             </aside>
           </>
