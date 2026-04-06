@@ -73,7 +73,7 @@ jobs:
             sudo -u retrynote git -C $APP_DIR reset --hard origin/main
 
             # Python 의존성 업데이트
-            sudo -u retrynote $APP_DIR/backend/.venv/bin/pip install -q -r $APP_DIR/backend/requirements.txt
+            cd $APP_DIR/backend && sudo -u retrynote uv sync --no-dev
 
             # 마이그레이션
             cd $APP_DIR/backend
