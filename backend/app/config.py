@@ -74,18 +74,24 @@ class Settings(BaseSettings):
     daily_quiz_generation_limit: int = 50
     daily_ocr_page_limit: int = 100
 
-    # Paddle
+    # Backblaze B2
+    b2_key_id: str = ""
+    b2_application_key: str = ""
+    b2_bucket_name: str = ""
+    b2_endpoint_url: str = ""
+
     paddle_api_key: str = ""
     paddle_environment: str = "sandbox"
     paddle_webhook_secret: str = ""
-    paddle_learner_lite_monthly_price_id: str = ""
-    paddle_learner_lite_quarterly_price_id: str = ""
-    paddle_learner_pro_monthly_price_id: str = ""
-    paddle_learner_pro_quarterly_price_id: str = ""
+    paddle_lite_monthly_price_id: str = ""
+    paddle_lite_quarterly_price_id: str = ""
+    paddle_standard_monthly_price_id: str = ""
+    paddle_standard_quarterly_price_id: str = ""
+    paddle_pro_monthly_price_id: str = ""
+    paddle_pro_quarterly_price_id: str = ""
     paddle_storage_5gb_price_id: str = ""
     paddle_storage_20gb_price_id: str = ""
-    paddle_ai_credits_100_price_id: str = ""
-    paddle_ai_credits_500_price_id: str = ""
+    paddle_storage_50gb_price_id: str = ""
 
 
 @lru_cache()

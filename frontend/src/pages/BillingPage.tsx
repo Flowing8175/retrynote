@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, CreditCard, HardDrive, Zap, CheckCircle } from 'lucide-react';
+import { X, CreditCard, HardDrive, CheckCircle } from 'lucide-react';
 import { billingApi } from '@/api/billing';
 import { useUsageStatus } from '@/lib/useUsageStatus';
 import type { ResourceType } from '@/types/billing';
@@ -33,13 +33,15 @@ const RESOURCE_LABELS: Record<ResourceType, string> = {
 
 const TIER_LABELS: Record<string, string> = {
   free: 'Free',
-  learner: 'Learner Lite',
-  pro: 'Learner Pro',
+  lite: 'Lite',
+  standard: 'Standard',
+  pro: 'Pro',
 };
 
 const TIER_BADGE: Record<string, string> = {
   free: 'bg-surface text-content-muted border border-white/[0.08]',
-  learner: 'bg-brand-500/15 text-brand-300 border border-brand-500/30',
+  lite: 'bg-brand-500/15 text-brand-300 border border-brand-500/30',
+  standard: 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30',
   pro: 'bg-purple-500/15 text-purple-300 border border-purple-500/30',
 };
 
@@ -71,31 +73,24 @@ interface CreditPack {
 const CREDIT_PACKS: CreditPack[] = [
   {
     label: '+5GB 저장소',
-    description: '저장 공간 5GB 추가',
+    description: '₩3,900 · ₩780/GB · 영구',
     creditType: 'storage',
     packSize: '5gb',
     icon: <HardDrive size={16} />,
   },
   {
     label: '+20GB 저장소',
-    description: '저장 공간 20GB 추가',
+    description: '₩12,900 · ₩645/GB · 영구',
     creditType: 'storage',
     packSize: '20gb',
     icon: <HardDrive size={16} />,
   },
   {
-    label: '+100 퀴즈 크레딧',
-    description: '퀴즈 생성 100회 추가',
-    creditType: 'ai',
-    packSize: '100',
-    icon: <Zap size={16} />,
-  },
-  {
-    label: '+500 퀴즈 크레딧',
-    description: '퀴즈 생성 500회 추가',
-    creditType: 'ai',
-    packSize: '500',
-    icon: <Zap size={16} />,
+    label: '+50GB 저장소',
+    description: '₩27,900 · ₩558/GB · 영구',
+    creditType: 'storage',
+    packSize: '50gb',
+    icon: <HardDrive size={16} />,
   },
 ];
 
@@ -352,27 +347,16 @@ export default function BillingPage() {
             </SectionCard>
           )}
 
-          {credits && (
+          {credits && credits.storageCreditsBytes > 0 && (
             <SectionCard>
               <SectionTitle>크레딧 잔액</SectionTitle>
-              <div className="flex flex-wrap gap-3">
-                <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-surface-deep px-4 py-3">
-                  <HardDrive size={18} className="text-brand-400 shrink-0" />
-                  <div>
-                    <p className="text-xs text-content-muted">저장소 크레딧</p>
-                    <p className="text-base font-semibold text-content-primary">
-                      {formatBytes(credits.storageCreditsBytes)}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-surface-deep px-4 py-3">
-                  <Zap size={18} className="text-brand-400 shrink-0" />
-                  <div>
-                    <p className="text-xs text-content-muted">AI 크레딧</p>
-                    <p className="text-base font-semibold text-content-primary">
-                      {credits.aiCreditsCount.toLocaleString()}회
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-surface-deep px-4 py-3 w-fit">
+                <HardDrive size={18} className="text-brand-400 shrink-0" />
+                <div>
+                  <p className="text-xs text-content-muted">저장소 크레딧</p>
+                  <p className="text-base font-semibold text-content-primary">
+                    {formatBytes(credits.storageCreditsBytes)}
+                  </p>
                 </div>
               </div>
             </SectionCard>

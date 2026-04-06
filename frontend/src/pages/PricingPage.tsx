@@ -9,6 +9,7 @@ interface TierMeta {
   monthlyPrice: string;
   quarterlyPrice: string;
   priceSuffix: { monthly: string; quarterly: string };
+  highlight?: boolean;
 }
 
 const TIER_META: Record<UserTier, TierMeta> = {
@@ -18,16 +19,23 @@ const TIER_META: Record<UserTier, TierMeta> = {
     quarterlyPrice: '₩0',
     priceSuffix: { monthly: '', quarterly: '' },
   },
-  learner: {
-    name: 'Learner Lite',
-    monthlyPrice: '₩9,900',
-    quarterlyPrice: '₩25,300',
+  lite: {
+    name: 'Lite',
+    monthlyPrice: '₩6,900',
+    quarterlyPrice: '₩17,600',
     priceSuffix: { monthly: '/월', quarterly: '/분기' },
   },
+  standard: {
+    name: 'Standard',
+    monthlyPrice: '₩14,900',
+    quarterlyPrice: '₩38,100',
+    priceSuffix: { monthly: '/월', quarterly: '/분기' },
+    highlight: true,
+  },
   pro: {
-    name: 'Learner Pro',
-    monthlyPrice: '₩22,000',
-    quarterlyPrice: '₩56,100',
+    name: 'Pro',
+    monthlyPrice: '₩26,900',
+    quarterlyPrice: '₩68,600',
     priceSuffix: { monthly: '/월', quarterly: '/분기' },
   },
 };
@@ -35,37 +43,39 @@ const TIER_META: Record<UserTier, TierMeta> = {
 interface FeatureRow {
   label: string;
   free: string;
-  learner: string;
+  lite: string;
+  standard: string;
   pro: string;
 }
 
 const FEATURES: FeatureRow[] = [
-  { label: '저장 공간', free: '100 MB', learner: '5,000 MB', pro: '무제한' },
-  { label: '퀴즈 생성 (8시간)', free: '3회', learner: '100회', pro: '무제한' },
-  { label: 'OCR 페이지 (8시간)', free: '1페이지', learner: '50페이지', pro: '무제한' },
-  { label: 'AI 모델', free: 'ECO만', learner: '전체', pro: '전체' },
-  { label: '고급 모델 무료 체험', free: '주 1회', learner: '—', pro: '—' },
+  { label: '저장 공간', free: '300 MB', lite: '3 GB', standard: '15 GB', pro: '50 GB' },
+  { label: '퀴즈 생성 (30일)', free: '20회', lite: '200회', standard: '1,000회', pro: '3,000회' },
+  { label: 'OCR 페이지 (30일)', free: '10페이지', lite: '100페이지', standard: '500페이지', pro: '2,000페이지' },
+  { label: 'AI 모델', free: 'ECO', lite: 'ECO · BALANCED', standard: '전체', pro: '전체' },
+  { label: '파일 크기 제한', free: '20 MB', lite: '50 MB', standard: '100 MB', pro: '200 MB' },
+  { label: '고급 모델 무료 체험', free: '주 1회', lite: '—', standard: '—', pro: '—' },
 ];
 
 interface CreditPack {
   label: string;
   price: string;
+  unitPrice: string;
   type: string;
   size: string;
 }
 
 const CREDIT_PACKS: CreditPack[] = [
-  { label: '+5GB 저장공간', price: '₩3,300', type: 'storage', size: '5gb' },
-  { label: '+20GB 저장공간', price: '₩9,900', type: 'storage', size: '20gb' },
-  { label: '+퀴즈 100회', price: '₩4,400', type: 'ai', size: '100' },
-  { label: '+퀴즈 500회', price: '₩18,700', type: 'ai', size: '500' },
+  { label: '+5GB 저장공간', price: '₩3,900', unitPrice: '₩780/GB', type: 'storage', size: '5gb' },
+  { label: '+20GB 저장공간', price: '₩12,900', unitPrice: '₩645/GB', type: 'storage', size: '20gb' },
+  { label: '+50GB 저장공간', price: '₩27,900', unitPrice: '₩558/GB', type: 'storage', size: '50gb' },
 ];
 
-const TIERS: UserTier[] = ['free', 'learner', 'pro'];
+const TIERS: UserTier[] = ['free', 'lite', 'standard', 'pro'];
 
 export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
-  const [loadingTier, setLoadingTier] = useState<'learner' | 'pro' | null>(null);
+  const [loadingTier, setLoadingTier] = useState<'lite' | 'standard' | 'pro' | null>(null);
   const [loadingCredit, setLoadingCredit] = useState<string | null>(null);
 
   const user = useAuthStore((s) => s.user);
@@ -73,7 +83,7 @@ export default function PricingPage() {
 
   const currentTier: UserTier | null = user ? (usageStatus?.tier ?? 'free') : null;
 
-  async function handleSubscribe(tier: 'learner' | 'pro') {
+  async function handleSubscribe(tier: 'lite' | 'standard' | 'pro') {
     setLoadingTier(tier);
     try {
       const result = await billingApi.checkoutSubscription(tier, billingCycle);
@@ -116,13 +126,18 @@ export default function PricingPage() {
       );
     }
 
-    const paidTier = tier as 'learner' | 'pro';
+    const paidTier = tier as 'lite' | 'standard' | 'pro';
     const isLoading = loadingTier === paidTier;
+    const isHighlight = TIER_META[tier].highlight;
     return (
       <button
         onClick={() => handleSubscribe(paidTier)}
         disabled={isLoading}
-        className="w-full rounded-xl bg-brand-500 py-2.5 text-sm font-semibold text-content-inverse transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+        className={`w-full rounded-xl py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+          isHighlight
+            ? 'bg-brand-500 text-content-inverse hover:bg-brand-600'
+            : 'border border-brand-500/60 text-brand-400 hover:bg-brand-500/10'
+        }`}
       >
         {isLoading ? '처리 중…' : `${TIER_META[tier].name} 시작하기`}
       </button>
@@ -130,15 +145,13 @@ export default function PricingPage() {
   }
 
   const currentPrice = (tier: UserTier) =>
-    billingCycle === 'monthly'
-      ? TIER_META[tier].monthlyPrice
-      : TIER_META[tier].quarterlyPrice;
+    billingCycle === 'monthly' ? TIER_META[tier].monthlyPrice : TIER_META[tier].quarterlyPrice;
 
   const currentSuffix = (tier: UserTier) => TIER_META[tier].priceSuffix[billingCycle];
 
   return (
     <div className="min-h-screen bg-surface-deep px-4 py-16 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
 
         <div className="text-center">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">요금제</p>
@@ -185,8 +198,8 @@ export default function PricingPage() {
         </div>
 
         <div className="mt-10 overflow-x-auto">
-          <div className="min-w-[600px] overflow-hidden rounded-2xl border border-white/[0.07]">
-            <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] bg-surface">
+          <div className="min-w-[700px] overflow-hidden rounded-2xl border border-white/[0.07]">
+            <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] bg-surface">
               <div className="border-b border-r border-white/[0.07] px-6 py-5" />
               {TIERS.map((tier, i) => (
                 <div
@@ -195,8 +208,14 @@ export default function PricingPage() {
                     'border-b border-white/[0.07] px-5 py-5',
                     i < TIERS.length - 1 ? 'border-r' : '',
                     currentTier === tier ? 'bg-brand-500/[0.06]' : '',
+                    TIER_META[tier].highlight ? 'ring-1 ring-inset ring-brand-500/30' : '',
                   ].join(' ')}
                 >
+                  {TIER_META[tier].highlight && (
+                    <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-widest text-brand-400">
+                      인기
+                    </p>
+                  )}
                   <p className="text-[0.72rem] font-bold uppercase tracking-widest text-content-muted">
                     {TIER_META[tier].name}
                   </p>
@@ -216,7 +235,7 @@ export default function PricingPage() {
             {FEATURES.map((feature, rowIdx) => (
               <div
                 key={feature.label}
-                className={`grid grid-cols-[1.4fr_1fr_1fr_1fr] ${
+                className={`grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] ${
                   rowIdx < FEATURES.length - 1 ? 'border-b border-white/[0.07]' : ''
                 }`}
               >
@@ -230,6 +249,7 @@ export default function PricingPage() {
                       'px-5 py-4 text-center text-sm text-content-primary',
                       i < TIERS.length - 1 ? 'border-r border-white/[0.07]' : '',
                       currentTier === tier ? 'bg-brand-500/[0.06]' : '',
+                      TIER_META[tier].highlight ? 'ring-1 ring-inset ring-brand-500/30' : '',
                     ].join(' ')}
                   >
                     {feature[tier]}
@@ -243,10 +263,10 @@ export default function PricingPage() {
         <div className="mt-16">
           <h2 className="text-xl font-semibold text-content-primary">크레딧 추가 구매</h2>
           <p className="mt-1 text-sm text-content-secondary">
-            구독보다 단가가 높지만 필요할 때 사용 가능합니다
+            구독 용량이 부족할 때 저장 공간을 영구적으로 추가할 수 있습니다.
           </p>
 
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
             {CREDIT_PACKS.map((pack) => {
               const key = `${pack.type}-${pack.size}`;
               const isLoading = loadingCredit === key;
@@ -258,6 +278,7 @@ export default function PricingPage() {
                   <div>
                     <p className="text-sm font-semibold text-content-primary">{pack.label}</p>
                     <p className="mt-1 text-lg font-semibold text-brand-400">{pack.price}</p>
+                    <p className="mt-0.5 text-xs text-content-muted">{pack.unitPrice}</p>
                   </div>
                   <button
                     onClick={() => handleCreditPurchase(pack.type, pack.size, key)}

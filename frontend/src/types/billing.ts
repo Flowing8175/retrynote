@@ -1,4 +1,4 @@
-export type UserTier = 'free' | 'learner' | 'pro';
+export type UserTier = 'free' | 'lite' | 'standard' | 'pro';
 export type BillingCycle = 'monthly' | 'quarterly';
 export type ResourceType = 'quiz' | 'ocr' | 'storage';
 export type CreditType = 'storage' | 'ai';
@@ -59,6 +59,7 @@ export interface UpgradePromptPayload {
 
 export const TIER_DISPLAY: Record<UserTier, { name: string; color: string }> = {
   free: { name: 'Free', color: 'gray' },
-  learner: { name: 'Learner Lite', color: 'blue' },
-  pro: { name: 'Learner Pro', color: 'purple' },
+  lite: { name: 'Lite', color: 'blue' },
+  standard: { name: 'Standard', color: 'indigo' },
+  pro: { name: 'Pro', color: 'purple' },
 };

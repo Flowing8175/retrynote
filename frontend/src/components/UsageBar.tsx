@@ -24,7 +24,9 @@ function getTierBadgeClass(tier: UserTier): string {
   switch (tier) {
     case 'pro':
       return 'text-purple-300 bg-purple-500/10 border-purple-500/20';
-    case 'learner':
+    case 'standard':
+      return 'text-indigo-300 bg-indigo-500/10 border-indigo-500/20';
+    case 'lite':
       return 'text-blue-300 bg-blue-500/10 border-blue-500/20';
     default:
       return 'text-content-muted bg-surface border-white/[0.05]';

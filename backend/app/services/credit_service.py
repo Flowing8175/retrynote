@@ -16,15 +16,10 @@ CREDIT_PACKS = {
         "storage_bytes": 20 * 1024 * 1024 * 1024,
         "ai_count": 0,
     },
-    ("ai", "100"): {
-        "price_id_setting": "paddle_ai_credits_100_price_id",
-        "storage_bytes": 0,
-        "ai_count": 100,
-    },
-    ("ai", "500"): {
-        "price_id_setting": "paddle_ai_credits_500_price_id",
-        "storage_bytes": 0,
-        "ai_count": 500,
+    ("storage", "50gb"): {
+        "price_id_setting": "paddle_storage_50gb_price_id",
+        "storage_bytes": 50 * 1024 * 1024 * 1024,
+        "ai_count": 0,
     },
 }
 

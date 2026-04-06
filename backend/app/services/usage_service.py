@@ -9,7 +9,7 @@ from app.schemas.billing import (
     UsageWindowSchema,
     CreditBalanceSchema,
 )
-from app.tier_config import TIER_LIMITS, WINDOW_SECONDS, UserTier, FREE_STORAGE_BYTES
+from app.tier_config import TIER_LIMITS, WINDOW_DAYS, UserTier, FREE_STORAGE_BYTES
 
 
 class UsageService:
@@ -49,14 +49,14 @@ class UsageService:
                 user_id=user_id,
                 resource_type=resource_type,
                 window_start=now,
-                window_end=now + timedelta(seconds=WINDOW_SECONDS),
+                window_end=now + timedelta(days=WINDOW_DAYS),
                 consumed=0,
             )
             db.add(record)
             await db.flush()
         elif now > record.window_end:
             record.window_start = now
-            record.window_end = now + timedelta(seconds=WINDOW_SECONDS)
+            record.window_end = now + timedelta(days=WINDOW_DAYS)
             record.consumed = 0
 
         return record
@@ -79,18 +79,25 @@ class UsageService:
         # Storage is cumulative, not rolling-window
         if resource_type == "storage":
             balance = await self._get_or_create_credit_balance(db, user.id)
-            total_quota = limits.storage_bytes + balance.storage_credits_bytes
+            tier_limit = limits.storage_bytes
+            total_quota = tier_limit + balance.storage_credits_bytes
             projected = user.storage_used_bytes + amount
-            if projected <= limits.storage_bytes:
-                return (True, limits.storage_bytes - projected, "tier")
-            elif projected <= total_quota:
-                credit_needed = projected - limits.storage_bytes
-                balance.storage_credits_bytes = max(
-                    0, balance.storage_credits_bytes - credit_needed
-                )
-                return (True, total_quota - projected, "credit")
-            else:
+
+            if projected > total_quota:
                 return (False, 0, "tier")
+
+            # Only charge credits for bytes that cross into the over-tier zone.
+            # e.g. tier=5GB, used=4.8GB, upload=400MB → 200MB from tier, 200MB from credits.
+            old_overage = max(0, user.storage_used_bytes - tier_limit)
+            new_overage = max(0, projected - tier_limit)
+            credit_needed = new_overage - old_overage
+
+            if credit_needed > 0:
+                balance.storage_credits_bytes -= credit_needed
+
+            remaining = total_quota - projected
+            source = "credit" if new_overage > 0 else "tier"
+            return (True, remaining, source)
 
         limit = (
             limits.quiz_per_window
@@ -138,7 +145,7 @@ class UsageService:
             )
             consumed = 0
             window_start = now
-            window_end = now + timedelta(seconds=WINDOW_SECONDS)
+            window_end = now + timedelta(days=WINDOW_DAYS)
             if record and now <= record.window_end:
                 consumed = record.consumed
                 window_start = record.window_start

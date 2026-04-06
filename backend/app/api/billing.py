@@ -54,16 +54,26 @@ async def checkout_subscription(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    if req.plan not in ("learner", "pro"):
-        raise HTTPException(status_code=422, detail="Invalid plan")
-    if req.billing_cycle not in ("monthly", "quarterly"):
-        raise HTTPException(status_code=422, detail="Invalid billing_cycle")
+    valid_combos = {
+        ("lite", "monthly"),
+        ("lite", "quarterly"),
+        ("standard", "monthly"),
+        ("standard", "quarterly"),
+        ("pro", "monthly"),
+        ("pro", "quarterly"),
+    }
+    if (req.plan, req.billing_cycle) not in valid_combos:
+        raise HTTPException(
+            status_code=422, detail="Invalid plan/billing_cycle combination"
+        )
 
     price_id_map = {
-        ("learner", "monthly"): settings.paddle_learner_lite_monthly_price_id,
-        ("learner", "quarterly"): settings.paddle_learner_lite_quarterly_price_id,
-        ("pro", "monthly"): settings.paddle_learner_pro_monthly_price_id,
-        ("pro", "quarterly"): settings.paddle_learner_pro_quarterly_price_id,
+        ("lite", "monthly"): settings.paddle_lite_monthly_price_id,
+        ("lite", "quarterly"): settings.paddle_lite_quarterly_price_id,
+        ("standard", "monthly"): settings.paddle_standard_monthly_price_id,
+        ("standard", "quarterly"): settings.paddle_standard_quarterly_price_id,
+        ("pro", "monthly"): settings.paddle_pro_monthly_price_id,
+        ("pro", "quarterly"): settings.paddle_pro_quarterly_price_id,
     }
     price_id = price_id_map[(req.plan, req.billing_cycle)]
     if not price_id:
