@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Upload, Trash2, Download, Edit3, RotateCw, Plus } from 'lucide-react';
+import { Upload, Trash2, Download, Edit3, RotateCw, Plus, X } from 'lucide-react';
 import type { AxiosError } from 'axios';
 import { filesApi } from '@/api';
 import { LoadingSpinner, Modal, Pagination, StatusBadge } from '@/components';
@@ -46,6 +46,7 @@ export default function Files() {
   const [moveTargetFolderId, setMoveTargetFolderId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [filePendingDelete, setFilePendingDelete] = useState<FileDetail | null>(null);
+  const [folderPendingDelete, setFolderPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -119,6 +120,16 @@ export default function Files() {
     },
   });
 
+  const deleteFolderMutation = useMutation({
+    mutationFn: (folderId: string) => filesApi.deleteFolder(folderId),
+    onSuccess: (_, folderId) => {
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+      setSelectedFolderId((current) => (current === folderId ? null : current));
+      setFolderPendingDelete(null);
+    },
+  });
+
   const deleteSelectedMutation = useMutation({
     mutationFn: (fileIds: string[]) =>
       Promise.all(fileIds.map((fileId) => filesApi.deleteFile(fileId))),
@@ -163,7 +174,7 @@ export default function Files() {
     }
   };
 
-  if (isLoading) return <LoadingSpinner message="자료실을 불러오고 있습니다" />;
+  if (isLoading) return <LoadingSpinner message="자료 목록을 불러오는 중..." />;
 
   const files = data?.files ?? [];
   const folders = folderData ?? [];
@@ -175,9 +186,9 @@ export default function Files() {
       <section className="animate-fade-in-up space-y-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
           <div className="space-y-2">
-            <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">자료실</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">자료 관리</h1>
             <p className="text-base text-content-secondary max-w-xl leading-relaxed">
-              지식의 근간이 되는 원천 자료를 관리합니다. 업로드된 데이터는 AI 분석을 거쳐 맞춤형 퀴즈의 재료가 됩니다.
+              학습 자료를 업로드하고 관리합니다. 업로드된 파일은 AI가 처리해 퀴즈 생성에 활용됩니다.
             </p>
           </div>
           
@@ -210,15 +221,23 @@ export default function Files() {
                 <span>모든 자료</span>
               </button>
               {folders.map((folder) => (
-                <button
-                  key={folder.id}
-                  onClick={() => { setSelectedFolderId(folder.id); setPage(1); setSelectedFileIds([]); }}
-                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
-                    selectedFolderId === folder.id ? 'bg-surface-raised text-white shadow-sm border border-white/[0.05]' : 'text-content-secondary hover:bg-surface-hover hover:text-white border border-transparent'
-                  }`}
-                >
-                  <span className="truncate">{folder.name}</span>
-                </button>
+                <div key={folder.id} className="group/folder relative">
+                  <button
+                    onClick={() => { setSelectedFolderId(folder.id); setPage(1); setSelectedFileIds([]); }}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors pr-8 ${
+                      selectedFolderId === folder.id ? 'bg-surface-raised text-white shadow-sm border border-white/[0.05]' : 'text-content-secondary hover:bg-surface-hover hover:text-white border border-transparent'
+                    }`}
+                  >
+                    <span className="truncate">{folder.name}</span>
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setFolderPendingDelete({ id: folder.id, name: folder.name }); }}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-content-muted hover:text-semantic-error hover:bg-semantic-error/10 opacity-0 group-hover/folder:opacity-100 transition-all"
+                    title="폴더 삭제"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
               ))}
             </div>
 
@@ -488,6 +507,26 @@ export default function Files() {
               className="flex-1 bg-semantic-error text-white py-2.5 text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-50"
             >
               {deleteMutation.isPending ? '삭제 중...' : '삭제하기'}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={folderPendingDelete !== null} onClose={() => setFolderPendingDelete(null)} title="폴더 삭제 확인">
+        <div className="space-y-6">
+          <div className="bg-surface-deep p-5 rounded-2xl border border-white/[0.05]">
+            <p className="text-sm text-content-secondary">
+              <span className="text-white font-medium">{folderPendingDelete?.name}</span> 폴더를 삭제하시겠습니까? 폴더 안의 파일은 삭제되지 않고 루트로 이동됩니다.
+            </p>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setFolderPendingDelete(null)} className="flex-1 py-2.5 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover">취소</button>
+            <button
+              onClick={() => { if (folderPendingDelete) deleteFolderMutation.mutate(folderPendingDelete.id); }}
+              disabled={deleteFolderMutation.isPending}
+              className="flex-1 bg-semantic-error text-white py-2.5 text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-50"
+            >
+              {deleteFolderMutation.isPending ? '삭제 중...' : '삭제하기'}
             </button>
           </div>
         </div>
