@@ -4,7 +4,6 @@ from sqlalchemy import (
     String,
     Text,
     Integer,
-    Float,
     Boolean,
     DateTime,
     Enum,
@@ -110,7 +109,6 @@ class ParsedDocument(CommonMixin, Base):
     parser_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     parser_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     ocr_applied: Mapped[bool] = mapped_column(Boolean, default=False)
-    parse_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="active")
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
     updated_by: Mapped[str | None] = mapped_column(String(36), nullable=True)

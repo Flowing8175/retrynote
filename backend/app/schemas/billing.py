@@ -22,7 +22,6 @@ class UsageWindowSchema(_CamelModel):
 
 class CreditBalanceSchema(_CamelModel):
     storage_credits_bytes: int
-    ai_credits_count: int
 
 
 class UsageStatusResponse(_CamelModel):

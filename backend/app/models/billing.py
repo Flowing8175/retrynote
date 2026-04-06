@@ -54,7 +54,6 @@ class CreditBalance(CommonMixin, Base):
         String(36), ForeignKey("users.id"), nullable=False, unique=True
     )
     storage_credits_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
-    ai_credits_count: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class CreditPurchase(CommonMixin, Base):

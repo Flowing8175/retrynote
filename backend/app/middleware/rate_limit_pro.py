@@ -6,16 +6,24 @@ from app.middleware.auth import get_current_user
 from app.models.user import User
 
 
+TIER_LIMITS = {
+    "free": 3,
+    "lite": 5,
+    "standard": 8,
+    "pro": 10,
+}
+
+
 async def pro_rate_limit(
     request: Request,
     user: User = Depends(get_current_user),
 ) -> None:
     """
-    Rate limit Pro users only: 10 requests per 60s sliding window.
-    Uses Redis sorted sets. Non-Pro users bypass entirely.
+    Rate limit all users based on subscription tier: 3-10 requests per 60s sliding window.
+    Uses Redis sorted sets. Free tier gets most restrictive limit, Pro gets highest.
     """
-    if user.tier != "pro":
-        return
+    # Get tier-based limit (default to free tier limit if tier not found)
+    limit = TIER_LIMITS.get(user.tier, 3)
 
     # Get Redis from app state (initialized in main.py lifespan)
     redis_client: aioredis.Redis = request.app.state.redis
@@ -31,7 +39,7 @@ async def pro_rate_limit(
     results = await pipe.execute()
 
     request_count = results[2]
-    if request_count > 10:
+    if request_count > limit:
         raise HTTPException(
             status_code=429,
             detail="요청 속도 제한 초과. 잠시 후 다시 시도해 주세요.",

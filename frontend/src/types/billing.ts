@@ -1,7 +1,7 @@
 export type UserTier = 'free' | 'lite' | 'standard' | 'pro';
 export type BillingCycle = 'monthly' | 'quarterly';
 export type ResourceType = 'quiz' | 'ocr' | 'storage';
-export type CreditType = 'storage' | 'ai';
+export type CreditType = 'storage';
 
 export interface TierLimits {
   storageBytes: number;
@@ -21,7 +21,6 @@ export interface UsageWindow {
 
 export interface CreditBalance {
   storageCreditsBytes: number;
-  aiCreditsCount: number;
 }
 
 export interface UsageStatus {

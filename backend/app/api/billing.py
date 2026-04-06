@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.rate_limit import limiter
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models.billing import WebhookEvent, Subscription
@@ -26,6 +27,8 @@ from app.services.usage_service import UsageService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+VALID_STORAGE_CREDIT_BYTES = {5 * 1024**3, 20 * 1024**3, 50 * 1024**3}
 
 subscription_svc = SubscriptionService()
 credit_svc = CreditService()
@@ -49,7 +52,9 @@ async def get_subscription(
 
 
 @router.post("/checkout/subscription", response_model=CheckoutResponse)
+@limiter.limit("10/minute")
 async def checkout_subscription(
+    request: Request,
     req: CheckoutRequest,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -94,7 +99,9 @@ async def checkout_subscription(
 
 
 @router.post("/checkout/credits", response_model=CheckoutResponse)
+@limiter.limit("10/minute")
 async def checkout_credits(
+    request: Request,
     req: CreditCheckoutRequest,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -134,7 +141,9 @@ async def get_manage_urls(
 
 
 @router.post("/cancel", status_code=status.HTTP_200_OK)
+@limiter.limit("5/minute")
 async def cancel_subscription(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -205,7 +214,16 @@ async def paddle_webhook(
                 )
                 sub = sub_result.scalar_one_or_none()
                 if sub:
-                    sub.status = data.get("status", sub.status)
+                    _VALID_SUB_STATUSES = {
+                        "active",
+                        "past_due",
+                        "canceled",
+                        "paused",
+                        "trialing",
+                    }
+                    new_status = data.get("status")
+                    if new_status in _VALID_SUB_STATUSES:
+                        sub.status = new_status
                     period_end = parse_paddle_datetime(data.get("next_billed_at"))
                     if period_end:
                         sub.current_period_end = period_end
@@ -227,19 +245,29 @@ async def paddle_webhook(
             user_id = custom_data.get("user_id")
 
             if not subscription_id and user_id and custom_data.get("credit_type"):
+                storage_bytes = int(custom_data.get("storage_bytes", 0))
+                if storage_bytes not in VALID_STORAGE_CREDIT_BYTES:
+                    logger.error(
+                        "Webhook: unexpected storage_bytes value %d for transaction %s",
+                        storage_bytes,
+                        data.get("id"),
+                    )
+                    storage_bytes = 0
                 await credit_svc.add_credits(
                     db=db,
                     user_id=user_id,
-                    storage_bytes=int(custom_data.get("storage_bytes", 0)),
+                    storage_bytes=storage_bytes,
                     ai_count=int(custom_data.get("ai_count", 0)),
                     paddle_transaction_id=data.get("id"),
                 )
 
+        if notification_id:
+            db.add(WebhookEvent(event_id=notification_id, event_type=event_type))
+            await db.commit()
+
     except Exception as e:
         logger.error("Webhook processing error for %s: %s", notification_id, e)
-
-    if notification_id:
-        db.add(WebhookEvent(event_id=notification_id, event_type=event_type))
-        await db.commit()
+        await db.rollback()
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
 
     return {"status": "ok"}

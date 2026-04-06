@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import logging
+import time
 from datetime import datetime
 from typing import Any
 
@@ -96,6 +97,14 @@ class PaddleClient:
             h1 = parts["h1"]
         except (ValueError, KeyError):
             return False
+
+        # Validate timestamp freshness (5 minute tolerance)
+        try:
+            if abs(time.time() - int(ts)) > 300:
+                return False
+        except (TypeError, ValueError):
+            return False
+
         signed_payload = f"{ts}:{raw_body.decode('utf-8')}"
         expected = hmac.new(
             secret.encode("utf-8"),

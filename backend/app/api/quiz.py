@@ -238,6 +238,12 @@ async def create_quiz_session(
         model_tier_label = MODEL_PERFORMANCE
 
     if model_tier_label and model_tier_label not in allowed_models:
+        # Lock the user row to prevent concurrent free trial consumption
+        _user_result = await db.execute(
+            select(User).where(User.id == user.id).with_for_update()
+        )
+        user = _user_result.scalar_one()
+
         now = datetime.now(timezone.utc)
         trial_ok = False
         if user.free_trial_used_at is None:

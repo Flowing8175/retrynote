@@ -57,8 +57,27 @@ async def process_file(job_id: str):
             file.processing_started_at = datetime.now(timezone.utc)
             await db.commit()
 
+            ocr_required = file.file_type in ("png", "jpg", "jpeg")
             text = ""
-            if file.source_type.value == "manual_text":
+
+            if ocr_required:
+                file.ocr_required = True
+                file.status = FileStatus.ocr_pending
+                await db.commit()
+
+                file.status = FileStatus.ocr_processing
+                await db.commit()
+
+                from app.services.ocr_service import extract_text_from_image
+                from app.services import storage as _storage
+
+                stored_path = file.stored_path
+                if not stored_path:
+                    raise ValueError("Image file missing stored_path")
+                image_data = await _storage.download_file(stored_path)
+                ocr_result = await extract_text_from_image(image_data)
+                text = ocr_result.text
+            elif file.source_type.value == "manual_text":
                 payload = job.payload_json or {}
                 text = payload.get("manual_text", "")
             elif file.source_type.value == "upload":
@@ -72,8 +91,12 @@ async def process_file(job_id: str):
             await db.commit()
 
             if not text.strip():
-                file.status = FileStatus.failed_terminal
-                file.parse_error_code = "empty_content"
+                if ocr_required:
+                    file.status = FileStatus.failed_partial
+                    file.parse_error_code = "ocr_empty"
+                else:
+                    file.status = FileStatus.failed_terminal
+                    file.parse_error_code = "empty_content"
                 file.processing_finished_at = datetime.now(timezone.utc)
                 job.status = "failed"
                 job.error_message = "File content is empty"
@@ -82,7 +105,6 @@ async def process_file(job_id: str):
                 return
 
             normalized = _normalize_text(text)
-            ocr_required = file.file_type in ("png", "jpg", "jpeg")
 
             parsed_doc = ParsedDocument(
                 file_id=file.id,
@@ -90,19 +112,14 @@ async def process_file(job_id: str):
                 normalized_text=normalized,
                 language="ko",
                 page_count=1,
-                parser_name="builtin",
+                parser_name="kakao_ocr" if ocr_required else "builtin",
                 parser_version="1.0",
                 ocr_applied=ocr_required,
-                parse_confidence=1.0 if not ocr_required else 0.7,
             )
             db.add(parsed_doc)
             await db.flush()
 
-            if ocr_required:
-                file.status = FileStatus.ocr_pending
-                file.ocr_required = True
-            else:
-                file.status = FileStatus.embedding_pending
+            file.status = FileStatus.embedding_pending
             await db.commit()
 
             chunks = _create_chunks(file.id, parsed_doc.id, normalized)
@@ -122,7 +139,15 @@ async def process_file(job_id: str):
             await db.commit()
 
         except Exception as e:
-            file.status = FileStatus.failed_terminal
+            is_ocr_failure = file.ocr_required and file.status in (
+                FileStatus.ocr_pending,
+                FileStatus.ocr_processing,
+            )
+            file.status = (
+                FileStatus.failed_partial
+                if is_ocr_failure
+                else FileStatus.failed_terminal
+            )
             file.parse_error_code = str(e)[:200]
             file.processing_finished_at = datetime.now(timezone.utc)
             job.status = "failed"

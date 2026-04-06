@@ -1,3 +1,4 @@
+import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -5,21 +6,20 @@ from app.models.billing import CreditBalance, CreditPurchase
 from app.config import settings
 from app.services.paddle_client import paddle
 
+logger = logging.getLogger(__name__)
+
 CREDIT_PACKS = {
     ("storage", "5gb"): {
         "price_id_setting": "paddle_storage_5gb_price_id",
         "storage_bytes": 5 * 1024 * 1024 * 1024,
-        "ai_count": 0,
     },
     ("storage", "20gb"): {
         "price_id_setting": "paddle_storage_20gb_price_id",
         "storage_bytes": 20 * 1024 * 1024 * 1024,
-        "ai_count": 0,
     },
     ("storage", "50gb"): {
         "price_id_setting": "paddle_storage_50gb_price_id",
         "storage_bytes": 50 * 1024 * 1024 * 1024,
-        "ai_count": 0,
     },
 }
 
@@ -46,7 +46,6 @@ class CreditService:
     ) -> CreditBalance:
         balance = await self.get_balance(db, user_id)
         balance.storage_credits_bytes += storage_bytes
-        balance.ai_credits_count += ai_count
 
         if storage_bytes > 0:
             db.add(
@@ -57,14 +56,11 @@ class CreditService:
                     paddle_transaction_id=paddle_transaction_id,
                 )
             )
+
         if ai_count > 0:
-            db.add(
-                CreditPurchase(
-                    user_id=user_id,
-                    credit_type="ai",
-                    amount=ai_count,
-                    paddle_transaction_id=paddle_transaction_id,
-                )
+            logger.warning(
+                "add_credits: ai_count=%d received but AI credits not yet supported",
+                ai_count,
             )
 
         await db.commit()
@@ -75,19 +71,13 @@ class CreditService:
         self,
         db: AsyncSession,
         user_id: str,
-        resource_type: str,
         amount: int,
     ) -> bool:
         balance = await self.get_balance(db, user_id)
 
-        if resource_type == "storage":
-            if balance.storage_credits_bytes < amount:
-                return False
-            balance.storage_credits_bytes -= amount
-        else:
-            if balance.ai_credits_count < amount:
-                return False
-            balance.ai_credits_count -= amount
+        if balance.storage_credits_bytes < amount:
+            return False
+        balance.storage_credits_bytes -= amount
 
         await db.commit()
         return True
@@ -100,12 +90,12 @@ class CreditService:
         price_id = getattr(settings, pack["price_id_setting"], "")
         return price_id
 
-    def get_pack_amounts(self, credit_type: str, pack_size: str) -> tuple[int, int]:
+    def get_pack_amounts(self, credit_type: str, pack_size: str) -> int:
         key = (credit_type, pack_size)
         pack = CREDIT_PACKS.get(key)
         if pack is None:
             raise ValueError(f"Unknown credit pack: {credit_type}/{pack_size}")
-        return pack["storage_bytes"], pack["ai_count"]
+        return pack["storage_bytes"]
 
     async def create_credit_checkout(
         self,
@@ -116,7 +106,7 @@ class CreditService:
         user_id: str,
     ) -> str:
         price_id = self.get_credit_pack_price_id(credit_type, pack_size)
-        storage_bytes, ai_count = self.get_pack_amounts(credit_type, pack_size)
+        storage_bytes = self.get_pack_amounts(credit_type, pack_size)
 
         transaction = await paddle.create_transaction(
             customer_id=customer_id,
@@ -126,7 +116,6 @@ class CreditService:
                 "credit_type": credit_type,
                 "pack_size": pack_size,
                 "storage_bytes": str(storage_bytes),
-                "ai_count": str(ai_count),
             },
             success_url=success_url,
         )

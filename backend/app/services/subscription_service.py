@@ -1,5 +1,5 @@
-from datetime import datetime
-from sqlalchemy import select
+from datetime import datetime, timezone
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -96,6 +96,10 @@ class SubscriptionService:
             select(Subscription).where(
                 Subscription.user_id == user_id,
                 Subscription.status.in_(["active", "past_due", "trialing"]),
+                or_(
+                    Subscription.current_period_end.is_(None),
+                    Subscription.current_period_end > datetime.now(timezone.utc),
+                ),
             )
         )
         return result.scalar_one_or_none()

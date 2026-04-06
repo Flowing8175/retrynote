@@ -79,6 +79,9 @@ class Settings(BaseSettings):
     b2_bucket_name: str = ""
     b2_endpoint_url: str = ""
 
+    # Kakao Vision OCR
+    kakao_rest_api_key: str = ""
+
     paddle_api_key: str = ""
     paddle_environment: str = "sandbox"
     paddle_webhook_secret: str = ""
@@ -177,4 +180,11 @@ else:
         logger.warning(
             "JWT_SECRET_KEY is insecure. This is acceptable in development but MUST be "
             "changed before deploying to production."
+        )
+
+if settings.app_env != "development":
+    if not settings.paddle_webhook_secret or len(settings.paddle_webhook_secret) < 16:
+        raise RuntimeError(
+            "PADDLE_WEBHOOK_SECRET must be set and at least 16 characters long "
+            "in non-development environments."
         )

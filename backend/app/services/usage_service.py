@@ -78,23 +78,30 @@ class UsageService:
 
         # Storage is cumulative, not rolling-window
         if resource_type == "storage":
+            # Lock the User row to prevent concurrent quota check race condition
+            result = await db.execute(
+                select(User).where(User.id == user.id).with_for_update()
+            )
+            locked_user = result.scalar_one()
+
             balance = await self._get_or_create_credit_balance(db, user.id)
             tier_limit = limits.storage_bytes
             total_quota = tier_limit + balance.storage_credits_bytes
-            projected = user.storage_used_bytes + amount
+            projected = locked_user.storage_used_bytes + amount
 
             if projected > total_quota:
                 return (False, 0, "tier")
 
             # Only charge credits for bytes that cross into the over-tier zone.
             # e.g. tier=5GB, used=4.8GB, upload=400MB → 200MB from tier, 200MB from credits.
-            old_overage = max(0, user.storage_used_bytes - tier_limit)
+            old_overage = max(0, locked_user.storage_used_bytes - tier_limit)
             new_overage = max(0, projected - tier_limit)
             credit_needed = new_overage - old_overage
 
             if credit_needed > 0:
                 balance.storage_credits_bytes -= credit_needed
 
+            locked_user.storage_used_bytes = projected
             remaining = total_quota - projected
             source = "credit" if new_overage > 0 else "tier"
             return (True, remaining, source)
@@ -113,11 +120,6 @@ class UsageService:
         if record.consumed + amount <= limit:
             record.consumed += amount
             return (True, limit - record.consumed, "tier")
-
-        balance = await self._get_or_create_credit_balance(db, user.id)
-        if resource_type in ("quiz", "ocr") and balance.ai_credits_count >= amount:
-            balance.ai_credits_count -= amount
-            return (True, balance.ai_credits_count, "credit")
 
         return (False, 0, "tier")
 
@@ -191,7 +193,6 @@ class UsageService:
             windows=windows,
             credits=CreditBalanceSchema(
                 storage_credits_bytes=balance.storage_credits_bytes,
-                ai_credits_count=balance.ai_credits_count,
             ),
             free_trial_used_at=user.free_trial_used_at,
             free_trial_available=free_trial_available,
