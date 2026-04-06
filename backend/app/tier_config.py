@@ -19,7 +19,7 @@ class TierLimits:
 
 WINDOW_DAYS = 30  # 30-day rolling window
 
-FREE_STORAGE_BYTES = 300 * 1024 * 1024  # 300 MB
+FREE_STORAGE_BYTES = 150 * 1024 * 1024  # 150 MB
 LITE_STORAGE_BYTES = 3 * 1024 * 1024 * 1024  # 3 GB
 STANDARD_STORAGE_BYTES = 15 * 1024 * 1024 * 1024  # 15 GB
 PRO_STORAGE_BYTES = 50 * 1024 * 1024 * 1024  # 50 GB
@@ -31,8 +31,8 @@ MODEL_PERFORMANCE = "PERFORMANCE"
 TIER_LIMITS: dict[UserTier, TierLimits] = {
     UserTier.free: TierLimits(
         storage_bytes=FREE_STORAGE_BYTES,
-        quiz_per_window=20,
-        ocr_pages_per_window=10,
+        quiz_per_window=10,
+        ocr_pages_per_window=5,
         allowed_models=[MODEL_ECO],
     ),
     UserTier.lite: TierLimits(
