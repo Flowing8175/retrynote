@@ -1,30 +1,23 @@
-import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.billing import Subscription
-from app.config import settings
 from app.tier_config import TIER_LIMITS, FREE_STORAGE_BYTES, UserTier
+from app.services.paddle_client import paddle
 
 
 class SubscriptionService:
-    async def get_or_create_stripe_customer(self, db: AsyncSession, user: User) -> str:
-        """Lazy creation — only hit Stripe API if user has no customer ID."""
-        if user.stripe_customer_id:
-            return user.stripe_customer_id
+    async def get_or_create_paddle_customer(self, db: AsyncSession, user: User) -> str:
+        if user.paddle_customer_id:
+            return user.paddle_customer_id
 
-        import stripe
-
-        stripe.api_key = settings.stripe_secret_key
-
-        customer = await asyncio.to_thread(
-            stripe.Customer.create,
+        customer = await paddle.create_customer(
             email=user.email,
-            metadata={"user_id": user.id, "username": user.username},
+            custom_data={"user_id": user.id, "username": user.username},
         )
-        user.stripe_customer_id = customer["id"]
+        user.paddle_customer_id = customer["id"]
         await db.commit()
         return customer["id"]
 
@@ -33,24 +26,16 @@ class SubscriptionService:
         customer_id: str,
         price_id: str,
         success_url: str,
-        cancel_url: str,
         metadata: dict,
     ) -> str:
-        """Create Stripe Checkout session for subscription. Returns session URL."""
-        import stripe
-
-        stripe.api_key = settings.stripe_secret_key
-
-        session = await asyncio.to_thread(
-            stripe.checkout.Session.create,
-            customer=customer_id,
-            mode="subscription",
-            line_items=[{"price": price_id, "quantity": 1}],
+        transaction = await paddle.create_transaction(
+            customer_id=customer_id,
+            price_id=price_id,
+            custom_data=metadata,
             success_url=success_url,
-            cancel_url=cancel_url,
-            metadata=metadata,
         )
-        return session["url"]
+        checkout = transaction.get("checkout") or {}
+        return checkout.get("url", "")
 
     async def provision_tier(
         self,
@@ -58,12 +43,11 @@ class SubscriptionService:
         user_id: str,
         tier: str,
         billing_cycle: str,
-        stripe_subscription_id: str,
-        stripe_customer_id: str,
-        current_period_end: datetime,
+        paddle_subscription_id: str,
+        paddle_customer_id: str,
+        current_period_end: datetime | None,
         reset_tz: str = "Asia/Seoul",
     ) -> Subscription:
-        """Upsert Subscription row, update User.tier and storage_quota_bytes."""
         result = await db.execute(
             select(Subscription).where(Subscription.user_id == user_id)
         )
@@ -74,8 +58,7 @@ class SubscriptionService:
 
         sub.tier = tier
         sub.billing_cycle = billing_cycle
-        sub.stripe_subscription_id = stripe_subscription_id
-        sub.stripe_customer_id = stripe_customer_id
+        sub.paddle_subscription_id = paddle_subscription_id
         sub.status = "active"
         sub.current_period_end = current_period_end
         sub.reset_tz = reset_tz
@@ -84,6 +67,7 @@ class SubscriptionService:
         user = user_result.scalar_one_or_none()
         if user:
             user.tier = tier
+            user.paddle_customer_id = paddle_customer_id
             tier_enum = UserTier(tier)
             user.storage_quota_bytes = TIER_LIMITS[tier_enum].storage_bytes
 
@@ -92,7 +76,6 @@ class SubscriptionService:
         return sub
 
     async def cancel_or_downgrade(self, db: AsyncSession, user_id: str) -> None:
-        """On subscription cancel/expire: set tier to free. Files NOT deleted. Credits survive."""
         result = await db.execute(
             select(Subscription).where(Subscription.user_id == user_id)
         )
@@ -109,7 +92,6 @@ class SubscriptionService:
         await db.commit()
 
     async def get_current(self, db: AsyncSession, user_id: str) -> Subscription | None:
-        """Return active subscription or None."""
         result = await db.execute(
             select(Subscription).where(
                 Subscription.user_id == user_id,

@@ -200,8 +200,11 @@ export default function BillingPage() {
   const isSuccess = searchParams.get('success') === '1';
 
   const [bannerVisible, setBannerVisible] = useState(isSuccess);
-  const [portalLoading, setPortalLoading] = useState(false);
   const [purchasingPack, setPurchasingPack] = useState<string | null>(null);
+  const [updatingPayment, setUpdatingPayment] = useState(false);
+  const [cancelConfirm, setCancelConfirm] = useState(false);
+  const [canceling, setCanceling] = useState(false);
+  const [cancelDone, setCancelDone] = useState(false);
 
   useEffect(() => {
     if (isSuccess) {
@@ -219,13 +222,27 @@ export default function BillingPage() {
 
   const isLoading = usageLoading || subLoading;
 
-  async function handleOpenPortal() {
-    setPortalLoading(true);
+  async function handleUpdatePayment() {
+    setUpdatingPayment(true);
     try {
-      const result = await billingApi.openPortal();
-      window.location.href = result.portal_url;
+      const result = await billingApi.getManageUrls();
+      if (result.updatePaymentMethodUrl) {
+        window.location.href = result.updatePaymentMethodUrl;
+      }
     } finally {
-      setPortalLoading(false);
+      setUpdatingPayment(false);
+    }
+  }
+
+  async function handleCancelSubscription() {
+    setCanceling(true);
+    try {
+      await billingApi.cancelSubscription();
+      setCancelDone(true);
+      setCancelConfirm(false);
+      queryClient.invalidateQueries({ queryKey: ['subscription'] });
+    } finally {
+      setCanceling(false);
     }
   }
 
@@ -361,21 +378,56 @@ export default function BillingPage() {
             </SectionCard>
           )}
 
-          <SectionCard>
-            <SectionTitle>구독 관리</SectionTitle>
-            <p className="text-sm text-content-secondary leading-relaxed">
-              결제 수단 변경, 구독 취소 및 청구 내역은 고객 포털에서 관리할 수 있습니다.
-            </p>
-            <button
-              type="button"
-              onClick={handleOpenPortal}
-              disabled={portalLoading}
-              className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-content-inverse transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              <CreditCard size={16} />
-              {portalLoading ? '이동 중…' : '구독 관리'}
-            </button>
-          </SectionCard>
+          {subscription && (
+            <SectionCard>
+              <SectionTitle>구독 관리</SectionTitle>
+              {cancelDone ? (
+                <p className="text-sm text-semantic-success">
+                  구독 취소가 예약되었습니다. 현재 결제 기간 종료 시 만료됩니다.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleUpdatePayment}
+                    disabled={updatingPayment}
+                    className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-content-inverse transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <CreditCard size={16} />
+                    {updatingPayment ? '이동 중…' : '결제 수단 변경'}
+                  </button>
+                  {!cancelConfirm ? (
+                    <button
+                      type="button"
+                      onClick={() => setCancelConfirm(true)}
+                      className="inline-flex items-center gap-2 rounded-xl border border-semantic-error/40 px-5 py-2.5 text-sm font-medium text-semantic-error transition-colors hover:bg-semantic-error/10"
+                    >
+                      구독 취소
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm text-content-secondary">정말 취소하시겠습니까?</p>
+                      <button
+                        type="button"
+                        onClick={handleCancelSubscription}
+                        disabled={canceling}
+                        className="rounded-xl bg-semantic-error px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                      >
+                        {canceling ? '처리 중…' : '취소 확인'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCancelConfirm(false)}
+                        className="rounded-xl border border-white/[0.08] px-4 py-2 text-sm font-medium text-content-secondary transition-colors hover:text-content-primary"
+                      >
+                        돌아가기
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </SectionCard>
+          )}
 
           <SectionCard>
             <SectionTitle>크레딧 구매</SectionTitle>

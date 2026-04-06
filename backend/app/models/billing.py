@@ -18,6 +18,9 @@ class Subscription(CommonMixin, Base):
         String(100), nullable=True, unique=True
     )
     stripe_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    paddle_subscription_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, unique=True
+    )
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="active")
     current_period_end: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -63,6 +66,9 @@ class CreditPurchase(CommonMixin, Base):
     credit_type: Mapped[str] = mapped_column(String(20), nullable=False)  # storage/ai
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     stripe_payment_intent_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True
+    )
+    paddle_transaction_id: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
 

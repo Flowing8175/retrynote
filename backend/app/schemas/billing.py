@@ -1,22 +1,31 @@
 from datetime import datetime
 from pydantic import BaseModel, ConfigDict
+from pydantic.alias_generators import to_camel
 
 
-class UsageWindowSchema(BaseModel):
+class _CamelModel(BaseModel):
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        from_attributes=True,
+    )
+
+
+class UsageWindowSchema(_CamelModel):
     resource_type: str
     consumed: int
-    limit: int  # -1 = unlimited
+    limit: int
     window_starts_at: datetime
     window_ends_at: datetime
-    source: str  # "tier" | "credit"
+    source: str
 
 
-class CreditBalanceSchema(BaseModel):
+class CreditBalanceSchema(_CamelModel):
     storage_credits_bytes: int
     ai_credits_count: int
 
 
-class UsageStatusResponse(BaseModel):
+class UsageStatusResponse(_CamelModel):
     tier: str
     windows: list[UsageWindowSchema]
     credits: CreditBalanceSchema
@@ -24,9 +33,7 @@ class UsageStatusResponse(BaseModel):
     free_trial_available: bool
 
 
-class SubscriptionResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
+class SubscriptionResponse(_CamelModel):
     id: str
     tier: str
     billing_cycle: str
@@ -35,26 +42,27 @@ class SubscriptionResponse(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    plan: str  # "learner" | "pro"
-    billing_cycle: str  # "monthly" | "quarterly"
+    plan: str
+    billing_cycle: str
 
 
 class CreditCheckoutRequest(BaseModel):
-    credit_type: str  # "storage" | "ai"
-    pack_size: str  # "5gb" | "20gb" | "100" | "500"
+    credit_type: str
+    pack_size: str
 
 
-class CheckoutResponse(BaseModel):
+class CheckoutResponse(_CamelModel):
     session_url: str
 
 
-class PortalResponse(BaseModel):
-    portal_url: str
+class ManageUrlsResponse(_CamelModel):
+    update_payment_method_url: str | None
+    cancel_url: str | None
 
 
-class LimitExceededError(BaseModel):
+class LimitExceededError(_CamelModel):
     detail: str
-    limit_type: str  # "quiz" | "ocr" | "storage" | "model_access"
+    limit_type: str
     current_usage: int
     limit: int
     upgrade_url: str = "/pricing"

@@ -2,6 +2,7 @@ import type {
   UsageStatus,
   Subscription,
   CheckoutSessionResponse,
+  ManageUrlsResponse,
 } from '../types/billing';
 import apiClient from './client';
 
@@ -34,8 +35,9 @@ export const billingApi = {
       })
       .then((r) => r.data),
 
-  openPortal: (): Promise<{ portal_url: string }> =>
-    apiClient
-      .post<{ portal_url: string }>('/billing/portal')
-      .then((r) => r.data),
+  getManageUrls: (): Promise<ManageUrlsResponse> =>
+    apiClient.get<ManageUrlsResponse>('/billing/manage-urls').then((r) => r.data),
+
+  cancelSubscription: (): Promise<{ status: string }> =>
+    apiClient.post<{ status: string }>('/billing/cancel').then((r) => r.data),
 };

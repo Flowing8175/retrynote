@@ -43,8 +43,7 @@ pgvector>=0.2.4,<1.0.0
 slowapi>=0.1.9,<1.0.0
 python-magic>=0.4.27,<1.0.0
 
-# Payments
-stripe>=10.0.0,<12.0.0
+
 
 # Utils
 python-dateutil>=2.8.2,<3.0.0

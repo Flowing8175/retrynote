@@ -74,18 +74,18 @@ class Settings(BaseSettings):
     daily_quiz_generation_limit: int = 50
     daily_ocr_page_limit: int = 100
 
-    # Stripe
-    stripe_secret_key: str = ""
-    stripe_publishable_key: str = ""
-    stripe_webhook_secret: str = ""
-    stripe_learner_monthly_price_id: str = ""
-    stripe_learner_quarterly_price_id: str = ""
-    stripe_pro_monthly_price_id: str = ""
-    stripe_pro_quarterly_price_id: str = ""
-    stripe_storage_5gb_price_id: str = ""
-    stripe_storage_20gb_price_id: str = ""
-    stripe_ai_credits_100_price_id: str = ""
-    stripe_ai_credits_500_price_id: str = ""
+    # Paddle
+    paddle_api_key: str = ""
+    paddle_environment: str = "sandbox"
+    paddle_webhook_secret: str = ""
+    paddle_learner_monthly_price_id: str = ""
+    paddle_learner_quarterly_price_id: str = ""
+    paddle_pro_monthly_price_id: str = ""
+    paddle_pro_quarterly_price_id: str = ""
+    paddle_storage_5gb_price_id: str = ""
+    paddle_storage_20gb_price_id: str = ""
+    paddle_ai_credits_100_price_id: str = ""
+    paddle_ai_credits_500_price_id: str = ""
 
 
 @lru_cache()

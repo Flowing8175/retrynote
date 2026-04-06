@@ -47,6 +47,7 @@ class User(CommonMixin, Base):
     updated_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
     tier: Mapped[str] = mapped_column(String(20), default="free", nullable=False)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    paddle_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     free_trial_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

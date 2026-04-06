@@ -44,6 +44,11 @@ export interface CheckoutSessionResponse {
   sessionUrl: string;
 }
 
+export interface ManageUrlsResponse {
+  updatePaymentMethodUrl: string | null;
+  cancelUrl: string | null;
+}
+
 export interface UpgradePromptPayload {
   detail: string;
   limitType: ResourceType | 'model_access';
