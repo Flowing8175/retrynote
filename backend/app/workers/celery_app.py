@@ -79,12 +79,12 @@ def review_objection_task(self, job_id: str):
 
 @celery_app.task(bind=True, name="file_cleanup", max_retries=3)
 def file_cleanup_task(self, job_id: str):
-    import os
     import logging
     from sqlalchemy import select
     from app.database import async_session
     from app.models.search import Job
     from app.models.file import File
+    from app.services import storage as _storage
 
     logger = logging.getLogger(__name__)
 
@@ -104,8 +104,8 @@ def file_cleanup_task(self, job_id: str):
                 await db.commit()
                 return
 
-            if file.stored_path and os.path.exists(file.stored_path):
-                os.remove(file.stored_path)
+            if file.stored_path:
+                await _storage.delete_file(file.stored_path)
 
             job.status = "completed"
             await db.commit()

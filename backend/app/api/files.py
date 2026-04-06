@@ -6,7 +6,6 @@ import uuid
 from datetime import datetime, timezone
 
 import magic
-from fastapi.responses import FileResponse
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -186,10 +185,7 @@ async def upload_file(
                 detail=f"동일한 파일이 이미 존재합니다: '{name}'",
             )
 
-        save_dir = os.path.join(settings.upload_dir, str(effective_user.id))
-        os.makedirs(save_dir, exist_ok=True)
-        stored_name = f"{uuid.uuid4().hex}.{ext}"
-        stored_path = os.path.join(save_dir, stored_name)
+        stored_path = f"{effective_user.id}/{uuid.uuid4().hex}.{ext}"
 
     elif manual_text:
         source_type = FileSourceType.manual_text
@@ -203,24 +199,26 @@ async def upload_file(
             status_code=400, detail="Must provide file, manual_text, or source_url"
         )
 
-    # Enforce storage quota BEFORE writing to disk
     from app.schemas.billing import LimitExceededError
     from app.tier_config import TIER_LIMITS, UserTier
+    from app.models.billing import CreditBalance
+    from app.services.usage_service import UsageService
 
     if file_size > 0:
         _tier = UserTier(effective_user.tier)
         _limits = TIER_LIMITS[_tier]
-        from app.models.billing import CreditBalance
-        from sqlalchemy import select as _select
 
         _credit_result = await db.execute(
-            _select(CreditBalance).where(CreditBalance.user_id == effective_user.id)
+            select(CreditBalance).where(CreditBalance.user_id == effective_user.id)
         )
         _credits = _credit_result.scalar_one_or_none()
         _credit_storage = _credits.storage_credits_bytes if _credits else 0
         _total_quota = _limits.storage_bytes + _credit_storage
 
-        if effective_user.storage_used_bytes + file_size > _total_quota:
+        _allowed, _, _ = await UsageService().check_and_consume(
+            db, effective_user, "storage", file_size
+        )
+        if not _allowed:
             raise HTTPException(
                 status_code=402,
                 detail=LimitExceededError(
@@ -232,11 +230,15 @@ async def upload_file(
                 ).model_dump(),
             )
 
-    # Write file to disk AFTER quota check passes
     if stored_path is not None and content is not None:
-        import asyncio as _asyncio
+        from app.services import storage as _storage
+        import mimetypes as _mimetypes
 
-        await _asyncio.to_thread(lambda: open(stored_path, "wb").write(content))
+        _mime = (
+            _mimetypes.guess_type(original_filename or "")[0]
+            or "application/octet-stream"
+        )
+        await _storage.upload_file(stored_path, content, _mime)
 
     file_record = File(
         user_id=effective_user.id,
@@ -535,13 +537,21 @@ async def download_file(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    from app.services import storage as _storage
+    from fastapi.responses import Response as _Response
+
     file = await get_owned_file(file_id, db, user)
-    if not file.stored_path or not os.path.exists(file.stored_path):
+    if not file.stored_path:
+        raise HTTPException(status_code=404, detail="File not available")
+
+    try:
+        data = await _storage.download_file(file.stored_path)
+    except Exception:
         raise HTTPException(status_code=404, detail="File not available")
 
     filename = file.original_filename or os.path.basename(file.stored_path)
-    return FileResponse(
-        file.stored_path,
-        filename=filename,
+    return _Response(
+        content=data,
         media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

@@ -62,7 +62,7 @@ async def process_file(job_id: str):
                 payload = job.payload_json or {}
                 text = payload.get("manual_text", "")
             elif file.source_type.value == "upload":
-                text = _extract_file_text(file)
+                text = await _extract_file_text_async(file)
             elif file.source_type.value == "url":
                 if not file.source_url:
                     raise ValueError("URL source missing source_url")
@@ -130,51 +130,57 @@ async def process_file(job_id: str):
             await db.commit()
 
 
-def _extract_file_text(file: File) -> str:
-    if not file.stored_path or not os.path.exists(file.stored_path):
+async def _extract_file_text_async(file: File) -> str:
+    if not file.stored_path:
+        return ""
+
+    from app.services import storage as _storage
+
+    try:
+        data = await _storage.download_file(file.stored_path)
+    except Exception:
         return ""
 
     ext = file.file_type
     if ext == "pdf":
-        return _extract_pdf(file.stored_path)
-    elif ext in ("docx",):
-        return _extract_docx(file.stored_path)
+        return _extract_pdf_bytes(data)
+    elif ext == "docx":
+        return _extract_docx_bytes(data)
     elif ext == "pptx":
-        return _extract_pptx(file.stored_path)
+        return _extract_pptx_bytes(data)
     elif ext in ("txt", "md"):
-        with open(file.stored_path, "r", encoding="utf-8") as f:
-            return f.read()
+        return data.decode("utf-8", errors="replace")
     return ""
 
 
-def _extract_pdf(path: str) -> str:
+def _extract_pdf_bytes(data: bytes) -> str:
     try:
+        import io
         from PyPDF2 import PdfReader
 
-        reader = PdfReader(path)
-        text = ""
-        for page in reader.pages:
-            text += page.extract_text() or ""
-        return text
+        reader = PdfReader(io.BytesIO(data))
+        return "".join(page.extract_text() or "" for page in reader.pages)
     except Exception:
         return ""
 
 
-def _extract_docx(path: str) -> str:
+def _extract_docx_bytes(data: bytes) -> str:
     try:
+        import io
         from docx import Document
 
-        doc = Document(path)
-        return "\n".join([p.text for p in doc.paragraphs if p.text])
+        doc = Document(io.BytesIO(data))
+        return "\n".join(p.text for p in doc.paragraphs if p.text)
     except Exception:
         return ""
 
 
-def _extract_pptx(path: str) -> str:
+def _extract_pptx_bytes(data: bytes) -> str:
     try:
+        import io
         from pptx import Presentation
 
-        prs = Presentation(path)
+        prs = Presentation(io.BytesIO(data))
         text = ""
         for slide in prs.slides:
             for shape in slide.shapes:
