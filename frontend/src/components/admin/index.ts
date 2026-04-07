@@ -12,5 +12,6 @@ export { default as AdminKPIsPanel } from './AdminKPIsPanel';
 export { default as AdminJobsTab } from './AdminJobsTab';
 export { default as AdminDbTab } from './AdminDbTab';
 export { default as AdminFilesTab } from './AdminFilesTab';
+export { default as AdminRateLimitTab } from './AdminRateLimitTab';
 export { formatDateTime, formatRelative, LogLevelBadge, HealthStatusBadge, ComponentStatusDot, tabs, LOG_LEVELS } from './adminUtils';
 export type { TabKey } from './adminUtils';

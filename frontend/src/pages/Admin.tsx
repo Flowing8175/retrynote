@@ -19,6 +19,7 @@ import {
   AdminJobsTab,
   AdminDbTab,
   AdminFilesTab,
+  AdminRateLimitTab,
   tabs,
 } from '@/components/admin';
 import type { TabKey } from '@/components/admin';
@@ -276,6 +277,10 @@ export default function Admin() {
 
       {activeTab === 'files' && (
         <AdminFilesTab isVerified={isVerified} activeTab={activeTab} />
+      )}
+
+      {activeTab === 'rate-limits' && (
+        <AdminRateLimitTab isVerified={isVerified} activeTab={activeTab} />
       )}
     </div>
   );
