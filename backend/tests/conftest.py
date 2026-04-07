@@ -1,4 +1,6 @@
 import asyncio
+import sys
+import types
 import uuid
 from datetime import datetime
 from unittest.mock import AsyncMock, patch, MagicMock
@@ -45,6 +47,17 @@ from app.models import (
     Job,
 )
 from app.middleware.auth import hash_password, create_access_token, create_admin_token
+
+import app.services as _app_services_pkg
+
+if not hasattr(_app_services_pkg, "storage"):
+    _storage_stub = types.ModuleType("app.services.storage")
+    setattr(_storage_stub, "upload_file", AsyncMock())
+    setattr(_storage_stub, "delete_file", AsyncMock())
+    setattr(_storage_stub, "download_file", AsyncMock(return_value=b""))
+    sys.modules["app.services.storage"] = _storage_stub
+    setattr(_app_services_pkg, "storage", _storage_stub)
+del _app_services_pkg
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite+aiosqlite://"
