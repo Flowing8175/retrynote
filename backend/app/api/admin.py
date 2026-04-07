@@ -18,6 +18,8 @@ from app.schemas.admin import (
     MasterPasswordVerify,
     AdminUserItem,
     AdminUserListResponse,
+    AdminUserStatusUpdate,
+    AdminUserRoleUpdate,
     AdminLogResponse,
     AdminLogItem,
     ModelUsageResponse,
@@ -44,6 +46,9 @@ from app.schemas.admin import (
     AdminFileInProgress,
     AdminFileFailure,
     AdminFilePipelineResponse,
+    AdminRateLimitEvent,
+    AdminRateLimitTopPath,
+    AdminRateLimitResponse,
 )
 from app.middleware.auth import (
     require_admin,
@@ -159,10 +164,116 @@ async def list_users(
                 storage_used_bytes=u.storage_used_bytes,
                 last_login_at=u.last_login_at,
                 is_active=u.is_active,
+                role=u.role.value,
             )
             for u in users
         ],
         total=total,
+    )
+
+
+@router.patch("/users/{user_id}/status", response_model=AdminUserItem)
+async def update_user_status(
+    user_id: str,
+    req: AdminUserStatusUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin_verified),
+):
+    user_result = await db.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not req.is_active and user.role == UserRole.super_admin:
+        active_sa_result = await db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.role == UserRole.super_admin,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+        )
+        active_sa_count = active_sa_result.scalar() or 0
+        if active_sa_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot deactivate the last super_admin",
+            )
+
+    user.is_active = req.is_active
+    await log_audit(
+        db,
+        admin.id,
+        "update_user_status",
+        request,
+        target_user_id=user_id,
+        payload={"is_active": req.is_active},
+    )
+    await db.commit()
+    await db.refresh(user)
+
+    return AdminUserItem(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        created_at=user.created_at,
+        storage_used_bytes=user.storage_used_bytes,
+        last_login_at=user.last_login_at,
+        is_active=user.is_active,
+        role=user.role.value,
+    )
+
+
+@router.patch("/users/{user_id}/role", response_model=AdminUserItem)
+async def update_user_role(
+    user_id: str,
+    req: AdminUserRoleUpdate,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin_verified),
+):
+    if admin.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+
+    if req.new_role == "super_admin" and admin.role != UserRole.super_admin:
+        raise HTTPException(
+            status_code=403,
+            detail="Only super_admin can grant super_admin role",
+        )
+
+    user_result = await db.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    old_role = user.role.value
+    user.role = UserRole(req.new_role)
+    await log_audit(
+        db,
+        admin.id,
+        "update_user_role",
+        request,
+        target_user_id=user_id,
+        payload={"old_role": old_role, "new_role": req.new_role},
+    )
+    await db.commit()
+    await db.refresh(user)
+
+    return AdminUserItem(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        created_at=user.created_at,
+        storage_used_bytes=user.storage_used_bytes,
+        last_login_at=user.last_login_at,
+        is_active=user.is_active,
+        role=user.role.value,
     )
 
 
@@ -938,4 +1049,68 @@ async def get_db_diagnostics(
         migration_version=migration_version,
         db_total_size=db_total_size,
         checked_at=datetime.now(timezone.utc),
+    )
+
+
+@router.get("/rate-limits", response_model=AdminRateLimitResponse)
+async def get_rate_limits(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    logs_result = await db.execute(
+        select(SystemLog).where(
+            SystemLog.event_type == "rate_limit_exceeded",
+            SystemLog.created_at >= cutoff,
+        )
+    )
+    logs = logs_result.scalars().all()
+
+    # Group by (client_ip, path) in Python — stays SQLite-compatible
+    groups: dict[tuple, dict] = {}
+    for log in logs:
+        meta = log.meta_json or {}
+        client_ip = meta.get("client_ip", "unknown")
+        path = meta.get("path", "unknown")
+        key = (client_ip, path)
+        if key not in groups:
+            groups[key] = {
+                "client_ip": client_ip,
+                "path": path,
+                "event_count": 0,
+                "latest_event": log.created_at,
+            }
+        groups[key]["event_count"] += 1
+        if log.created_at and (
+            groups[key]["latest_event"] is None
+            or log.created_at > groups[key]["latest_event"]
+        ):
+            groups[key]["latest_event"] = log.created_at
+
+    sorted_events = sorted(
+        groups.values(), key=lambda x: x["event_count"], reverse=True
+    )[:100]
+
+    unique_ips = len({g["client_ip"] for g in groups.values()})
+
+    path_counts: dict[str, int] = {}
+    for g in groups.values():
+        path_counts[g["path"]] = path_counts.get(g["path"], 0) + g["event_count"]
+    top_paths = sorted(path_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+
+    return AdminRateLimitResponse(
+        events=[
+            AdminRateLimitEvent(
+                client_ip=e["client_ip"],
+                path=e["path"],
+                event_count=e["event_count"],
+                latest_event=e["latest_event"],
+            )
+            for e in sorted_events
+        ],
+        total_events_24h=len(logs),
+        unique_ips_count=unique_ips,
+        top_paths=[AdminRateLimitTopPath(path=p, count=c) for p, c in top_paths],
     )

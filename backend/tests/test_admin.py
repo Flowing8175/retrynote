@@ -972,6 +972,145 @@ class TestFilePipeline:
         assert resp.status_code == 403
 
 
+class TestRateLimits:
+    async def test_rate_limits_returns_200_with_structure(
+        self, admin_client: AsyncClient
+    ):
+        resp = await admin_client.get("/admin/rate-limits")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "events" in data
+        assert "total_events_24h" in data
+        assert "unique_ips_count" in data
+        assert "top_paths" in data
+        assert isinstance(data["events"], list)
+        assert isinstance(data["top_paths"], list)
+        assert data["total_events_24h"] >= 0
+        assert data["unique_ips_count"] >= 0
+
+    async def test_rate_limits_empty_when_no_data(self, admin_client: AsyncClient):
+        resp = await admin_client.get("/admin/rate-limits")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["events"] == []
+        assert data["total_events_24h"] == 0
+        assert data["unique_ips_count"] == 0
+        assert data["top_paths"] == []
+
+    async def test_rate_limits_aggregates_by_ip_and_path(
+        self, db_session, admin_client: AsyncClient
+    ):
+        from app.models import SystemLog
+
+        for _ in range(2):
+            db_session.add(
+                SystemLog(
+                    id=str(uuid.uuid4()),
+                    level="warning",
+                    service_name="rate_limiter",
+                    event_type="rate_limit_exceeded",
+                    message="Rate limit exceeded",
+                    meta_json={
+                        "client_ip": "1.2.3.4",
+                        "path": "/api/notes",
+                        "method": "GET",
+                    },
+                )
+            )
+        db_session.add(
+            SystemLog(
+                id=str(uuid.uuid4()),
+                level="warning",
+                service_name="rate_limiter",
+                event_type="rate_limit_exceeded",
+                message="Rate limit exceeded",
+                meta_json={
+                    "client_ip": "5.6.7.8",
+                    "path": "/api/quiz",
+                    "method": "POST",
+                },
+            )
+        )
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/rate-limits")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert data["total_events_24h"] == 3
+        assert data["unique_ips_count"] == 2
+        assert len(data["events"]) >= 2
+        assert data["events"][0]["event_count"] >= data["events"][1]["event_count"]
+
+        top = data["events"][0]
+        assert top["client_ip"] == "1.2.3.4"
+        assert top["path"] == "/api/notes"
+        assert top["event_count"] == 2
+        assert "latest_event" in top
+
+    async def test_rate_limits_no_user_ids_exposed(
+        self, db_session, admin_client: AsyncClient
+    ):
+        from app.models import SystemLog
+
+        db_session.add(
+            SystemLog(
+                id=str(uuid.uuid4()),
+                level="warning",
+                service_name="rate_limiter",
+                event_type="rate_limit_exceeded",
+                message="Rate limit exceeded",
+                meta_json={
+                    "client_ip": "1.2.3.4",
+                    "path": "/api/notes",
+                    "user_id": "secret-id",
+                    "method": "GET",
+                },
+            )
+        )
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/rate-limits")
+        assert resp.status_code == 200
+        data = resp.json()
+        for event in data["events"]:
+            assert "user_id" not in event
+
+    async def test_rate_limits_top_paths_max_five(
+        self, db_session, admin_client: AsyncClient
+    ):
+        from app.models import SystemLog
+
+        for i in range(7):
+            db_session.add(
+                SystemLog(
+                    id=str(uuid.uuid4()),
+                    level="warning",
+                    service_name="rate_limiter",
+                    event_type="rate_limit_exceeded",
+                    message="Rate limit exceeded",
+                    meta_json={
+                        "client_ip": f"10.0.0.{i}",
+                        "path": f"/api/path{i}",
+                        "method": "GET",
+                    },
+                )
+            )
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/rate-limits")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["top_paths"]) <= 5
+        for entry in data["top_paths"]:
+            assert "path" in entry
+            assert "count" in entry
+
+    async def test_user_cannot_access_rate_limits(self, auth_client: AsyncClient):
+        resp = await auth_client.get("/admin/rate-limits")
+        assert resp.status_code == 403
+
+
 class TestDbDiagnostics:
     async def test_super_admin_gets_diagnostics(self, super_admin_client: AsyncClient):
         resp = await super_admin_client.get("/admin/db-diagnostics")
@@ -989,4 +1128,70 @@ class TestDbDiagnostics:
 
     async def test_plain_admin_gets_403(self, admin_client: AsyncClient):
         resp = await admin_client.get("/admin/db-diagnostics")
+        assert resp.status_code == 403
+
+
+class TestUserManagement:
+    async def test_deactivate_user(
+        self, db_session, verified_admin_client: AsyncClient, test_user
+    ):
+        """PATCH /admin/users/{id}/status → 200, user deactivated"""
+        resp = await verified_admin_client.patch(
+            f"/admin/users/{test_user.id}/status",
+            json={"is_active": False},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["is_active"] is False
+        assert data["id"] == test_user.id
+
+        await db_session.refresh(test_user)
+        assert test_user.is_active is False
+
+    async def test_deactivate_last_super_admin_returns_400(
+        self, db_session, verified_super_admin_client: AsyncClient, super_admin_user
+    ):
+        """Deactivating the only super_admin → 400 with clear error"""
+        resp = await verified_super_admin_client.patch(
+            f"/admin/users/{super_admin_user.id}/status",
+            json={"is_active": False},
+        )
+        assert resp.status_code == 400
+        assert "last super_admin" in resp.json()["detail"]
+
+    async def test_update_user_role(
+        self, db_session, verified_admin_client: AsyncClient, test_user
+    ):
+        """PATCH /admin/users/{id}/role → 200, role updated"""
+        resp = await verified_admin_client.patch(
+            f"/admin/users/{test_user.id}/role",
+            json={"new_role": "admin"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == test_user.id
+        assert data["role"] == "admin"
+
+        await db_session.refresh(test_user)
+        assert test_user.role == UserRole.admin
+
+    async def test_admin_cannot_change_own_role(
+        self, db_session, verified_admin_client: AsyncClient, admin_user
+    ):
+        """Admin changing own role → 400"""
+        resp = await verified_admin_client.patch(
+            f"/admin/users/{admin_user.id}/role",
+            json={"new_role": "user"},
+        )
+        assert resp.status_code == 400
+        assert "own role" in resp.json()["detail"]
+
+    async def test_non_super_admin_cannot_grant_super_admin(
+        self, db_session, verified_admin_client: AsyncClient, test_user
+    ):
+        """Non-super_admin granting super_admin role → 403"""
+        resp = await verified_admin_client.patch(
+            f"/admin/users/{test_user.id}/role",
+            json={"new_role": "super_admin"},
+        )
         assert resp.status_code == 403

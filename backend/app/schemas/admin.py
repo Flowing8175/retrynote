@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 from datetime import datetime
 
@@ -14,6 +15,15 @@ class AdminUserItem(BaseModel):
     storage_used_bytes: int
     last_login_at: datetime | None = None
     is_active: bool
+    role: str | None = None
+
+
+class AdminUserStatusUpdate(BaseModel):
+    is_active: bool
+
+
+class AdminUserRoleUpdate(BaseModel):
+    new_role: Literal["user", "admin", "super_admin"]
 
 
 class AdminUserListResponse(BaseModel):
@@ -225,3 +235,22 @@ class AdminFilePipelineResponse(BaseModel):
     status_breakdown: list[AdminFileStatusBreakdown]
     in_progress: list[AdminFileInProgress]
     recent_failures: list[AdminFileFailure]
+
+
+class AdminRateLimitEvent(BaseModel):
+    client_ip: str
+    path: str
+    event_count: int
+    latest_event: datetime
+
+
+class AdminRateLimitTopPath(BaseModel):
+    path: str
+    count: int
+
+
+class AdminRateLimitResponse(BaseModel):
+    events: list[AdminRateLimitEvent]
+    total_events_24h: int
+    unique_ips_count: int
+    top_paths: list[AdminRateLimitTopPath]
