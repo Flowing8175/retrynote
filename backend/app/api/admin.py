@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.rate_limit import limiter
 from app.models.user import User, UserRole, AdminSettings
@@ -84,15 +85,21 @@ async def verify_master_password(
         await db.flush()
 
     if not admin_settings.master_password_hash:
-        if user.role.value != "super_admin":
+        if settings.admin_master_password:
+            admin_settings.master_password_hash = hash_password(
+                settings.admin_master_password
+            )
+            await db.commit()
+        elif user.role.value != "super_admin":
             raise HTTPException(
                 status_code=403,
                 detail="Only super_admin can set the initial master password",
             )
-        admin_settings.master_password_hash = hash_password(req.master_password)
-        await db.commit()
-        token = create_admin_token(user.id)
-        return {"verified": True, "admin_token": token}
+        else:
+            admin_settings.master_password_hash = hash_password(req.master_password)
+            await db.commit()
+            token = create_admin_token(user.id)
+            return {"verified": True, "admin_token": token}
 
     if verify_password(req.master_password, admin_settings.master_password_hash):
         token = create_admin_token(user.id)
