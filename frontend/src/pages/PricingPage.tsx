@@ -121,7 +121,7 @@ export default function PricingPage() {
           to="/signup"
           className="block w-full rounded-xl border border-brand-500/60 py-2.5 text-center text-sm font-medium text-brand-400 transition-colors hover:bg-brand-500/10"
         >
-          무료 시작
+          시작하기
         </Link>
       );
     }
@@ -139,7 +139,7 @@ export default function PricingPage() {
             : 'border border-brand-500/60 text-brand-400 hover:bg-brand-500/10'
         }`}
       >
-        {isLoading ? '처리 중…' : `${TIER_META[tier].name} 시작하기`}
+        {isLoading ? '처리 중…' : '시작하기'}
       </button>
     );
   }
@@ -150,71 +150,84 @@ export default function PricingPage() {
   const currentSuffix = (tier: UserTier) => TIER_META[tier].priceSuffix[billingCycle];
 
   return (
-    <div className="min-h-screen bg-surface-deep px-4 py-16 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-6xl">
 
-        <div className="text-center">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">요금제</p>
-          <h1 className="mt-3 text-[clamp(1.8rem,4vw,2.8rem)] font-semibold tracking-tight text-content-primary">
-            학습 목표에 맞는 요금제를 선택하세요
-          </h1>
-          <p className="mt-4 text-base text-content-secondary">
-            언제든지 업그레이드하거나 취소할 수 있습니다.
-          </p>
-        </div>
+      <div className="text-center">
+        <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">요금제</p>
+        <h1
+          className="mt-3 font-semibold tracking-tight text-content-primary"
+          style={{ fontSize: 'clamp(1.5rem, 4vw, 2.5rem)' }}
+        >
+          학습 목표에 맞는 요금제를 선택하세요
+        </h1>
+        <p className="mt-4 text-base text-content-secondary">
+          언제든지 업그레이드하거나 취소할 수 있습니다.
+        </p>
+      </div>
 
-        <div className="mt-10 flex items-center justify-center gap-3">
-          <div className="flex rounded-xl border border-white/[0.07] bg-surface p-1">
-            <button
-              onClick={() => setBillingCycle('monthly')}
-              className={`rounded-lg px-5 py-2 text-sm font-medium transition-colors ${
-                billingCycle === 'monthly'
-                  ? 'bg-brand-500 text-content-inverse'
-                  : 'text-content-secondary hover:text-content-primary'
-              }`}
-            >
-              월간
-            </button>
-            <button
-              onClick={() => setBillingCycle('quarterly')}
-              className={`rounded-lg px-5 py-2 text-sm font-medium transition-colors ${
-                billingCycle === 'quarterly'
-                  ? 'bg-brand-500 text-content-inverse'
-                  : 'text-content-secondary hover:text-content-primary'
-              }`}
-            >
-              분기
-            </button>
-          </div>
-          <span
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
-              billingCycle === 'quarterly'
-                ? 'bg-semantic-success/20 text-semantic-success'
-                : 'border border-white/[0.07] bg-surface text-content-muted'
+      <div className="mt-10 flex items-center justify-center gap-3">
+        <div className="flex rounded-xl border border-white/[0.07] bg-surface p-1">
+          <button
+            onClick={() => setBillingCycle('monthly')}
+            className={`rounded-lg px-5 py-2 text-sm font-medium transition-colors ${
+              billingCycle === 'monthly'
+                ? 'bg-brand-500 text-content-inverse'
+                : 'text-content-secondary hover:text-content-primary'
             }`}
           >
-            15% 할인
-          </span>
+            월간
+          </button>
+          <button
+            onClick={() => setBillingCycle('quarterly')}
+            className={`rounded-lg px-5 py-2 text-sm font-medium transition-colors ${
+              billingCycle === 'quarterly'
+                ? 'bg-brand-500 text-content-inverse'
+                : 'text-content-secondary hover:text-content-primary'
+            }`}
+          >
+            분기
+          </button>
         </div>
+        <span
+          className={`rounded-full px-3 py-1 text-xs font-semibold transition-colors ${
+            billingCycle === 'quarterly'
+              ? 'bg-semantic-success/20 text-semantic-success'
+              : 'border border-white/[0.07] bg-surface text-content-muted'
+          }`}
+        >
+          15% 할인
+        </span>
+      </div>
 
-        <div className="mt-10 overflow-x-auto">
-          <div className="min-w-[700px] overflow-hidden rounded-2xl border border-white/[0.07]">
-            <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] bg-surface">
-              <div className="border-b border-r border-white/[0.07] px-6 py-5" />
-              {TIERS.map((tier, i) => (
+      <div className="mt-10 overflow-x-auto">
+        <div className="min-w-[700px] overflow-hidden rounded-2xl border border-white/[0.07]">
+          {/* Header row */}
+          <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] bg-surface">
+            <div className="border-b border-r border-white/[0.07] px-6 py-7" />
+            {TIERS.map((tier, i) => {
+              const isHighlight = TIER_META[tier].highlight;
+              return (
                 <div
                   key={tier}
                   className={[
-                    'border-b border-white/[0.07] px-5 py-5',
+                    'border-b border-white/[0.07] px-5 py-7',
                     i < TIERS.length - 1 ? 'border-r' : '',
                     currentTier === tier ? 'bg-brand-500/[0.06]' : '',
-                    TIER_META[tier].highlight ? 'ring-1 ring-inset ring-brand-500/30' : '',
+                    isHighlight ? 'relative bg-brand-500/[0.09]' : '',
                   ].join(' ')}
+                  style={
+                    isHighlight
+                      ? {
+                          boxShadow: '0 0 28px -6px oklch(0.65 0.15 175 / 0.35)',
+                          borderTop: '2px solid oklch(0.65 0.15 175 / 0.6)',
+                        }
+                      : undefined
+                  }
                 >
-                  {TIER_META[tier].highlight && (
-                    <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-widest text-brand-400">
+                  {isHighlight && (
+                    <span className="mb-2.5 inline-flex items-center rounded-full bg-semantic-success-bg px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-widest text-semantic-success">
                       인기
-                    </p>
+                    </span>
                   )}
                   <p className="text-[0.72rem] font-bold uppercase tracking-widest text-content-muted">
                     {TIER_META[tier].name}
@@ -229,71 +242,77 @@ export default function PricingPage() {
                   </div>
                   <div className="mt-4">{renderTierCta(tier)}</div>
                 </div>
-              ))}
-            </div>
-
-            {FEATURES.map((feature, rowIdx) => (
-              <div
-                key={feature.label}
-                className={`grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] ${
-                  rowIdx < FEATURES.length - 1 ? 'border-b border-white/[0.07]' : ''
-                }`}
-              >
-                <div className="border-r border-white/[0.07] bg-surface-deep/30 px-6 py-4 text-sm font-medium text-content-secondary">
-                  {feature.label}
-                </div>
-                {TIERS.map((tier, i) => (
-                  <div
-                    key={tier}
-                    className={[
-                      'px-5 py-4 text-center text-sm text-content-primary',
-                      i < TIERS.length - 1 ? 'border-r border-white/[0.07]' : '',
-                      currentTier === tier ? 'bg-brand-500/[0.06]' : '',
-                      TIER_META[tier].highlight ? 'ring-1 ring-inset ring-brand-500/30' : '',
-                    ].join(' ')}
-                  >
-                    {feature[tier]}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-16">
-          <h2 className="text-xl font-semibold text-content-primary">크레딧 추가 구매</h2>
-          <p className="mt-1 text-sm text-content-secondary">
-            구독 용량이 부족할 때 저장 공간을 영구적으로 추가할 수 있습니다.
-          </p>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-3">
-            {CREDIT_PACKS.map((pack) => {
-              const key = `${pack.type}-${pack.size}`;
-              const isLoading = loadingCredit === key;
-              return (
-                <div
-                  key={key}
-                  className="flex flex-col gap-4 rounded-2xl border border-white/[0.07] bg-surface p-5"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-content-primary">{pack.label}</p>
-                    <p className="mt-1 text-lg font-semibold text-brand-400">{pack.price}</p>
-                    <p className="mt-0.5 text-xs text-content-muted">{pack.unitPrice}</p>
-                  </div>
-                  <button
-                    onClick={() => handleCreditPurchase(pack.type, pack.size, key)}
-                    disabled={isLoading}
-                    className="mt-auto rounded-xl border border-brand-500/50 py-2 text-sm font-medium text-brand-400 transition-colors hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isLoading ? '처리 중…' : '구매'}
-                  </button>
-                </div>
               );
             })}
           </div>
-        </div>
 
+          {FEATURES.map((feature, rowIdx) => (
+            <div
+              key={feature.label}
+              className={`grid grid-cols-[1.4fr_1fr_1fr_1fr_1fr] ${
+                rowIdx < FEATURES.length - 1 ? 'border-b border-white/[0.07]' : ''
+              }`}
+              style={
+                rowIdx % 2 === 0
+                  ? { backgroundColor: 'oklch(0.18 0.01 250)' }
+                  : undefined
+              }
+            >
+              <div className="border-r border-white/[0.07] px-6 py-6 text-sm font-medium text-content-secondary">
+                {feature.label}
+              </div>
+              {TIERS.map((tier, i) => (
+                <div
+                  key={tier}
+                  className={[
+                    'px-5 py-6 text-center text-sm text-content-primary',
+                    i < TIERS.length - 1 ? 'border-r border-white/[0.07]' : '',
+                    currentTier === tier ? 'bg-brand-500/[0.06]' : '',
+                    TIER_META[tier].highlight ? 'bg-brand-500/[0.07]' : '',
+                  ].join(' ')}
+                >
+                  {feature[tier]}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
+
+      <div className="mt-16">
+        <h2 className="text-xl font-semibold text-content-primary">크레딧 추가 구매</h2>
+        <p className="mt-1 text-sm text-content-secondary">
+          구독 용량이 부족할 때 저장 공간을 영구적으로 추가할 수 있습니다.
+        </p>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          {CREDIT_PACKS.map((pack) => {
+            const key = `${pack.type}-${pack.size}`;
+            const isLoading = loadingCredit === key;
+            return (
+              <div
+                key={key}
+                className="flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-surface p-6"
+                style={{ backgroundColor: 'oklch(0.20 0.01 250)' }}
+              >
+                <div>
+                  <p className="text-sm font-semibold text-content-primary">{pack.label}</p>
+                  <p className="mt-1 text-lg font-semibold text-brand-300">{pack.price}</p>
+                  <p className="mt-0.5 text-xs text-content-muted">{pack.unitPrice}</p>
+                </div>
+                <button
+                  onClick={() => handleCreditPurchase(pack.type, pack.size, key)}
+                  disabled={isLoading}
+                  className="mt-auto rounded-xl border border-brand-500/50 py-2 text-sm font-medium text-brand-400 transition-colors hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isLoading ? '처리 중…' : '구매'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
     </div>
   );
 }

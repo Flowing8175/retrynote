@@ -9,7 +9,7 @@ export default function Navbar() {
   return (
     <>
       <AdminBanner />
-      <nav className="sticky top-0 z-50 bg-background border-b border-white/[0.05] backdrop-blur-md">
+      <nav className="sticky top-0 z-50 bg-background/80 border-b border-surface-hover backdrop-blur-[12px]">
         <div className="mx-auto flex w-full max-w-[1600px] h-16 items-center justify-between px-6 lg:px-10">
           <Link to="/" className="flex items-center gap-3 group">
             <div className="flex h-10 w-10 items-center justify-center bg-brand-500/10 text-brand-300 rounded-xl transition-colors group-hover:bg-brand-500/20">
