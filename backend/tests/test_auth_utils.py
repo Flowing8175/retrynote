@@ -11,7 +11,8 @@ from app.middleware.auth import (
     create_admin_token,
     get_client_ip,
 )
-from jose import jwt, JWTError
+import jwt
+from jwt import InvalidTokenError as JWTError
 from app.config import settings
 
 

@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt as _jwt
 from jwt import InvalidTokenError as JWTError
-from passlib.context import CryptContext
+import bcrypt as _bcrypt_lib
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import select
@@ -14,16 +14,18 @@ from app.database import get_db
 from app.models.user import User, UserRole
 from app.models.search import ImpersonationSession
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return _bcrypt_lib.hashpw(password.encode(), _bcrypt_lib.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    try:
+        return _bcrypt_lib.checkpw(plain.encode(), hashed.encode())
+    except (ValueError, TypeError):
+        return False
 
 
 def create_access_token(

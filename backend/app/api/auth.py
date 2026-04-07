@@ -2,7 +2,8 @@ import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from jose import jwt, JWTError
+import jwt
+from jwt import InvalidTokenError as JWTError
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta, timezone
