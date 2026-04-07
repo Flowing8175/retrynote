@@ -87,7 +87,8 @@ export type TabKey =
   | 'impersonation'
   | 'model_settings'
   | 'jobs'
-  | 'db';
+  | 'db'
+  | 'files';
 
 export const tabs: { key: TabKey; label: string; helper: string }[] = [
   { key: 'health', label: '진단', helper: '시스템 상태 실시간 점검' },
@@ -100,6 +101,7 @@ export const tabs: { key: TabKey; label: string; helper: string }[] = [
   { key: 'model_settings', label: '모델 설정', helper: 'AI 모델 변경' },
   { key: 'jobs', label: '작업 관리', helper: '백그라운드 작업 조회 및 제어' },
   { key: 'db', label: 'DB 진단', helper: '마이그레이션 버전 및 테이블 현황' },
+  { key: 'files', label: '파일 파이프라인', helper: '파일 처리 상태 및 실패 현황' },
 ];
 
 export const LOG_LEVELS = ['전체', 'INFO', 'WARNING', 'ERROR'] as const;
