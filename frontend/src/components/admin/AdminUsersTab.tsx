@@ -1,12 +1,78 @@
+import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { adminApi } from '@/api';
 import { StatusBadge } from '@/components';
-import type { AdminUserListResponse } from '@/types';
+import type { AdminUserListResponse, AdminUserItemWithRole } from '@/types';
 import { formatDateTime, formatRelative } from './adminUtils';
 
 interface AdminUsersTabProps {
   usersData: AdminUserListResponse | undefined;
+  currentAdminId?: string;
 }
 
-export default function AdminUsersTab({ usersData }: AdminUsersTabProps) {
+const ROLE_LABELS: Record<string, string> = {
+  user: '일반',
+  admin: '관리자',
+  super_admin: '최고관리자',
+};
+
+const ROLE_RANK: Record<string, number> = {
+  user: 0,
+  admin: 1,
+  super_admin: 2,
+};
+
+export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersTabProps) {
+  const queryClient = useQueryClient();
+  const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [rowSuccess, setRowSuccess] = useState<Record<string, string>>({});
+
+  const setRowError = (userId: string, msg: string) => {
+    setRowErrors((prev) => ({ ...prev, [userId]: msg }));
+    setTimeout(() => {
+      setRowErrors((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    }, 3500);
+  };
+
+  const setRowSuccessMsg = (userId: string, msg: string) => {
+    setRowSuccess((prev) => ({ ...prev, [userId]: msg }));
+    setTimeout(() => {
+      setRowSuccess((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    }, 2000);
+  };
+
+  const toggleStatusMutation = useMutation({
+    mutationFn: ({ userId, isActive }: { userId: string; isActive: boolean }) =>
+      adminApi.toggleUserStatus(userId, { is_active: isActive }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setRowSuccessMsg(variables.userId, variables.isActive ? '활성화됨' : '비활성화됨');
+    },
+    onError: (_, variables) => {
+      setRowError(variables.userId, '상태 변경에 실패했습니다.');
+    },
+  });
+
+  const changeRoleMutation = useMutation({
+    mutationFn: ({ userId, newRole }: { userId: string; newRole: 'user' | 'admin' | 'super_admin' }) =>
+      adminApi.changeUserRole(userId, { new_role: newRole }),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setRowSuccessMsg(variables.userId, `역할 변경됨 → ${ROLE_LABELS[variables.newRole]}`);
+    },
+    onError: (_, variables) => {
+      setRowError(variables.userId, '역할 변경에 실패했습니다.');
+    },
+  });
+
   return (
     <section className="overflow-hidden rounded-3xl border border-white/[0.07] bg-surface">
       <table className="min-w-full divide-y divide-white/[0.07]">
@@ -18,13 +84,31 @@ export default function AdminUsersTab({ usersData }: AdminUsersTabProps) {
             <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-[0.18em] text-content-muted">마지막 접속</th>
             <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-[0.18em] text-content-muted">저장공간</th>
             <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-[0.18em] text-content-muted">상태</th>
+            <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-[0.18em] text-content-muted">작업</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-white/[0.07] bg-surface">
           {usersData?.users.map((user) => {
+            const userWithRole = user as AdminUserItemWithRole;
+            const currentRole = userWithRole.role || 'user';
+            const isSelf = currentAdminId !== undefined && currentAdminId === user.id;
+            const statusPending =
+              toggleStatusMutation.isPending &&
+              toggleStatusMutation.variables?.userId === user.id;
+            const rolePending =
+              changeRoleMutation.isPending &&
+              changeRoleMutation.variables?.userId === user.id;
+            const rowError = rowErrors[user.id];
+            const rowSuccessText = rowSuccess[user.id];
             const storageMB = user.storage_used_bytes / 1024 / 1024;
             const storagePct = Math.min((storageMB / 500) * 100, 100);
-            const storageColor = storagePct >= 90 ? 'bg-red-500' : storagePct >= 70 ? 'bg-amber-500' : 'bg-brand-500';
+            const storageColor =
+              storagePct >= 90
+                ? 'bg-red-500'
+                : storagePct >= 70
+                  ? 'bg-amber-500'
+                  : 'bg-brand-500';
+
             return (
               <tr key={user.id} className="align-top transition-colors hover:bg-surface-deep/50">
                 <td className="px-6 py-5 whitespace-nowrap text-sm font-medium text-content-primary">
@@ -55,6 +139,105 @@ export default function AdminUsersTab({ usersData }: AdminUsersTabProps) {
                 </td>
                 <td className="px-6 py-5 whitespace-nowrap text-sm">
                   <StatusBadge status={user.is_active ? 'active' : 'inactive'} />
+                </td>
+                <td className="px-6 py-5 whitespace-nowrap text-sm">
+                  <div className="flex flex-col gap-2 min-w-[10rem]">
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={isSelf || statusPending}
+                        onClick={() =>
+                          toggleStatusMutation.mutate({
+                            userId: user.id,
+                            isActive: !user.is_active,
+                          })
+                        }
+                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                          user.is_active
+                            ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
+                            : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
+                        }`}
+                      >
+                        {statusPending ? (
+                          <svg
+                            className="h-3 w-3 animate-spin"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                            />
+                          </svg>
+                        ) : null}
+                        {user.is_active ? '비활성화' : '활성화'}
+                      </button>
+
+                      <select
+                        disabled={isSelf || rolePending}
+                        value={currentRole}
+                        onChange={(e) => {
+                          const newRole = e.target.value as 'user' | 'admin' | 'super_admin';
+                          if (newRole === currentRole) return;
+                          const isDemotion = ROLE_RANK[newRole] < ROLE_RANK[currentRole];
+                          if (isDemotion) {
+                            const confirmed = window.confirm(
+                              `${user.username}의 역할을 ${ROLE_LABELS[currentRole]}에서 ${ROLE_LABELS[newRole]}으로 강등하시겠습니까?`
+                            );
+                            if (!confirmed) return;
+                          }
+                          changeRoleMutation.mutate({ userId: user.id, newRole });
+                        }}
+                        className="rounded-lg border border-white/[0.10] bg-surface-raised px-2 py-1.5 text-xs text-content-primary transition-colors hover:border-white/[0.20] focus:outline-none focus:ring-1 focus:ring-brand-500/50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <option value="user">일반</option>
+                        <option value="admin">관리자</option>
+                        <option value="super_admin">최고관리자</option>
+                      </select>
+
+                      {rolePending && (
+                        <svg
+                          className="h-3 w-3 animate-spin text-content-muted"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          />
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                          />
+                        </svg>
+                      )}
+                    </div>
+
+                    {isSelf && (
+                      <span className="text-[11px] text-content-muted">본인 계정 — 변경 불가</span>
+                    )}
+                    {rowError && (
+                      <span className="text-[11px] text-red-400">{rowError}</span>
+                    )}
+                    {rowSuccessText && (
+                      <span className="text-[11px] text-green-400">{rowSuccessText}</span>
+                    )}
+                  </div>
                 </td>
               </tr>
             );

@@ -26,7 +26,7 @@ import type { TabKey } from '@/components/admin';
 
 export default function Admin() {
   const queryClient = useQueryClient();
-  const { setImpersonation, endImpersonation: storeEndImpersonation, setAdminToken } = useAuthStore();
+  const { user, setImpersonation, endImpersonation: storeEndImpersonation, setAdminToken } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<TabKey>('health');
   const [masterPassword, setMasterPassword] = useState('');
@@ -214,7 +214,7 @@ export default function Admin() {
       )}
 
       {activeTab === 'users' && !usersLoading && (
-        <AdminUsersTab usersData={usersData} />
+        <AdminUsersTab usersData={usersData} currentAdminId={user?.id} />
       )}
 
       {activeTab === 'logs' && !logsLoading && (
