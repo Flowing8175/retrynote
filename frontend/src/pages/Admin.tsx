@@ -113,7 +113,7 @@ export default function Admin() {
     onSuccess: (data) => {
       setImpersonationId(data.impersonation_id);
       setImpersonatingTarget(data.target_username);
-      setImpersonation(data.target_user_id, data.target_username);
+      setImpersonation(data.target_user_id, data.target_username, data.impersonation_id);
     },
   });
 

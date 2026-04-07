@@ -17,7 +17,6 @@ class FileDetail(BaseModel):
     file_size_bytes: int
     source_type: str
     source_url: str | None
-    stored_path: str | None
     status: str
     parse_error_code: str | None
     ocr_required: bool

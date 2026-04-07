@@ -3,13 +3,21 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import DateTime, func
 import sqlalchemy as sa
+import logging as _logging
 from datetime import datetime
 import uuid
 
 from app.config import settings
 
+_db_logger = _logging.getLogger(__name__)
 
 engine = create_async_engine(settings.database_url, echo=False)
+
+if "sslmode" not in settings.database_url and settings.app_env != "development":
+    _db_logger.warning(
+        "DATABASE_URL does not include sslmode=require. "
+        "Production deployments should enforce SSL on DB connections."
+    )
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -25,7 +33,9 @@ class CommonMixin:
         DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), onupdate=func.now()
+        DateTime(timezone=True),
+        server_default=sa.text("CURRENT_TIMESTAMP"),
+        onupdate=func.now(),
     )
     deleted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

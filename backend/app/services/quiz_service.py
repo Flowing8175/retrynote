@@ -301,21 +301,33 @@ async def _fetch_url_text(url: str) -> str:
             )
         )
 
+        MAX_FETCH_BYTES = 5 * 1024 * 1024  # 5 MB
         async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                ip_url,
-                headers={"Host": hostname},
-                follow_redirects=False,
-                timeout=30,
-            )
-            if resp.status_code != 200:
-                return ""
-            from bs4 import BeautifulSoup
+            try:
+                async with client.stream(
+                    "GET",
+                    ip_url,
+                    headers={"Host": hostname},
+                    follow_redirects=False,
+                    timeout=30,
+                ) as resp:
+                    if resp.status_code != 200:
+                        return ""
+                    body = b""
+                    async for chunk in resp.aiter_bytes(chunk_size=8192):
+                        body += chunk
+                        if len(body) > MAX_FETCH_BYTES:
+                            return ""
+                from bs4 import BeautifulSoup
 
-            soup = BeautifulSoup(resp.text, "html.parser")
-            for tag in soup(["script", "style", "nav", "footer"]):
-                tag.decompose()
-            return soup.get_text(separator="\n")
+                soup = BeautifulSoup(
+                    body.decode("utf-8", errors="replace"), "html.parser"
+                )
+                for tag in soup(["script", "style", "nav", "footer"]):
+                    tag.decompose()
+                return soup.get_text(separator="\n")
+            except Exception:
+                return ""
     except Exception:
         return ""
 

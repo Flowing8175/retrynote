@@ -1,4 +1,5 @@
-FROM node:20-slim
+# Stage 1: Build
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
@@ -7,9 +8,24 @@ RUN npm ci
 
 COPY . .
 
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser && chown -R appuser:appgroup /app
-USER appuser
+ARG VITE_API_URL
+RUN npm run build
 
-EXPOSE 5173
+# Stage 2: Serve with nginx
+FROM nginx:alpine
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Simple nginx config for SPA routing
+RUN printf 'server {\n\
+    listen 80;\n\
+    root /usr/share/nginx/html;\n\
+    index index.html;\n\
+    location / {\n\
+        try_files $uri $uri/ /index.html;\n\
+    }\n\
+}\n' > /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

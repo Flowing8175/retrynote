@@ -11,11 +11,12 @@ interface AuthState {
   isAdmin: boolean;
   impersonatingUserId: string | null;
   impersonatingUsername: string | null;
+  impersonationId: string | null;
   adminToken: string | null;
   setUser: (user: UserProfile | null) => void;
   setTokens: (accessToken: string, refreshToken: string) => void;
   logout: () => void;
-  setImpersonation: (userId: string, username: string) => void;
+  setImpersonation: (userId: string, username: string, impersonationId: string) => void;
   endImpersonation: () => void;
   setAdminToken: (token: string | null) => void;
   usageStatus: UsageStatus | null;
@@ -32,6 +33,7 @@ export const useAuthStore = create<AuthState>()(
       isAdmin: false,
       impersonatingUserId: null,
       impersonatingUsername: null,
+      impersonationId: null,
       adminToken: null,
       usageStatus: null,
 
@@ -47,18 +49,22 @@ export const useAuthStore = create<AuthState>()(
         isAdmin: false,
         impersonatingUserId: null,
         impersonatingUsername: null,
+        impersonationId: null,
         adminToken: null,
         usageStatus: null,
       }),
 
-      setImpersonation: (userId, username) => set({
+      setImpersonation: (userId, username, impersonationId) => set({
         impersonatingUserId: userId,
         impersonatingUsername: username,
+        impersonationId,
       }),
 
       endImpersonation: () => set({
         impersonatingUserId: null,
         impersonatingUsername: null,
+        impersonationId: null,
+        adminToken: null,       // H-009: clear admin token when impersonation ends
       }),
 
       setAdminToken: (adminToken) => set({ adminToken }),
@@ -68,6 +74,19 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'auth-storage',
       storage: createJSONStorage(() => sessionStorage),
+      // M-007: adminToken is NOT persisted — memory-only for security
+      partialize: (state) => ({
+        user: state.user,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        isAuthenticated: state.isAuthenticated,
+        isAdmin: state.isAdmin,
+        impersonatingUserId: state.impersonatingUserId,
+        impersonatingUsername: state.impersonatingUsername,
+        impersonationId: state.impersonationId,
+        usageStatus: state.usageStatus,
+        // adminToken intentionally excluded
+      }),
     }
   )
 );

@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Optional
-from jose import JWTError, jwt
+import jwt as _jwt
+from jwt import InvalidTokenError as JWTError
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -31,7 +32,7 @@ def create_access_token(
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=settings.access_token_expire_minutes)
     )
-    return jwt.encode(
+    return _jwt.encode(
         {"sub": user_id, "role": role, "exp": expire, "type": "access"},
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
@@ -51,7 +52,7 @@ def create_refresh_token(user_id: str, role: str, jti: str | None = None) -> str
         "type": "refresh",
         "jti": jti,
     }
-    return jwt.encode(
+    return _jwt.encode(
         payload,
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
@@ -62,7 +63,7 @@ def create_admin_token(user_id: str) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.admin_session_expire_minutes
     )
-    return jwt.encode(
+    return _jwt.encode(
         {"sub": user_id, "role": "admin_verified", "exp": expire, "type": "admin"},
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
@@ -75,7 +76,7 @@ async def get_current_user(
 ) -> User:
     token = credentials.credentials
     try:
-        payload = jwt.decode(
+        payload = _jwt.decode(
             token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
         )
         user_id = payload.get("sub")
@@ -138,7 +139,7 @@ async def require_admin_verified(
             detail="Admin verification required",
         )
     try:
-        payload = jwt.decode(
+        payload = _jwt.decode(
             admin_token,
             settings.jwt_secret_key,
             algorithms=[settings.jwt_algorithm],
@@ -176,6 +177,7 @@ async def get_impersonation_context(
             ImpersonationSession.id == imp_header,
             ImpersonationSession.admin_user_id == user.id,
             ImpersonationSession.is_active == True,
+            ImpersonationSession.expires_at > datetime.now(timezone.utc),
         )
     )
     imp_session = result.scalar_one_or_none()
@@ -198,7 +200,6 @@ async def get_impersonation_context(
 
 
 def get_client_ip(request: Request) -> str:
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    from app.rate_limit import _get_real_client_ip
+
+    return _get_real_client_ip(request)

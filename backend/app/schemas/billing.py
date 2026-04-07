@@ -1,5 +1,6 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from typing import Literal
+from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
 
@@ -41,13 +42,13 @@ class SubscriptionResponse(_CamelModel):
 
 
 class CheckoutRequest(BaseModel):
-    plan: str
-    billing_cycle: str
+    plan: Literal["lite", "standard", "pro"]
+    billing_cycle: Literal["monthly", "quarterly"]
 
 
 class CreditCheckoutRequest(BaseModel):
-    credit_type: str
-    pack_size: str
+    credit_type: Literal["storage", "ai"]
+    pack_size: str = Field(max_length=20)
 
 
 class CheckoutResponse(_CamelModel):

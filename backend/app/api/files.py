@@ -265,7 +265,6 @@ async def upload_file(
     )
     db.add(job)
 
-    effective_user.storage_used_bytes += file_size
     await db.commit()
     await db.refresh(file_record)
 
@@ -502,7 +501,13 @@ async def rename_file(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    import re
+
     file = await get_owned_file(file_id, db, user)
+    if req.original_filename and re.search(r'[\r\n"]', req.original_filename):
+        raise HTTPException(
+            status_code=400, detail="Filename contains invalid characters"
+        )
     file.original_filename = req.original_filename
     file.updated_by = user.id
     file.updated_at = datetime.now(timezone.utc)
@@ -549,9 +554,12 @@ async def download_file(
     except Exception:
         raise HTTPException(status_code=404, detail="File not available")
 
+    from urllib.parse import quote as _urlquote
+
     filename = file.original_filename or os.path.basename(file.stored_path)
+    safe_name = _urlquote(filename, safe=" .-_~")
     return _Response(
         content=data,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}"},
     )

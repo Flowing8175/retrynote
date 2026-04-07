@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { QuizSessionDetail, QuizItemResponse } from '@/types';
 
 interface QuizState {
@@ -54,6 +54,7 @@ export const useQuizStore = create<QuizState>()(
     }),
     {
       name: 'quiz-storage',
+      storage: createJSONStorage(() => sessionStorage),
     }
   )
 );

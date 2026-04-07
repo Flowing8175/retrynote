@@ -1,10 +1,11 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.rate_limit import limiter
 from app.models.user import User, UserRole, AdminSettings
 from app.models.admin import SystemLog, AdminAuditLog, Announcement
 from app.models.quiz import QuizItem, AnswerLog, QuizSession
@@ -68,6 +69,7 @@ async def log_audit(
 
 
 @router.post("/login/verify-master")
+@limiter.limit("5/minute")
 async def verify_master_password(
     req: MasterPasswordVerify,
     request: Request,
@@ -224,6 +226,7 @@ async def start_impersonation(
         admin_user_id=admin.id,
         target_user_id=target.id,
         reason=req.reason,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=8),
     )
     db.add(imp_session)
 

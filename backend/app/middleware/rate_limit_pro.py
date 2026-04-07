@@ -33,7 +33,7 @@ async def pro_rate_limit(
 
     pipe = redis_client.pipeline()
     pipe.zremrangebyscore(key, 0, window_start)
-    pipe.zadd(key, {str(now): now})
+    pipe.zadd(key, {str(__import__("uuid").uuid4()): now})
     pipe.zcard(key)
     pipe.expire(key, 120)
     results = await pipe.execute()

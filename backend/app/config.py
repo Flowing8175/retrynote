@@ -188,3 +188,13 @@ if settings.app_env != "development":
             "PADDLE_WEBHOOK_SECRET must be set and at least 16 characters long "
             "in non-development environments."
         )
+
+if (
+    settings.paddle_api_key
+    and "_live_" in settings.paddle_api_key
+    and settings.paddle_environment == "sandbox"
+):
+    logger.warning(
+        "PADDLE_API_KEY appears to be a live key but PADDLE_ENVIRONMENT=sandbox. "
+        "This may cause billing inconsistencies. Set PADDLE_ENVIRONMENT=production for live keys."
+    )

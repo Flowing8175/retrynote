@@ -1,4 +1,5 @@
-from pydantic import BaseModel
+from typing import Literal
+from pydantic import BaseModel, Field
 from datetime import datetime
 
 
@@ -16,6 +17,6 @@ class DashboardResponse(BaseModel):
 
 
 class DashboardQuery(BaseModel):
-    range: str = "7d"  # 7d | 30d | all
-    file_id: str | None = None
-    category_tag: str | None = None
+    range: Literal["7d", "30d", "all"] = "7d"
+    file_id: str | None = Field(default=None, max_length=36)
+    category_tag: str | None = Field(default=None, max_length=100)

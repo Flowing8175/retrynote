@@ -1,10 +1,22 @@
 import { TriangleAlert } from 'lucide-react';
 import { useAuthStore } from '@/stores';
+import { adminApi } from '@/api';
 
 export default function AdminBanner() {
-  const { impersonatingUsername, endImpersonation } = useAuthStore();
+  const { impersonatingUsername, impersonationId, endImpersonation } = useAuthStore();
 
   if (!impersonatingUsername) return null;
+
+  const handleEnd = async () => {
+    if (impersonationId) {
+      try {
+        await adminApi.endImpersonation(impersonationId);
+      } catch {
+        // Best-effort: clear local state even if server call fails
+      }
+    }
+    endImpersonation();
+  };
 
   return (
     <div className="border-b border-semantic-warning-border/20 bg-semantic-warning-bg px-4 py-2.5">
@@ -19,7 +31,7 @@ export default function AdminBanner() {
         </div>
         <button
           type="button"
-          onClick={endImpersonation}
+          onClick={handleEnd}
           className="shrink-0 rounded-lg border border-semantic-warning-border/30 px-3 py-1.5 text-xs font-medium text-content-secondary transition-colors hover:bg-surface-hover hover:text-content-primary"
         >
           종료

@@ -13,6 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base, CommonMixin
+
 try:
     from pgvector.sqlalchemy import Vector
 except ImportError:
@@ -73,6 +74,9 @@ class ImpersonationSession(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     ended_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    expires_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
 
