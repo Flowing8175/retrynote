@@ -452,6 +452,16 @@ MOCK_OBJECTION_REJECTED_RESULT = {
 }
 
 
+@pytest.fixture(autouse=True)
+def mock_redis_state():
+    mock_pipeline = MagicMock()
+    mock_pipeline.execute = AsyncMock(return_value=[None, None, 0, None])
+    mock_redis = MagicMock()
+    mock_redis.pipeline = MagicMock(return_value=mock_pipeline)
+    app.state.redis = mock_redis
+    yield mock_redis
+
+
 @pytest_asyncio.fixture(autouse=True)
 async def mock_dispatch_task():
     mock = AsyncMock()
