@@ -135,7 +135,6 @@ export interface SystemHealthResponse {
 }
 
 export interface AdminTopUserByStorage {
-  id: string;
   username: string;
   storage_used_bytes: number;
 }
@@ -162,8 +161,8 @@ export interface AdminDashboardKPIs {
   total_quiz_jobs: number;
   total_storage_bytes: number;
   top_users_by_storage: AdminTopUserByStorage[];
-  ai_token_usage: AdminAiTokenUsage[];
-  top_errors: AdminTopError[];
+  ai_token_usage_24h: number;
+  top_errors_24h: AdminTopError[];
   signups_7d: number;
   dau: number;
   job_queue: AdminJobQueueItem[];
