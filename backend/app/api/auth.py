@@ -42,7 +42,10 @@ async def signup(
     request: Request, req: SignupRequest, db: AsyncSession = Depends(get_db)
 ):
     existing = await db.execute(
-        select(User).where((User.username == req.username) | (User.email == req.email))
+        select(User).where(
+            ((User.username == req.username) | (User.email == req.email)),
+            User.deleted_at.is_(None),
+        )
     )
     if existing.scalar_one_or_none():
         raise HTTPException(

@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+import sqlalchemy as sa
 from sqlalchemy import (
     String,
     Text,
@@ -77,6 +78,6 @@ class AdminSettings(Base):
     banner_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     master_password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")
     )
     updated_by: Mapped[str | None] = mapped_column(String(36), nullable=True)

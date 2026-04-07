@@ -1014,38 +1014,34 @@ async def get_db_diagnostics(
 ):
     tables_result = await db.execute(
         text(
-            "SELECT name FROM sqlite_master"
-            " WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+            "SELECT tablename, "
+            "  pg_size_pretty(pg_total_relation_size(quote_ident(tablename))) AS total_size, "
+            "  (SELECT reltuples::bigint FROM pg_class WHERE relname = tablename) AS row_estimate "
+            "FROM pg_tables "
+            "WHERE schemaname = 'public' "
+            "ORDER BY tablename"
         )
     )
-    table_names = [row[0] for row in tables_result.fetchall()]
     tables = [
-        AdminDbTableInfo(name=name, row_estimate=0, total_size="N/A")
-        for name in table_names
+        AdminDbTableInfo(
+            name=row[0], row_estimate=max(0, row[2] or 0), total_size=row[1] or "N/A"
+        )
+        for row in tables_result.fetchall()
     ]
 
-    alembic_exists_result = await db.execute(
-        text(
-            "SELECT name FROM sqlite_master"
-            " WHERE type='table' AND name='alembic_version'"
-        )
-    )
     migration_version: str | None = None
-    if alembic_exists_result.scalar_one_or_none():
+    try:
         version_result = await db.execute(
-            text("SELECT version_num FROM alembic_version")
+            text("SELECT version_num FROM alembic_version LIMIT 1")
         )
         migration_version = version_result.scalar_one_or_none()
+    except Exception:
+        pass
 
-    page_count_result = await db.execute(text("PRAGMA page_count"))
-    page_count = page_count_result.scalar() or 0
-    page_size_result = await db.execute(text("PRAGMA page_size"))
-    page_size = page_size_result.scalar() or 0
-    total_bytes = page_count * page_size
-    if total_bytes >= 1024 * 1024:
-        db_total_size = f"{total_bytes / (1024 * 1024):.2f} MB"
-    else:
-        db_total_size = f"{total_bytes / 1024:.2f} KB"
+    db_size_result = await db.execute(
+        text("SELECT pg_size_pretty(pg_database_size(current_database()))")
+    )
+    db_total_size = db_size_result.scalar() or "N/A"
 
     return AdminDbDiagnostics(
         tables=tables,
