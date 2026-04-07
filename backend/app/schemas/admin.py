@@ -158,3 +158,26 @@ class AdminDashboardKPIs(BaseModel):
     top_users_by_storage: list[TopStorageUser]
     top_errors_24h: list[TopErrorItem]
     job_queue: list[JobQueueItem]
+
+
+class AdminJobItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    job_type: str
+    status: str
+    target_type: str | None = None
+    target_id: str | None = None
+    payload_json: dict | None = None
+    result_json: dict | None = None
+    error_message: str | None = None
+    retry_count: int
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    celery_task_id: str | None = None
+
+
+class AdminJobListResponse(BaseModel):
+    jobs: list[AdminJobItem]
+    total: int

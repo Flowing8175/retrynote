@@ -631,3 +631,239 @@ class TestDashboardKPIs:
     async def test_user_cannot_get_dashboard_kpis(self, auth_client: AsyncClient):
         resp = await auth_client.get("/admin/dashboard-kpis")
         assert resp.status_code == 403
+
+
+class TestJobManagement:
+    async def test_list_jobs(self, db_session, admin_client: AsyncClient):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="generate_quiz",
+            status="pending",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/jobs")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "jobs" in data
+        assert "total" in data
+        assert data["total"] >= 1
+        assert len(data["jobs"]) >= 1
+
+    async def test_list_jobs_filter_by_status(
+        self, db_session, admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        job_failed = Job(
+            id=str(uuid.uuid4()), job_type="generate_quiz", status="failed"
+        )
+        job_pending = Job(
+            id=str(uuid.uuid4()), job_type="generate_quiz", status="pending"
+        )
+        db_session.add_all([job_failed, job_pending])
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/jobs", params={"status": "failed"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert all(j["status"] == "failed" for j in data["jobs"])
+
+    async def test_list_jobs_filter_by_job_type(
+        self, db_session, admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        job1 = Job(id=str(uuid.uuid4()), job_type="generate_quiz", status="pending")
+        job2 = Job(id=str(uuid.uuid4()), job_type="grade_exam", status="pending")
+        db_session.add_all([job1, job2])
+        await db_session.commit()
+
+        resp = await admin_client.get(
+            "/admin/jobs", params={"job_type": "generate_quiz"}
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert all(j["job_type"] == "generate_quiz" for j in data["jobs"])
+
+    async def test_retry_failed_job(
+        self, db_session, verified_admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="generate_quiz",
+            status="failed",
+            error_message="Something went wrong",
+            retry_count=0,
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await verified_admin_client.post(f"/admin/jobs/{job.id}/retry")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+
+        await db_session.refresh(job)
+        assert job.status == "pending"
+        assert job.retry_count == 1
+        assert job.error_message is None
+
+    async def test_retry_completed_job_returns_400(
+        self, db_session, verified_admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="generate_quiz",
+            status="completed",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await verified_admin_client.post(f"/admin/jobs/{job.id}/retry")
+        assert resp.status_code == 400
+
+    async def test_retry_pending_job_returns_400(
+        self, db_session, verified_admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="generate_quiz",
+            status="pending",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await verified_admin_client.post(f"/admin/jobs/{job.id}/retry")
+        assert resp.status_code == 400
+
+    async def test_retry_nonexistent_job_returns_404(
+        self, verified_admin_client: AsyncClient
+    ):
+        resp = await verified_admin_client.post(
+            f"/admin/jobs/{str(uuid.uuid4())}/retry"
+        )
+        assert resp.status_code == 404
+
+    async def test_cancel_pending_job(
+        self, db_session, verified_admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="generate_quiz",
+            status="pending",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await verified_admin_client.post(f"/admin/jobs/{job.id}/cancel")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "ok"
+
+        await db_session.refresh(job)
+        assert job.status == "failed"
+        assert job.error_message == "Cancelled by admin"
+
+    async def test_cancel_running_job(
+        self, db_session, verified_admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="process_file",
+            status="running",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await verified_admin_client.post(f"/admin/jobs/{job.id}/cancel")
+        assert resp.status_code == 200
+
+        await db_session.refresh(job)
+        assert job.status == "failed"
+        assert job.error_message == "Cancelled by admin"
+
+    async def test_cancel_completed_job_returns_400(
+        self, db_session, verified_admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="generate_quiz",
+            status="completed",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await verified_admin_client.post(f"/admin/jobs/{job.id}/cancel")
+        assert resp.status_code == 400
+
+    async def test_cancel_failed_job_returns_400(
+        self, db_session, verified_admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="generate_quiz",
+            status="failed",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await verified_admin_client.post(f"/admin/jobs/{job.id}/cancel")
+        assert resp.status_code == 400
+
+    async def test_cancel_nonexistent_job_returns_404(
+        self, verified_admin_client: AsyncClient
+    ):
+        resp = await verified_admin_client.post(
+            f"/admin/jobs/{str(uuid.uuid4())}/cancel"
+        )
+        assert resp.status_code == 404
+
+    async def test_user_cannot_list_jobs(self, auth_client: AsyncClient):
+        resp = await auth_client.get("/admin/jobs")
+        assert resp.status_code == 403
+
+    async def test_user_cannot_retry_job(self, db_session, auth_client: AsyncClient):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="generate_quiz",
+            status="failed",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await auth_client.post(f"/admin/jobs/{job.id}/retry")
+        assert resp.status_code == 403
+
+    async def test_user_cannot_cancel_job(self, db_session, auth_client: AsyncClient):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="generate_quiz",
+            status="pending",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await auth_client.post(f"/admin/jobs/{job.id}/cancel")
+        assert resp.status_code == 403

@@ -1,3 +1,4 @@
+import asyncio
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -34,6 +35,8 @@ from app.schemas.admin import (
     TopStorageUser,
     TopErrorItem,
     JobQueueItem,
+    AdminJobItem,
+    AdminJobListResponse,
 )
 from app.middleware.auth import (
     require_admin,
@@ -45,7 +48,7 @@ from app.middleware.auth import (
     create_admin_token,
     get_client_ip,
 )
-from app.workers.celery_app import dispatch_task
+from app.workers.celery_app import celery_app, dispatch_task
 
 router = APIRouter()
 
@@ -679,3 +682,112 @@ async def get_dashboard_kpis(
         top_errors_24h=top_errors_24h,
         job_queue=job_queue,
     )
+
+
+_JOB_TYPE_TASK_MAP: dict[str, str] = {
+    "process_file": "process_file",
+    "generate_quiz": "generate_quiz",
+    "grade_exam": "grade_exam",
+    "review_objection": "review_objection",
+    "admin_regrade": "admin_regrade",
+}
+
+
+@router.get("/jobs", response_model=AdminJobListResponse)
+async def list_jobs(
+    request: Request,
+    status: str | None = None,
+    job_type: str | None = None,
+    page: int = 1,
+    size: int = 20,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    query = select(Job).order_by(Job.created_at.desc())
+    if status:
+        query = query.where(Job.status == status)
+    if job_type:
+        query = query.where(Job.job_type == job_type)
+
+    total_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    total = total_result.scalar() or 0
+
+    result = await db.execute(query.offset((page - 1) * size).limit(size))
+    jobs = result.scalars().all()
+
+    return AdminJobListResponse(
+        jobs=[AdminJobItem.model_validate(j) for j in jobs],
+        total=total,
+    )
+
+
+@router.post("/jobs/{job_id}/retry")
+async def retry_job(
+    job_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin_verified),
+):
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status != "failed":
+        raise HTTPException(status_code=400, detail="Only failed jobs can be retried")
+
+    job.status = "pending"
+    job.retry_count += 1
+    job.error_message = None
+
+    await log_audit(
+        db,
+        admin.id,
+        "job_retry",
+        request,
+        target_type="job",
+        target_id=job_id,
+    )
+    await db.commit()
+
+    task_name = _JOB_TYPE_TASK_MAP.get(job.job_type)
+    if task_name:
+        await dispatch_task(task_name, [job.id])
+
+    return {"status": "ok", "job_id": job_id}
+
+
+@router.post("/jobs/{job_id}/cancel")
+async def cancel_job(
+    job_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin_verified),
+):
+    result = await db.execute(select(Job).where(Job.id == job_id))
+    job = result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.status in ("completed", "failed"):
+        raise HTTPException(
+            status_code=400, detail="Cannot cancel completed or failed jobs"
+        )
+
+    if job.celery_task_id:
+        await asyncio.to_thread(
+            celery_app.control.revoke, job.celery_task_id, terminate=True
+        )
+
+    job.status = "failed"
+    job.error_message = "Cancelled by admin"
+
+    await log_audit(
+        db,
+        admin.id,
+        "job_cancel",
+        request,
+        target_type="job",
+        target_id=job_id,
+    )
+    await db.commit()
+
+    return {"status": "ok", "job_id": job_id}
