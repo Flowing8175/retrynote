@@ -57,6 +57,7 @@ export default function Admin() {
   const [logLevelFilter, setLogLevelFilter] = useState<string | null>(null);
 
   const [isBannerDismissed, setIsBannerDismissed] = useState(false);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const prevHealthStatus = useRef<string | undefined>(undefined);
 
   const { data: healthData, isLoading: healthLoading, refetch: refetchHealth } = useQuery({
@@ -74,6 +75,31 @@ export default function Admin() {
     }
     prevHealthStatus.current = s;
   }, [healthData?.status]);
+
+  // Keyboard shortcuts for tab navigation (Ctrl+1 through Ctrl+9)
+  useEffect(() => {
+    if (!isVerified) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if user is typing in input or textarea
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.contentEditable === 'true') {
+        return;
+      }
+
+      // Check for Ctrl+1 through Ctrl+9
+      if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault();
+        const tabIndex = parseInt(e.key, 10) - 1;
+        if (tabIndex < tabs.length) {
+          setActiveTab(tabs[tabIndex].key);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isVerified]);
 
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -212,25 +238,52 @@ export default function Admin() {
       )}
 
       <section className="border-b border-white/[0.07]">
-        <nav className="-mb-px flex overflow-x-auto">
-          {tabs.map((tab) => {
-            const isActive = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'border-brand-500 text-brand-300'
-                    : 'border-transparent text-content-secondary hover:border-white/[0.20] hover:text-content-primary'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </section>
+         <div className="flex items-center justify-between">
+           <nav className="-mb-px flex overflow-x-auto">
+             {tabs.map((tab) => {
+               const isActive = activeTab === tab.key;
+               return (
+                 <button
+                   key={tab.key}
+                   onClick={() => setActiveTab(tab.key)}
+                   className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                     isActive
+                       ? 'border-brand-500 text-brand-300'
+                       : 'border-transparent text-content-secondary hover:border-white/[0.20] hover:text-content-primary'
+                   }`}
+                 >
+                   {tab.label}
+                 </button>
+               );
+             })}
+           </nav>
+           <div className="relative">
+             <button
+               onClick={() => setShowShortcutsHelp(!showShortcutsHelp)}
+               className="ml-4 inline-flex items-center justify-center h-8 w-8 rounded-full bg-white/5 text-content-secondary hover:bg-white/10 hover:text-content-primary transition-colors text-sm font-medium"
+               title="단축키 도움말"
+               aria-label="단축키 도움말"
+             >
+               ?
+             </button>
+             {showShortcutsHelp && (
+               <div className="absolute right-0 top-full mt-2 w-64 rounded-lg bg-white/10 border border-white/[0.15] p-4 shadow-lg z-50">
+                 <h3 className="text-sm font-semibold text-content-primary mb-3">⌨️ 단축키</h3>
+                 <div className="space-y-2 text-xs text-content-secondary">
+                   {tabs.map((tab, idx) => (
+                     <div key={tab.key} className="flex justify-between items-center">
+                       <span>{tab.label}</span>
+                       <kbd className="px-2 py-1 rounded bg-white/10 border border-white/[0.15] font-mono text-content-muted">
+                         Ctrl+{idx + 1}
+                       </kbd>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+             )}
+           </div>
+         </div>
+       </section>
 
       {activeTab === 'health' && healthLoading && <LoadingSpinner message="시스템 상태 점검 중" />}
       {activeTab === 'users' && usersLoading && <LoadingSpinner message="사용자 목록 정리 중" />}
