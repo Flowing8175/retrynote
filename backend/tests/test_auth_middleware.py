@@ -6,7 +6,7 @@ import pytest
 import pytest_asyncio
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
-from jose import jwt
+import jwt
 from sqlalchemy import select
 
 from app.config import settings
