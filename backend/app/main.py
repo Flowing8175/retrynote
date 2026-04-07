@@ -43,14 +43,14 @@ async def _log_rate_limit_event(request: Request, user_id: str | None = None):
         pass
 
 
-async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+async def _rate_limit_exceeded_handler(request: Request, exc: Exception):
     """Custom rate limit handler that logs to SystemLog."""
     # Extract user_id from JWT token if present
     user_id = None
     auth_header = request.headers.get("authorization", "")
     if auth_header.startswith("Bearer "):
         try:
-            from app.middleware.auth import _jwt
+            import jwt as _jwt
 
             token = auth_header[7:]
             payload = _jwt.decode(
