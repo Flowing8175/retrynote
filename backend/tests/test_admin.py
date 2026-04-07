@@ -867,3 +867,23 @@ class TestJobManagement:
 
         resp = await auth_client.post(f"/admin/jobs/{job.id}/cancel")
         assert resp.status_code == 403
+
+
+class TestDbDiagnostics:
+    async def test_super_admin_gets_diagnostics(self, super_admin_client: AsyncClient):
+        resp = await super_admin_client.get("/admin/db-diagnostics")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "tables" in data
+        assert "migration_version" in data
+        assert "db_total_size" in data
+        assert "checked_at" in data
+        assert isinstance(data["tables"], list)
+        for table in data["tables"]:
+            assert "name" in table
+            assert "row_estimate" in table
+            assert "total_size" in table
+
+    async def test_plain_admin_gets_403(self, admin_client: AsyncClient):
+        resp = await admin_client.get("/admin/db-diagnostics")
+        assert resp.status_code == 403

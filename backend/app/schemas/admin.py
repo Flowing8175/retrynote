@@ -181,3 +181,16 @@ class AdminJobItem(BaseModel):
 class AdminJobListResponse(BaseModel):
     jobs: list[AdminJobItem]
     total: int
+
+
+class AdminDbTableInfo(BaseModel):
+    name: str
+    row_estimate: int
+    total_size: str
+
+
+class AdminDbDiagnostics(BaseModel):
+    tables: list[AdminDbTableInfo]
+    migration_version: str | None
+    db_total_size: str
+    checked_at: datetime

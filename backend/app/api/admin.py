@@ -37,6 +37,8 @@ from app.schemas.admin import (
     JobQueueItem,
     AdminJobItem,
     AdminJobListResponse,
+    AdminDbTableInfo,
+    AdminDbDiagnostics,
 )
 from app.middleware.auth import (
     require_admin,
@@ -791,3 +793,52 @@ async def cancel_job(
     await db.commit()
 
     return {"status": "ok", "job_id": job_id}
+
+
+@router.get("/db-diagnostics", response_model=AdminDbDiagnostics)
+async def get_db_diagnostics(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    tables_result = await db.execute(
+        text(
+            "SELECT name FROM sqlite_master"
+            " WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+        )
+    )
+    table_names = [row[0] for row in tables_result.fetchall()]
+    tables = [
+        AdminDbTableInfo(name=name, row_estimate=0, total_size="N/A")
+        for name in table_names
+    ]
+
+    alembic_exists_result = await db.execute(
+        text(
+            "SELECT name FROM sqlite_master"
+            " WHERE type='table' AND name='alembic_version'"
+        )
+    )
+    migration_version: str | None = None
+    if alembic_exists_result.scalar_one_or_none():
+        version_result = await db.execute(
+            text("SELECT version_num FROM alembic_version")
+        )
+        migration_version = version_result.scalar_one_or_none()
+
+    page_count_result = await db.execute(text("PRAGMA page_count"))
+    page_count = page_count_result.scalar() or 0
+    page_size_result = await db.execute(text("PRAGMA page_size"))
+    page_size = page_size_result.scalar() or 0
+    total_bytes = page_count * page_size
+    if total_bytes >= 1024 * 1024:
+        db_total_size = f"{total_bytes / (1024 * 1024):.2f} MB"
+    else:
+        db_total_size = f"{total_bytes / 1024:.2f} KB"
+
+    return AdminDbDiagnostics(
+        tables=tables,
+        migration_version=migration_version,
+        db_total_size=db_total_size,
+        checked_at=datetime.now(timezone.utc),
+    )
