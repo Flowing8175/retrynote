@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/api';
 import { LoadingSpinner } from '@/components';
@@ -56,12 +56,24 @@ export default function Admin() {
 
   const [logLevelFilter, setLogLevelFilter] = useState<string | null>(null);
 
+  const [isBannerDismissed, setIsBannerDismissed] = useState(false);
+  const prevHealthStatus = useRef<string | undefined>(undefined);
+
   const { data: healthData, isLoading: healthLoading, refetch: refetchHealth } = useQuery({
     queryKey: ['admin-health'],
     queryFn: () => adminApi.getSystemHealth(),
-    enabled: isVerified && activeTab === 'health',
+    enabled: isVerified,
     staleTime: 30_000,
+    refetchInterval: 30_000,
   });
+
+  useEffect(() => {
+    const s = healthData?.status;
+    if ((s === 'degraded' || s === 'down') && s !== prevHealthStatus.current) {
+      setIsBannerDismissed(false);
+    }
+    prevHealthStatus.current = s;
+  }, [healthData?.status]);
 
   const { data: usersData, isLoading: usersLoading } = useQuery({
     queryKey: ['admin-users'],
@@ -176,6 +188,28 @@ export default function Admin() {
         errors24h={errors24h}
         errorRatePct={errorRatePct}
       />
+
+      {!isBannerDismissed && (healthData?.status === 'degraded' || healthData?.status === 'down') && (
+        <div
+          className={`flex items-center justify-between rounded-lg border px-4 py-3 text-sm ${
+            healthData.status === 'down'
+              ? 'border-red-500/30 bg-red-500/10'
+              : 'border-semantic-warning-border/30 bg-semantic-warning-bg'
+          }`}
+        >
+          <span className="font-medium text-content-primary">
+            {healthData.status === 'down' ? '🔴 시스템 상태: DOWN' : '⚠️ 시스템 상태: DEGRADED'}
+          </span>
+          <button
+            type="button"
+            onClick={() => setIsBannerDismissed(true)}
+            className="ml-4 shrink-0 text-content-secondary transition-colors hover:text-content-primary"
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <section className="border-b border-white/[0.07]">
         <nav className="-mb-px flex overflow-x-auto">
