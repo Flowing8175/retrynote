@@ -869,6 +869,109 @@ class TestJobManagement:
         assert resp.status_code == 403
 
 
+class TestFilePipeline:
+    async def test_pipeline_returns_200_with_structure(
+        self, db_session, admin_client: AsyncClient, test_user
+    ):
+        from app.models import File, FileStatus, FileSourceType
+
+        file_parsing = File(
+            id=str(uuid.uuid4()),
+            user_id=test_user.id,
+            original_filename="processing.pdf",
+            file_type="pdf",
+            file_size_bytes=1024,
+            source_type=FileSourceType.upload,
+            status=FileStatus.parsing,
+        )
+        file_failed = File(
+            id=str(uuid.uuid4()),
+            user_id=test_user.id,
+            original_filename="failed.pdf",
+            file_type="pdf",
+            file_size_bytes=512,
+            source_type=FileSourceType.upload,
+            status=FileStatus.failed_terminal,
+        )
+        db_session.add_all([file_parsing, file_failed])
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/files-pipeline")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        assert "status_breakdown" in data
+        assert "in_progress" in data
+        assert "recent_failures" in data
+        assert isinstance(data["status_breakdown"], list)
+        assert isinstance(data["in_progress"], list)
+        assert isinstance(data["recent_failures"], list)
+
+        for item in data["status_breakdown"]:
+            assert "status" in item
+            assert "count" in item
+
+        in_prog_ids = [f["id"] for f in data["in_progress"]]
+        assert file_parsing.id in in_prog_ids
+        in_prog = next(f for f in data["in_progress"] if f["id"] == file_parsing.id)
+        assert in_prog["username"] == test_user.username
+        assert "email" not in in_prog
+        assert in_prog["user_id"] == test_user.id
+        assert "retry_count" in in_prog
+
+        failure_ids = [f["id"] for f in data["recent_failures"]]
+        assert file_failed.id in failure_ids
+        failure = next(f for f in data["recent_failures"] if f["id"] == file_failed.id)
+        assert failure["username"] == test_user.username
+        assert "email" not in failure
+
+    async def test_pipeline_empty_lists_are_valid(self, admin_client: AsyncClient):
+        resp = await admin_client.get("/admin/files-pipeline")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["in_progress"] == []
+        assert data["recent_failures"] == []
+        assert data["status_breakdown"] == []
+
+    async def test_only_in_progress_statuses_appear_in_in_progress(
+        self, db_session, admin_client: AsyncClient, test_user
+    ):
+        from app.models import File, FileStatus, FileSourceType
+
+        file_ready = File(
+            id=str(uuid.uuid4()),
+            user_id=test_user.id,
+            original_filename="ready.pdf",
+            file_type="pdf",
+            file_size_bytes=1024,
+            source_type=FileSourceType.upload,
+            status=FileStatus.ready,
+        )
+        file_ocr = File(
+            id=str(uuid.uuid4()),
+            user_id=test_user.id,
+            original_filename="ocr.pdf",
+            file_type="pdf",
+            file_size_bytes=1024,
+            source_type=FileSourceType.upload,
+            status=FileStatus.ocr_processing,
+        )
+        db_session.add_all([file_ready, file_ocr])
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/files-pipeline")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        in_prog_ids = [f["id"] for f in data["in_progress"]]
+        assert file_ocr.id in in_prog_ids
+        assert file_ready.id not in in_prog_ids
+
+    async def test_user_cannot_access_pipeline(self, auth_client: AsyncClient):
+        resp = await auth_client.get("/admin/files-pipeline")
+        assert resp.status_code == 403
+
+
 class TestDbDiagnostics:
     async def test_super_admin_gets_diagnostics(self, super_admin_client: AsyncClient):
         resp = await super_admin_client.get("/admin/db-diagnostics")

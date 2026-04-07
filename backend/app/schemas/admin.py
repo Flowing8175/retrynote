@@ -194,3 +194,34 @@ class AdminDbDiagnostics(BaseModel):
     migration_version: str | None
     db_total_size: str
     checked_at: datetime
+
+
+class AdminFileStatusBreakdown(BaseModel):
+    status: str
+    count: int
+
+
+class AdminFileInProgress(BaseModel):
+    id: str
+    original_filename: str | None
+    status: str
+    user_id: str
+    username: str
+    processing_started_at: datetime | None
+    retry_count: int
+
+
+class AdminFileFailure(BaseModel):
+    id: str
+    original_filename: str | None
+    status: str
+    user_id: str
+    username: str
+    parse_error_code: str | None
+    processing_finished_at: datetime | None
+
+
+class AdminFilePipelineResponse(BaseModel):
+    status_breakdown: list[AdminFileStatusBreakdown]
+    in_progress: list[AdminFileInProgress]
+    recent_failures: list[AdminFileFailure]

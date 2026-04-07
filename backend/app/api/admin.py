@@ -11,6 +11,7 @@ from app.database import get_db
 from app.rate_limit import limiter
 from app.models.user import User, UserRole, AdminSettings
 from app.models.admin import SystemLog, AdminAuditLog, Announcement
+from app.models.file import File, FileStatus
 from app.models.quiz import QuizItem, AnswerLog, QuizSession
 from app.models.search import ImpersonationSession, Job
 from app.schemas.admin import (
@@ -39,6 +40,10 @@ from app.schemas.admin import (
     AdminJobListResponse,
     AdminDbTableInfo,
     AdminDbDiagnostics,
+    AdminFileStatusBreakdown,
+    AdminFileInProgress,
+    AdminFileFailure,
+    AdminFilePipelineResponse,
 )
 from app.middleware.auth import (
     require_admin,
@@ -793,6 +798,98 @@ async def cancel_job(
     await db.commit()
 
     return {"status": "ok", "job_id": job_id}
+
+
+@router.get("/files-pipeline", response_model=AdminFilePipelineResponse)
+async def get_files_pipeline(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    breakdown_result = await db.execute(
+        select(File.status, func.count().label("count")).group_by(File.status)
+    )
+    status_breakdown = [
+        AdminFileStatusBreakdown(status=str(row[0]), count=row[1])
+        for row in breakdown_result.fetchall()
+    ]
+
+    in_progress_result = await db.execute(
+        select(
+            File.id,
+            File.original_filename,
+            File.status,
+            File.user_id,
+            User.username,
+            File.processing_started_at,
+            File.retry_count,
+        )
+        .join(User, File.user_id == User.id)
+        .where(
+            File.status.in_(
+                [
+                    FileStatus.parsing,
+                    FileStatus.ocr_processing,
+                    FileStatus.embedding_processing,
+                ]
+            )
+        )
+        .order_by(File.processing_started_at.desc())
+        .limit(100)
+    )
+    in_progress = [
+        AdminFileInProgress(
+            id=row[0],
+            original_filename=row[1],
+            status=str(row[2]),
+            user_id=row[3],
+            username=row[4],
+            processing_started_at=row[5],
+            retry_count=row[6],
+        )
+        for row in in_progress_result.fetchall()
+    ]
+
+    failures_result = await db.execute(
+        select(
+            File.id,
+            File.original_filename,
+            File.status,
+            File.user_id,
+            User.username,
+            File.parse_error_code,
+            File.processing_finished_at,
+        )
+        .join(User, File.user_id == User.id)
+        .where(
+            File.status.in_(
+                [
+                    FileStatus.failed_partial,
+                    FileStatus.failed_terminal,
+                ]
+            )
+        )
+        .order_by(File.processing_finished_at.desc())
+        .limit(50)
+    )
+    recent_failures = [
+        AdminFileFailure(
+            id=row[0],
+            original_filename=row[1],
+            status=str(row[2]),
+            user_id=row[3],
+            username=row[4],
+            parse_error_code=row[5],
+            processing_finished_at=row[6],
+        )
+        for row in failures_result.fetchall()
+    ]
+
+    return AdminFilePipelineResponse(
+        status_breakdown=status_breakdown,
+        in_progress=in_progress,
+        recent_failures=recent_failures,
+    )
 
 
 @router.get("/db-diagnostics", response_model=AdminDbDiagnostics)
