@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from app.rate_limit import _get_real_client_ip
 
 
-def _make_request(headers=None, client_host="192.168.1.1"):
+def _make_request(headers=None, client_host: str | None = "127.0.0.1"):
     request = MagicMock()
     request.headers = headers or {}
     if client_host:

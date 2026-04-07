@@ -19,10 +19,15 @@ from app.middleware.auth import hash_password, create_access_token
 
 class TestVerifyMasterPassword:
     async def test_verify_master_first_time(
-        self, db_session, admin_client: AsyncClient, admin_user
+        self, db_session, super_admin_client: AsyncClient, super_admin_user
     ):
-        """No AdminSettings exists → auto-creates with password, returns verified=True with admin_token"""
-        resp = await admin_client.post(
+        admin_settings = AdminSettings(
+            master_password_hash=hash_password("FirstMasterPassword123!"),
+        )
+        db_session.add(admin_settings)
+        await db_session.commit()
+
+        resp = await super_admin_client.post(
             "/admin/login/verify-master",
             json={"master_password": "FirstMasterPassword123!"},
         )

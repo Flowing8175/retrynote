@@ -200,6 +200,9 @@ async def get_impersonation_context(
 
 
 def get_client_ip(request: Request) -> str:
-    from app.rate_limit import _get_real_client_ip
-
-    return _get_real_client_ip(request)
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client is None:
+        return "unknown"
+    return request.client.host

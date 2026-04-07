@@ -188,6 +188,12 @@ if settings.app_env != "development":
             "PADDLE_WEBHOOK_SECRET must be set and at least 16 characters long "
             "in non-development environments."
         )
+else:
+    if not settings.paddle_webhook_secret:
+        logger.warning(
+            "PADDLE_WEBHOOK_SECRET is not set. Paddle webhook signature verification "
+            "is disabled. Do not deploy without setting this."
+        )
 
 if (
     settings.paddle_api_key

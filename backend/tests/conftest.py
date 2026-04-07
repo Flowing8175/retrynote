@@ -463,6 +463,20 @@ def mock_redis_state():
 
 
 @pytest_asyncio.fixture(autouse=True)
+async def mock_storage_service():
+    with (
+        patch("app.services.storage.upload_file", new_callable=AsyncMock),
+        patch("app.services.storage.delete_file", new_callable=AsyncMock),
+        patch(
+            "app.services.storage.download_file",
+            new_callable=AsyncMock,
+            return_value=b"",
+        ),
+    ):
+        yield
+
+
+@pytest_asyncio.fixture(autouse=True)
 async def mock_dispatch_task():
     mock = AsyncMock()
     with (

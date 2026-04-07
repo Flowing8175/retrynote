@@ -280,9 +280,14 @@ class TestNormalModeAnswer:
                 json={"user_answer": "A"},
             )
         await db_session.refresh(session)
-        assert session.status == QuizSessionStatus.graded
-        assert session.total_score is not None
-        assert session.max_score is not None
+        assert session.status == QuizSessionStatus.in_progress
+
+        complete_resp = await auth_client.post(f"/quiz-sessions/{session.id}/complete")
+        assert complete_resp.status_code == 200
+        data = complete_resp.json()
+        assert data["status"] == "graded"
+        assert data["total_score"] is not None
+        assert data["max_score"] is not None
 
     async def test_submit_answer_normal_only(
         self, auth_client: AsyncClient, exam_session_ready
@@ -555,6 +560,8 @@ class TestScoreCalculation:
                 json={"user_answer": answer},
             )
 
-        await db_session.refresh(session)
-        assert session.total_score == 2.0
-        assert session.max_score == 3.0
+        complete_resp = await auth_client.post(f"/quiz-sessions/{session.id}/complete")
+        assert complete_resp.status_code == 200
+        data = complete_resp.json()
+        assert data["total_score"] == 2.0
+        assert data["max_score"] == 3.0

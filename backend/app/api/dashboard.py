@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func, and_, false
 from sqlalchemy.ext.asyncio import AsyncSession
-import redis.asyncio as redis
 
 from app.database import get_db
 from app.models.quiz import AnswerLog, QuizItem, QuizSession, Judgement, QuestionType
@@ -19,7 +18,6 @@ import json
 
 router = APIRouter()
 COACHING_SUMMARY_CACHE_TTL_SECONDS = 60 * 60
-_redis_client: redis.Redis | None = None
 
 
 def format_question_type_label(question_type: str) -> str:
@@ -57,15 +55,6 @@ def build_coaching_summary_cache_key(
     return f"dashboard:coaching:{user_id}:{range_value}:{file_id or 'none'}:{category_tag or 'none'}"
 
 
-async def get_redis_client() -> redis.Redis:
-    global _redis_client
-
-    if _redis_client is None:
-        _redis_client = redis.from_url(cfg.redis_url, decode_responses=True)
-
-    return _redis_client
-
-
 def apply_coaching_tone(message: str, accuracy: float) -> str:
     if accuracy >= 0.8 and "우수" not in message:
         return f"현재 성과가 우수합니다. {message}"
@@ -81,6 +70,7 @@ def apply_coaching_tone(message: str, accuracy: float) -> str:
 
 @router.get("", response_model=DashboardResponse)
 async def get_dashboard(
+    request: Request,
     range: str = Query("7d", pattern="^(7d|30d|all)$"),
     file_id: str | None = Query(None),
     category_tag: str | None = Query(None),
@@ -333,12 +323,14 @@ async def get_dashboard(
 JSON 형식으로 응답하세요:
 {{"summary": "...", "weak_concepts_top": [...], "weak_question_types": [...], "recommended_next_actions": [...], "coaching_message": "..."}}"""
 
-        redis_client = None
+        redis_client = getattr(request.app.state, "redis", None)
         try:
-            redis_client = await get_redis_client()
-            cached_summary = await redis_client.get(coaching_cache_key)
-            if cached_summary is not None:
-                coaching_summary = apply_coaching_tone(cached_summary, overall_accuracy)
+            if redis_client is not None:
+                cached_summary = await redis_client.get(coaching_cache_key)
+                if cached_summary is not None:
+                    coaching_summary = apply_coaching_tone(
+                        cached_summary, overall_accuracy
+                    )
         except Exception:
             redis_client = None
 

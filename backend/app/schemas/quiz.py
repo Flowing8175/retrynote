@@ -162,6 +162,12 @@ class ExamSubmitResponse(BaseModel):
     job_id: str | None = None
 
 
+class SessionCompleteResponse(BaseModel):
+    status: str
+    total_score: float
+    max_score: float
+
+
 class AnswerLogEntry(BaseModel):
     item_id: str
     answer_log_id: str

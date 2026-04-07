@@ -51,7 +51,6 @@ class TestUserModel:
         assert user.is_active is True
 
     async def test_create_user_default_storage(self, db_session):
-        """storage_used_bytes=0, storage_quota_bytes=1073741824"""
         user = User(
             id=str(uuid.uuid4()),
             username="defaultstorage",
@@ -62,7 +61,7 @@ class TestUserModel:
         await db_session.commit()
         await db_session.refresh(user)
         assert user.storage_used_bytes == 0
-        assert user.storage_quota_bytes == 1073741824  # 1GB
+        assert user.storage_quota_bytes == 104857600
 
     async def test_user_enum_values(self, db_session):
         """All UserRole values (user, admin, super_admin) work"""

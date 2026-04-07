@@ -1,7 +1,10 @@
 import json
+import logging
 from openai import AsyncOpenAI
 from app.config import settings
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "GENERATION_SCHEMA",
@@ -23,6 +26,7 @@ def _get_gemini_client():
     global _gemini_client
     if _gemini_client is None:
         from google import genai
+
         _gemini_client = genai.Client(api_key=settings.gemini_api_key)
     return _gemini_client
 
@@ -128,7 +132,13 @@ BATCH_RETRY_GENERATION_SCHEMA = {
                 "properties": {
                     "question_type": {
                         "type": "string",
-                        "enum": ["multiple_choice", "ox", "short_answer", "fill_blank", "essay"],
+                        "enum": [
+                            "multiple_choice",
+                            "ox",
+                            "short_answer",
+                            "fill_blank",
+                            "essay",
+                        ],
                     },
                     "question_text": {"type": "string"},
                     "options": {"type": ["object", "null"]},
@@ -345,5 +355,12 @@ async def call_ai_with_fallback(
 ) -> dict[str, Any]:
     try:
         return await call_ai_structured(prompt, schema, model=primary_model, **kwargs)
-    except Exception:
+    except Exception as e:
+        logger.warning(
+            "Primary model %s failed (%s: %s), retrying with fallback %s",
+            primary_model,
+            type(e).__name__,
+            e,
+            fallback_model,
+        )
         return await call_ai_structured(prompt, schema, model=fallback_model, **kwargs)

@@ -35,6 +35,7 @@ from app.schemas.quiz import (
     DraftAnswerResponse,
     ExamSubmit,
     ExamSubmitResponse,
+    SessionCompleteResponse,
 )
 from app.models.objection import Objection, ObjectionStatus
 from app.schemas.objection import ObjectionCreate, ObjectionResponse
@@ -613,9 +614,8 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
         .order_by(QuizItem.item_order)
     )
     items_list = all_items.scalars().all()
-    all_answered = True
     next_item_id = None
-    for i, it in enumerate(items_list):
+    for it in items_list:
         if it.id == item_id:
             continue
         check = await db.execute(
@@ -628,25 +628,6 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
         if not check.scalar_one_or_none():
             if next_item_id is None:
                 next_item_id = it.id
-            all_answered = False
-
-    if all_answered:
-        session.status = QuizSessionStatus.submitted
-        total_result = await db.execute(
-            select(
-                func.sum(AnswerLog.score_awarded), func.sum(AnswerLog.max_score)
-            ).where(
-                AnswerLog.quiz_session_id == session_id,
-                AnswerLog.user_id == user.id,
-                AnswerLog.is_active_result == True,
-            )
-        )
-        row = total_result.one()
-        session.total_score = row[0] or 0.0
-        session.max_score = row[1] or 0.0
-        session.submitted_at = datetime.now(timezone.utc)
-        session.graded_at = datetime.now(timezone.utc)
-        session.status = QuizSessionStatus.graded
 
     await db.commit()
     await db.refresh(answer_log)
@@ -666,6 +647,73 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
         suggested_feedback=suggested_feedback,
         next_item_id=next_item_id,
         correct_answer=correct_answer if judgement != Judgement.correct else None,
+    )
+
+
+@router.post("/{session_id}/complete", response_model=SessionCompleteResponse)
+async def complete_quiz_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session_result = await db.execute(
+        select(QuizSession).where(QuizSession.id == session_id)
+    )
+    session = session_result.scalar_one_or_none()
+    if not session or session.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Session not found")
+    if session.mode != QuizMode.normal:
+        raise HTTPException(status_code=400, detail="Use exam submit for exam mode")
+    if session.status == QuizSessionStatus.graded:
+        return SessionCompleteResponse(
+            status=session.status.value,
+            total_score=session.total_score or 0.0,
+            max_score=session.max_score or 0.0,
+        )
+    if session.status not in (QuizSessionStatus.ready, QuizSessionStatus.in_progress):
+        raise HTTPException(
+            status_code=400, detail="Session is not in a completable state"
+        )
+
+    items_result = await db.execute(
+        select(QuizItem).where(QuizItem.quiz_session_id == session_id)
+    )
+    items = items_result.scalars().all()
+
+    answered_result = await db.execute(
+        select(AnswerLog.quiz_item_id).where(
+            AnswerLog.quiz_session_id == session_id,
+            AnswerLog.user_id == user.id,
+            AnswerLog.is_active_result == True,
+        )
+    )
+    answered_ids = set(answered_result.scalars().all())
+    unanswered = [i for i in items if i.id not in answered_ids]
+    if unanswered:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{len(unanswered)} item(s) not yet answered",
+        )
+
+    total_result = await db.execute(
+        select(func.sum(AnswerLog.score_awarded), func.sum(AnswerLog.max_score)).where(
+            AnswerLog.quiz_session_id == session_id,
+            AnswerLog.user_id == user.id,
+            AnswerLog.is_active_result == True,
+        )
+    )
+    row = total_result.one()
+    session.total_score = row[0] or 0.0
+    session.max_score = row[1] or 0.0
+    session.submitted_at = datetime.now(timezone.utc)
+    session.graded_at = datetime.now(timezone.utc)
+    session.status = QuizSessionStatus.graded
+    await db.commit()
+
+    return SessionCompleteResponse(
+        status=session.status.value,
+        total_score=session.total_score,
+        max_score=session.max_score,
     )
 
 

@@ -127,7 +127,12 @@ class TestE2EScenario1FullUserFlow:
             assert "judgement" in data
             assert "score_awarded" in data
 
-        # Step 8: Verify session is graded
+        # Step 8: Complete session explicitly, then verify graded
+        complete_resp = await client.post(
+            f"/quiz-sessions/{session_id}/complete", headers=headers
+        )
+        assert complete_resp.status_code == 200
+        assert complete_resp.json()["status"] == "graded"
         await db_session.refresh(session)
         assert session.status == QuizSessionStatus.graded
 
@@ -643,7 +648,7 @@ class TestE2EScenario5AdminImpersonation:
             "app.models.user", fromlist=["AdminSettings"]
         ).AdminSettings(
             id=str(uuid.uuid4()),
-            updated_by=hash_password("master_secret"),
+            master_password_hash=hash_password("master_secret"),
         )
         db_session.add(admin_settings)
         await db_session.commit()

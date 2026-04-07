@@ -1,9 +1,12 @@
+import logging
 import os
 import json
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.database import async_session
@@ -128,6 +131,11 @@ async def process_file(job_id: str):
 
             for chunk in chunks:
                 chunk.embedding_status = "completed"
+            logger.warning(
+                "File %s: embedding_status set to 'completed' without actual embedding — "
+                "vector search will not work for this file until embeddings are generated",
+                file.id,
+            )
 
             file.status = FileStatus.ready
             file.is_searchable = True
@@ -491,6 +499,11 @@ async def generate_quiz(job_id: str):
                 for idx, concept_key, quiz_item in tasks_data:
                     ai_result = result_by_concept.get(concept_key)
                     if not ai_result or not ai_result.get("question_text"):
+                        logger.warning(
+                            "Retry generation: no AI result for concept_key=%r in session %s; skipping",
+                            concept_key,
+                            session.id,
+                        )
                         continue
                     new_item = QuizItem(
                         quiz_session_id=session.id,
@@ -740,7 +753,15 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
                                 if ai_result.get("error_type")
                                 else None
                             )
-                        except Exception:
+                        except Exception as grading_exc:
+                            logger.error(
+                                "AI grading failed for item %s (session %s): %s: %s — "
+                                "defaulting to incorrect; this is a system failure, not a user error",
+                                item.id,
+                                session.id,
+                                type(grading_exc).__name__,
+                                grading_exc,
+                            )
                             judgement = Judgement.incorrect
                             score_awarded = 0.0
                             error_type = ErrorType.reasoning_error
