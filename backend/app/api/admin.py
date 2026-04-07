@@ -1,8 +1,11 @@
 import asyncio
+import csv
+import io
 import time
 import uuid
-from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Request
+from datetime import date, datetime, timedelta, timezone
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1113,4 +1116,175 @@ async def get_rate_limits(
         total_events_24h=len(logs),
         unique_ips_count=unique_ips,
         top_paths=[AdminRateLimitTopPath(path=p, count=c) for p, c in top_paths],
+    )
+
+
+@router.get("/export/users")
+async def export_users_csv(
+    request: Request,
+    is_active: bool | None = None,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    query = (
+        select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc())
+    )
+    if is_active is not None:
+        query = query.where(User.is_active == is_active)
+
+    result = await db.execute(query)
+    users = result.scalars().all()
+
+    async def csv_generator():
+        buf = io.StringIO()
+        buf.write("\ufeff")  # UTF-8 BOM
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate()
+
+        writer = csv.writer(buf)
+        writer.writerow(
+            ["id", "username", "email", "created_at", "storage_used_bytes", "is_active"]
+        )
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate()
+
+        for u in users:
+            writer.writerow(
+                [
+                    u.id,
+                    u.username,
+                    u.email,
+                    u.created_at,
+                    u.storage_used_bytes,
+                    u.is_active,
+                ]
+            )
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate()
+
+    return StreamingResponse(
+        csv_generator(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="admin_users_{date.today()}.csv"'
+        },
+    )
+
+
+@router.get("/export/logs")
+async def export_logs_csv(
+    request: Request,
+    level: str | None = None,
+    service_name: str | None = None,
+    event_type: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    query = select(SystemLog).order_by(SystemLog.created_at.desc())
+    if level:
+        query = query.where(SystemLog.level == level)
+    if service_name:
+        query = query.where(SystemLog.service_name == service_name)
+    if event_type:
+        query = query.where(SystemLog.event_type == event_type)
+    if date_from:
+        query = query.where(SystemLog.created_at >= date_from)
+    if date_to:
+        query = query.where(SystemLog.created_at <= date_to)
+
+    result = await db.execute(query)
+    logs = result.scalars().all()
+
+    async def csv_generator():
+        buf = io.StringIO()
+        buf.write("\ufeff")  # UTF-8 BOM
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate()
+
+        writer = csv.writer(buf)
+        writer.writerow(
+            ["created_at", "level", "service_name", "event_type", "message"]
+        )
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate()
+
+        for log in logs:
+            message = (log.message or "")[:100]
+            writer.writerow(
+                [log.created_at, log.level, log.service_name, log.event_type, message]
+            )
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate()
+
+    return StreamingResponse(
+        csv_generator(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="admin_logs_{date.today()}.csv"'
+        },
+    )
+
+
+@router.get("/export/audit-logs")
+async def export_audit_logs_csv(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin_verified),
+):
+    result = await db.execute(
+        select(AdminAuditLog).order_by(AdminAuditLog.created_at.desc()).limit(1000)
+    )
+    logs = result.scalars().all()
+
+    async def csv_generator():
+        buf = io.StringIO()
+        buf.write("\ufeff")  # UTF-8 BOM
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate()
+
+        writer = csv.writer(buf)
+        writer.writerow(
+            [
+                "created_at",
+                "admin_user_id",
+                "target_user_id",
+                "action_type",
+                "target_type",
+                "ip_address",
+            ]
+        )
+        yield buf.getvalue()
+        buf.seek(0)
+        buf.truncate()
+
+        for log in logs:
+            writer.writerow(
+                [
+                    log.created_at,
+                    log.admin_user_id,
+                    log.target_user_id,
+                    log.action_type,
+                    log.target_type,
+                    log.ip_address,
+                ]
+            )
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate()
+
+    return StreamingResponse(
+        csv_generator(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="admin_audit_logs_{date.today()}.csv"'
+        },
     )

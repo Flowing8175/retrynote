@@ -1195,3 +1195,198 @@ class TestUserManagement:
             json={"new_role": "super_admin"},
         )
         assert resp.status_code == 403
+
+
+class TestCSVExport:
+    async def test_users_csv_has_bom(self, admin_client: AsyncClient, test_user):
+        resp = await admin_client.get("/admin/export/users")
+        assert resp.status_code == 200
+        assert resp.content.startswith(b"\xef\xbb\xbf")
+
+    async def test_users_csv_content_type(self, admin_client: AsyncClient):
+        resp = await admin_client.get("/admin/export/users")
+        assert resp.status_code == 200
+        assert "text/csv" in resp.headers["content-type"]
+
+    async def test_users_csv_has_correct_headers(
+        self, admin_client: AsyncClient, test_user
+    ):
+        resp = await admin_client.get("/admin/export/users")
+        assert resp.status_code == 200
+        content = resp.content.decode("utf-8-sig")
+        first_line = content.strip().split("\n")[0]
+        headers = [h.strip() for h in first_line.split(",")]
+        for col in (
+            "id",
+            "username",
+            "email",
+            "created_at",
+            "storage_used_bytes",
+            "is_active",
+        ):
+            assert col in headers
+
+    async def test_users_csv_no_password_hash(
+        self, admin_client: AsyncClient, test_user
+    ):
+        resp = await admin_client.get("/admin/export/users")
+        assert resp.status_code == 200
+        assert "password_hash" not in resp.text
+
+    async def test_users_csv_filter_by_is_active(
+        self, db_session, admin_client: AsyncClient, test_user
+    ):
+        inactive = User(
+            id=str(uuid.uuid4()),
+            username="inactive_export_user",
+            email="inactive_export@example.com",
+            password_hash=hash_password("Pass123!"),
+            role=UserRole.user,
+            is_active=False,
+        )
+        db_session.add(inactive)
+        await db_session.commit()
+
+        resp = await admin_client.get(
+            "/admin/export/users", params={"is_active": False}
+        )
+        assert resp.status_code == 200
+        content = resp.text
+        assert "inactive_export_user" in content
+        assert "testuser" not in content
+
+    async def test_user_cannot_export_users(self, auth_client: AsyncClient):
+        resp = await auth_client.get("/admin/export/users")
+        assert resp.status_code == 403
+
+    async def test_logs_csv_has_bom(self, db_session, admin_client: AsyncClient):
+        from app.models import SystemLog
+
+        db_session.add(
+            SystemLog(
+                id=str(uuid.uuid4()),
+                level="ERROR",
+                service_name="test_svc",
+                event_type="test_event",
+                message="Test error",
+            )
+        )
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/export/logs")
+        assert resp.status_code == 200
+        assert resp.content.startswith(b"\xef\xbb\xbf")
+
+    async def test_logs_csv_has_correct_headers(self, admin_client: AsyncClient):
+        resp = await admin_client.get("/admin/export/logs")
+        assert resp.status_code == 200
+        content = resp.content.decode("utf-8-sig")
+        first_line = content.strip().split("\n")[0]
+        headers = [h.strip() for h in first_line.split(",")]
+        for col in ("created_at", "level", "service_name", "event_type", "message"):
+            assert col in headers
+
+    async def test_logs_csv_filter_by_level(
+        self, db_session, admin_client: AsyncClient
+    ):
+        from app.models import SystemLog
+
+        db_session.add(
+            SystemLog(
+                id=str(uuid.uuid4()),
+                level="ERROR",
+                service_name="svc",
+                event_type="err",
+                message="Error message",
+            )
+        )
+        db_session.add(
+            SystemLog(
+                id=str(uuid.uuid4()),
+                level="INFO",
+                service_name="svc",
+                event_type="info",
+                message="Info message",
+            )
+        )
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/export/logs", params={"level": "ERROR"})
+        assert resp.status_code == 200
+        content = resp.content.decode("utf-8-sig")
+        lines = [l for l in content.strip().split("\n") if l]
+        data_lines = lines[1:]
+        assert len(data_lines) == 1
+        assert "ERROR" in data_lines[0]
+
+    async def test_logs_csv_no_raw_meta_json(
+        self, db_session, admin_client: AsyncClient
+    ):
+        from app.models import SystemLog
+
+        db_session.add(
+            SystemLog(
+                id=str(uuid.uuid4()),
+                level="INFO",
+                service_name="svc",
+                event_type="test",
+                message="Test message",
+                meta_json={"secret_key": "secret_value"},
+            )
+        )
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/export/logs")
+        assert resp.status_code == 200
+        assert "meta_json" not in resp.text
+        assert "secret_key" not in resp.text
+
+    async def test_user_cannot_export_logs(self, auth_client: AsyncClient):
+        resp = await auth_client.get("/admin/export/logs")
+        assert resp.status_code == 403
+
+    async def test_audit_logs_csv_requires_verified_admin(
+        self, admin_client: AsyncClient
+    ):
+        resp = await admin_client.get("/admin/export/audit-logs")
+        assert resp.status_code == 403
+
+    async def test_audit_logs_csv_has_bom(
+        self, db_session, verified_admin_client: AsyncClient, admin_user
+    ):
+        from app.models import AdminAuditLog
+
+        db_session.add(
+            AdminAuditLog(
+                id=str(uuid.uuid4()),
+                admin_user_id=admin_user.id,
+                action_type="test_action",
+            )
+        )
+        await db_session.commit()
+
+        resp = await verified_admin_client.get("/admin/export/audit-logs")
+        assert resp.status_code == 200
+        assert resp.content.startswith(b"\xef\xbb\xbf")
+
+    async def test_audit_logs_csv_has_correct_headers(
+        self, verified_admin_client: AsyncClient
+    ):
+        resp = await verified_admin_client.get("/admin/export/audit-logs")
+        assert resp.status_code == 200
+        content = resp.content.decode("utf-8-sig")
+        first_line = content.strip().split("\n")[0]
+        headers = [h.strip() for h in first_line.split(",")]
+        for col in (
+            "created_at",
+            "admin_user_id",
+            "target_user_id",
+            "action_type",
+            "target_type",
+            "ip_address",
+        ):
+            assert col in headers
+
+    async def test_user_cannot_export_audit_logs(self, auth_client: AsyncClient):
+        resp = await auth_client.get("/admin/export/audit-logs")
+        assert resp.status_code == 403
