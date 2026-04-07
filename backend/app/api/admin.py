@@ -1,7 +1,8 @@
+import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -27,6 +28,8 @@ from app.schemas.admin import (
     AnnouncementCreate,
     AnnouncementResponse,
     AdminAuditLogItem,
+    SystemHealthComponent,
+    SystemHealthResponse,
 )
 from app.middleware.auth import (
     require_admin,
@@ -444,3 +447,111 @@ async def list_audit_logs(
         ],
         "total": total,
     }
+
+
+@router.get("/system-health", response_model=SystemHealthResponse)
+async def get_system_health(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    components: dict[str, SystemHealthComponent] = {}
+    overall_ok = True
+
+    t0 = time.monotonic()
+    try:
+        await db.execute(text("SELECT 1"))
+        components["database"] = SystemHealthComponent(
+            status="ok",
+            latency_ms=round((time.monotonic() - t0) * 1000, 2),
+        )
+    except Exception as exc:
+        overall_ok = False
+        components["database"] = SystemHealthComponent(status="down", detail=str(exc))
+
+    redis_client = getattr(request.app.state, "redis", None)
+    if redis_client is not None:
+        t0 = time.monotonic()
+        try:
+            await redis_client.ping()
+            components["redis"] = SystemHealthComponent(
+                status="ok",
+                latency_ms=round((time.monotonic() - t0) * 1000, 2),
+            )
+        except Exception as exc:
+            overall_ok = False
+            components["redis"] = SystemHealthComponent(status="down", detail=str(exc))
+    else:
+        components["redis"] = SystemHealthComponent(
+            status="degraded", detail="not configured"
+        )
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    error_count_result = await db.execute(
+        select(func.count())
+        .select_from(SystemLog)
+        .where(
+            SystemLog.level.in_(["ERROR", "CRITICAL"]),
+            SystemLog.created_at >= cutoff,
+        )
+    )
+    error_count = error_count_result.scalar() or 0
+
+    total_log_result = await db.execute(
+        select(func.count())
+        .select_from(SystemLog)
+        .where(SystemLog.created_at >= cutoff)
+    )
+    total_logs_24h = total_log_result.scalar() or 0
+
+    pending_jobs_result = await db.execute(
+        select(func.count())
+        .select_from(Job)
+        .where(Job.status.in_(["pending", "running"]))
+    )
+    pending_jobs = pending_jobs_result.scalar() or 0
+
+    failed_jobs_result = await db.execute(
+        select(func.count())
+        .select_from(Job)
+        .where(
+            Job.status == "failed",
+            Job.created_at >= cutoff,
+        )
+    )
+    failed_jobs_24h = failed_jobs_result.scalar() or 0
+
+    total_users_result = await db.execute(
+        select(func.count()).select_from(User).where(User.deleted_at.is_(None))
+    )
+    total_users = total_users_result.scalar() or 0
+
+    active_users_result = await db.execute(
+        select(func.count())
+        .select_from(User)
+        .where(User.deleted_at.is_(None), User.is_active.is_(True))
+    )
+    active_users = active_users_result.scalar() or 0
+
+    error_rate = (
+        round((error_count / total_logs_24h * 100), 1) if total_logs_24h > 0 else 0.0
+    )
+
+    if error_rate > 20 or failed_jobs_24h > 10:
+        overall_ok = False
+
+    return SystemHealthResponse(
+        status="ok" if overall_ok else "degraded",
+        checked_at=datetime.now(timezone.utc),
+        components=components,
+        stats={
+            "total_users": total_users,
+            "active_users": active_users,
+            "errors_24h": error_count,
+            "total_logs_24h": total_logs_24h,
+            "error_rate_pct": error_rate,
+            "pending_jobs": pending_jobs,
+            "failed_jobs_24h": failed_jobs_24h,
+        },
+    )

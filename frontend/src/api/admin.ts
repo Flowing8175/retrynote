@@ -12,6 +12,7 @@ import type {
   AnnouncementCreate,
   AnnouncementResponse,
   AdminAuditLogItem,
+  SystemHealthResponse,
 } from '@/types';
 
 export const adminApi = {
@@ -100,6 +101,11 @@ export const adminApi = {
     size: number = 20
   ): Promise<{ logs: AdminAuditLogItem[]; total: number }> => {
     const response = await apiClient.get<{ logs: AdminAuditLogItem[]; total: number }>('/admin/audit-logs', { params: { page, size } });
+    return response.data;
+  },
+
+  getSystemHealth: async (): Promise<SystemHealthResponse> => {
+    const response = await apiClient.get<SystemHealthResponse>('/admin/system-health');
     return response.data;
   },
 };

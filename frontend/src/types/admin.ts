@@ -112,3 +112,24 @@ export interface AdminAuditLogItem {
   ip_address: string | null;
   created_at: string;
 }
+
+export interface SystemHealthComponent {
+  status: 'ok' | 'degraded' | 'down';
+  latency_ms: number | null;
+  detail: string | null;
+}
+
+export interface SystemHealthResponse {
+  status: 'ok' | 'degraded' | 'down';
+  checked_at: string;
+  components: Record<string, SystemHealthComponent>;
+  stats: {
+    total_users: number;
+    active_users: number;
+    errors_24h: number;
+    total_logs_24h: number;
+    error_rate_pct: number;
+    pending_jobs: number;
+    failed_jobs_24h: number;
+  };
+}

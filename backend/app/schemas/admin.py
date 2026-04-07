@@ -117,3 +117,16 @@ class AdminAuditLogItem(BaseModel):
     payload_json: dict | None
     ip_address: str | None
     created_at: datetime
+
+
+class SystemHealthComponent(BaseModel):
+    status: str
+    latency_ms: float | None = None
+    detail: str | None = None
+
+
+class SystemHealthResponse(BaseModel):
+    status: str
+    checked_at: datetime
+    components: dict[str, SystemHealthComponent]
+    stats: dict[str, int | float]
