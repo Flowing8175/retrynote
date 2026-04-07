@@ -8,5 +8,7 @@ export { default as AdminAuditTab } from './AdminAuditTab';
 export { default as AdminAnnouncementsTab } from './AdminAnnouncementsTab';
 export { default as AdminImpersonationTab } from './AdminImpersonationTab';
 export { default as AdminModelSettingsTab } from './AdminModelSettingsTab';
+export { default as AdminKPIsPanel } from './AdminKPIsPanel';
+export { default as AdminJobsTab } from './AdminJobsTab';
 export { formatDateTime, formatRelative, LogLevelBadge, HealthStatusBadge, ComponentStatusDot, tabs, LOG_LEVELS } from './adminUtils';
 export type { TabKey } from './adminUtils';

@@ -15,6 +15,8 @@ import {
   AdminAnnouncementsTab,
   AdminImpersonationTab,
   AdminModelSettingsTab,
+  AdminKPIsPanel,
+  AdminJobsTab,
   tabs,
 } from '@/components/admin';
 import type { TabKey } from '@/components/admin';
@@ -204,6 +206,10 @@ export default function Admin() {
         <AdminHealthTab healthData={healthData} refetchHealth={refetchHealth} />
       )}
 
+      {activeTab === 'health' && (
+        <AdminKPIsPanel isVerified={isVerified} />
+      )}
+
       {activeTab === 'users' && !usersLoading && (
         <AdminUsersTab usersData={usersData} />
       )}
@@ -256,6 +262,10 @@ export default function Admin() {
           modelSaveMsg={modelSaveMsg}
           updateModelSettingsMutation={updateModelSettingsMutation}
         />
+      )}
+
+      {activeTab === 'jobs' && (
+        <AdminJobsTab isVerified={isVerified} activeTab={activeTab} />
       )}
     </div>
   );
