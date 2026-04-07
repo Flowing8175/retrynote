@@ -121,6 +121,7 @@ class Job(Base):
     finished_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class RefreshToken(Base):

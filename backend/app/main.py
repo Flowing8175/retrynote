@@ -5,13 +5,70 @@ app_metadata = {
     "version": "1.0.0",
 }
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from app.rate_limit import limiter
+from app.rate_limit import limiter, _get_real_client_ip
 from slowapi.errors import RateLimitExceeded
-from slowapi import _rate_limit_exceeded_handler
 import redis.asyncio as aioredis
+import uuid
+import asyncio
+from app.database import async_session
+from app.models.admin import SystemLog
+
+
+async def _log_rate_limit_event(request: Request, user_id: str | None = None):
+    """Fire-and-forget background task to log rate limit event."""
+    try:
+        async with async_session() as db:
+            client_ip = _get_real_client_ip(request)
+            log = SystemLog(
+                id=str(uuid.uuid4()),
+                level="WARNING",
+                service_name="rate_limiter",
+                event_type="rate_limit_exceeded",
+                message=f"Rate limit exceeded: {request.method} {request.url.path}",
+                meta_json={
+                    "user_id": user_id,
+                    "path": str(request.url.path),
+                    "method": request.method,
+                    "client_ip": client_ip,
+                },
+            )
+            db.add(log)
+            await db.commit()
+    except Exception:
+        # Silently fail - don't let logging errors affect the response
+        pass
+
+
+async def _rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    """Custom rate limit handler that logs to SystemLog."""
+    # Extract user_id from JWT token if present
+    user_id = None
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        try:
+            from app.middleware.auth import _jwt
+
+            token = auth_header[7:]
+            payload = _jwt.decode(
+                token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
+            )
+            user_id = payload.get("sub")
+        except Exception:
+            # Token is invalid or expired, user_id stays None
+            pass
+
+    # Fire-and-forget background logging
+    asyncio.create_task(_log_rate_limit_event(request, user_id))
+
+    # Return 429 response
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded"},
+    )
 
 
 @asynccontextmanager
