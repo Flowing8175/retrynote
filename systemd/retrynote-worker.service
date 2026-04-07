@@ -8,9 +8,8 @@ Type=exec
 User=retrynote
 Group=retrynote
 WorkingDirectory=/home/retrynote/app/backend
-EnvironmentFile=/home/retrynote/app/.env
 Environment=PYTHONPATH=/home/retrynote/app/backend
-ExecStart=/home/retrynote/app/backend/.venv/bin/celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
+ExecStart=/usr/local/bin/doppler run -- /home/retrynote/app/backend/.venv/bin/celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
 Restart=always
 RestartSec=5
 
