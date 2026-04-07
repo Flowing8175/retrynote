@@ -204,7 +204,7 @@ export default function Dashboard() {
     return (
       <div className="max-w-4xl mx-auto space-y-16 py-20">
         <div className="animate-fade-in-up">
-          <h1 className="text-3xl font-medium tracking-tight text-content-primary md:text-4xl leading-tight">
+          <h1 className="text-3xl font-semibold tracking-tight text-content-primary md:text-4xl leading-tight">
             성장의 첫 걸음,<br />자료를 올려보세요.
           </h1>
           <p className="mt-6 text-lg text-content-secondary max-w-2xl leading-relaxed">
@@ -268,7 +268,7 @@ export default function Dashboard() {
 
           {/* Punchy headline + demoted coaching message */}
           <div className="space-y-3">
-            <h1 className="text-4xl font-semibold tracking-tight text-content-primary leading-tight">
+            <h1 className="text-4xl font-semibold tracking-tight text-white leading-tight">
               {headline}
             </h1>
             <p className="text-base text-content-secondary leading-relaxed max-w-xl">
