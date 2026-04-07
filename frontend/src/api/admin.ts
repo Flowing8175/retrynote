@@ -13,6 +13,13 @@ import type {
   AnnouncementResponse,
   AdminAuditLogItem,
   SystemHealthResponse,
+  AdminDbDiagnostics,
+  AdminDashboardKPIs,
+  AdminJobListResponse,
+  AdminFilePipelineResponse,
+  AdminRateLimitResponse,
+  AdminUserStatusUpdate,
+  AdminUserRoleUpdate,
 } from '@/types';
 
 export const adminApi = {
@@ -107,5 +114,81 @@ export const adminApi = {
   getSystemHealth: async (): Promise<SystemHealthResponse> => {
     const response = await apiClient.get<SystemHealthResponse>('/admin/system-health');
     return response.data;
+  },
+
+  getDbDiagnostics: async (): Promise<AdminDbDiagnostics> => {
+    const response = await apiClient.get<AdminDbDiagnostics>('/admin/db-diagnostics');
+    return response.data;
+  },
+
+  getDashboardKPIs: async (): Promise<AdminDashboardKPIs> => {
+    const response = await apiClient.get<AdminDashboardKPIs>('/admin/dashboard-kpis');
+    return response.data;
+  },
+
+  listJobs: async (
+    status?: string,
+    jobType?: string,
+    page: number = 1,
+    size: number = 20
+  ): Promise<AdminJobListResponse> => {
+    const params: Record<string, string | number> = { page, size };
+    if (status) params.status = status;
+    if (jobType) params.job_type = jobType;
+    const response = await apiClient.get<AdminJobListResponse>('/admin/jobs', { params });
+    return response.data;
+  },
+
+  retryJob: async (jobId: string): Promise<{ status: string }> => {
+    const response = await apiClient.post<{ status: string }>(`/admin/jobs/${jobId}/retry`);
+    return response.data;
+  },
+
+  cancelJob: async (jobId: string): Promise<{ status: string }> => {
+    const response = await apiClient.post<{ status: string }>(`/admin/jobs/${jobId}/cancel`);
+    return response.data;
+  },
+
+  getFilePipeline: async (): Promise<AdminFilePipelineResponse> => {
+    const response = await apiClient.get<AdminFilePipelineResponse>('/admin/files-pipeline');
+    return response.data;
+  },
+
+  getRateLimits: async (): Promise<AdminRateLimitResponse> => {
+    const response = await apiClient.get<AdminRateLimitResponse>('/admin/rate-limits');
+    return response.data;
+  },
+
+  toggleUserStatus: async (userId: string, data: AdminUserStatusUpdate): Promise<{ status: string }> => {
+    const response = await apiClient.patch<{ status: string }>(`/admin/users/${userId}/status`, data);
+    return response.data;
+  },
+
+  changeUserRole: async (userId: string, data: AdminUserRoleUpdate): Promise<{ status: string }> => {
+    const response = await apiClient.patch<{ status: string }>(`/admin/users/${userId}/role`, data);
+    return response.data;
+  },
+
+  exportUsers: async (isActive?: boolean): Promise<Blob> => {
+    const params: Record<string, string> = {};
+    if (isActive !== undefined) params.is_active = String(isActive);
+    const response = await apiClient.get('/admin/export/users', { params, responseType: 'blob' });
+    return response.data as Blob;
+  },
+
+  exportLogs: async (level?: string, serviceName?: string, eventType?: string, dateFrom?: string, dateTo?: string): Promise<Blob> => {
+    const params: Record<string, string> = {};
+    if (level) params.level = level;
+    if (serviceName) params.service_name = serviceName;
+    if (eventType) params.event_type = eventType;
+    if (dateFrom) params.date_from = dateFrom;
+    if (dateTo) params.date_to = dateTo;
+    const response = await apiClient.get('/admin/export/logs', { params, responseType: 'blob' });
+    return response.data as Blob;
+  },
+
+  exportAuditLogs: async (): Promise<Blob> => {
+    const response = await apiClient.get('/admin/export/audit-logs', { responseType: 'blob' });
+    return response.data as Blob;
   },
 };

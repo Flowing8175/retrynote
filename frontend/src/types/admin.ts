@@ -133,3 +133,128 @@ export interface SystemHealthResponse {
     failed_jobs_24h: number;
   };
 }
+
+export interface AdminTopUserByStorage {
+  id: string;
+  username: string;
+  storage_used_bytes: number;
+}
+
+export interface AdminAiTokenUsage {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+}
+
+export interface AdminTopError {
+  event_type: string;
+  count: number;
+}
+
+export interface AdminJobQueueItem {
+  status: string;
+  job_type: string;
+  count: number;
+}
+
+export interface AdminDashboardKPIs {
+  quizzes_today: number;
+  total_quiz_jobs: number;
+  total_storage_bytes: number;
+  top_users_by_storage: AdminTopUserByStorage[];
+  ai_token_usage: AdminAiTokenUsage[];
+  top_errors: AdminTopError[];
+  signups_7d: number;
+  dau: number;
+  job_queue: AdminJobQueueItem[];
+}
+
+export interface AdminJobItem {
+  id: string;
+  job_type: string;
+  status: string;
+  target_type: string | null;
+  target_id: string | null;
+  error_message: string | null;
+  retry_count: number;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface AdminJobListResponse {
+  jobs: AdminJobItem[];
+  total: number;
+}
+
+export interface AdminDbTableInfo {
+  name: string;
+  row_estimate: number;
+  total_size: string;
+}
+
+export interface AdminDbDiagnostics {
+  tables: AdminDbTableInfo[];
+  migration_version: string;
+  db_total_size: string;
+  checked_at: string;
+}
+
+export interface AdminFileStatusBreakdown {
+  status: string;
+  count: number;
+  latest_started: string | null;
+  latest_finished: string | null;
+}
+
+export interface AdminFileInProgress {
+  id: string;
+  original_filename: string;
+  status: string;
+  user_id: string;
+  username: string;
+  processing_started_at: string | null;
+  retry_count: number;
+}
+
+export interface AdminFileFailure {
+  id: string;
+  original_filename: string;
+  status: string;
+  user_id: string;
+  username: string;
+  parse_error_code: string | null;
+  processing_finished_at: string | null;
+}
+
+export interface AdminFilePipelineResponse {
+  status_breakdown: AdminFileStatusBreakdown[];
+  in_progress: AdminFileInProgress[];
+  recent_failures: AdminFileFailure[];
+}
+
+export interface AdminRateLimitEvent {
+  client_ip: string | null;
+  path: string | null;
+  event_count: number;
+  latest_event: string;
+}
+
+export interface AdminRateLimitResponse {
+  events: AdminRateLimitEvent[];
+  total_events_24h: number;
+  unique_ips_count: number;
+  top_paths: Array<{ path: string; count: number }>;
+}
+
+export interface AdminUserStatusUpdate {
+  is_active: boolean;
+}
+
+export interface AdminUserRoleUpdate {
+  new_role: 'user' | 'admin' | 'super_admin';
+}
+
+export interface AdminUserItemWithRole extends AdminUserItem {
+  role: string;
+}
