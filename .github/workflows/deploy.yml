@@ -84,11 +84,9 @@ jobs:
 
             # 마이그레이션
             cd $APP_DIR/backend
-            sudo -u retrynote env \
-              PYTHONPATH=$APP_DIR/backend \
-              DOPPLER_TOKEN=$(sudo cat /home/retrynote/.doppler/service-token | grep DOPPLER_TOKEN | cut -d= -f2) \
-              /usr/bin/doppler run --project retrynote --config prd \
-              -- $APP_DIR/backend/.venv/bin/alembic upgrade head
+            DB_URL=$(sudo grep "^DATABASE_URL=" $APP_DIR/.env | cut -d= -f2-)
+            sudo -u retrynote env PYTHONPATH=$APP_DIR/backend APP_ENV=development DATABASE_URL="$DB_URL" \
+              $APP_DIR/backend/.venv/bin/alembic upgrade head
 
             # 서비스 재시작
             sudo systemctl restart retrynote-api retrynote-worker
