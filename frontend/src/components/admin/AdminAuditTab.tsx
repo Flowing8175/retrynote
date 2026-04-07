@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { adminApi } from '@/api';
 import type { AdminAuditLogItem } from '@/types';
 import { formatDateTime } from './adminUtils';
 
@@ -9,7 +11,44 @@ interface AdminAuditTabProps {
 }
 
 export default function AdminAuditTab({ auditData, auditPage, setAuditPage, auditTotalPages }: AdminAuditTabProps) {
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const blob = await adminApi.exportAuditLogs();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `admin_audit_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-end">
+        <button
+          onClick={handleExport}
+          disabled={isExporting}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.07] bg-surface-raised px-4 py-2 text-xs font-medium text-content-secondary transition-colors hover:bg-surface-hover disabled:opacity-50"
+        >
+          {isExporting ? (
+            <svg className="h-3.5 w-3.5 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <svg className="h-3.5 w-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+            </svg>
+          )}
+          CSV 내보내기
+        </button>
+      </div>
     <section className="overflow-hidden rounded-3xl border border-white/[0.07] bg-surface">
       <table className="min-w-full divide-y divide-white/[0.07]">
         <thead className="bg-surface-raised">
@@ -77,5 +116,6 @@ export default function AdminAuditTab({ auditData, auditPage, setAuditPage, audi
         </button>
       </div>
     </section>
+    </div>
   );
 }
