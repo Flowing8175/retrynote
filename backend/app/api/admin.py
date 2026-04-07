@@ -30,6 +30,10 @@ from app.schemas.admin import (
     AdminAuditLogItem,
     SystemHealthComponent,
     SystemHealthResponse,
+    AdminDashboardKPIs,
+    TopStorageUser,
+    TopErrorItem,
+    JobQueueItem,
 )
 from app.middleware.auth import (
     require_admin,
@@ -205,16 +209,36 @@ async def get_model_usage(
 ):
     await log_audit(db, admin.id, "view_model_usage", request)
 
+    logs_result = await db.execute(
+        select(SystemLog).where(SystemLog.event_type == "ai_token_usage")
+    )
+    logs = logs_result.scalars().all()
+
+    model_stats: dict[str, dict] = {}
+    for log in logs:
+        meta = log.meta_json or {}
+        model_name = meta.get("model", "unknown")
+        if model_name not in model_stats:
+            model_stats[model_name] = {
+                "request_count": 0,
+                "input_tokens": 0,
+                "output_tokens": 0,
+            }
+        model_stats[model_name]["request_count"] += 1
+        model_stats[model_name]["input_tokens"] += meta.get("prompt_tokens", 0)
+        model_stats[model_name]["output_tokens"] += meta.get("completion_tokens", 0)
+
     return ModelUsageResponse(
         usage=[
             ModelUsageItem(
-                model_name="gpt-4o",
-                request_count=0,
-                input_tokens=0,
-                output_tokens=0,
+                model_name=model_name,
+                request_count=stats["request_count"],
+                input_tokens=stats["input_tokens"],
+                output_tokens=stats["output_tokens"],
                 failure_count=0,
                 fallback_count=0,
-            ),
+            )
+            for model_name, stats in model_stats.items()
         ]
     )
 
@@ -554,4 +578,104 @@ async def get_system_health(
             "pending_jobs": pending_jobs,
             "failed_jobs_24h": failed_jobs_24h,
         },
+    )
+
+
+@router.get("/dashboard-kpis", response_model=AdminDashboardKPIs)
+async def get_dashboard_kpis(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+    cutoff_7d = datetime.now(timezone.utc) - timedelta(days=7)
+
+    quizzes_today_result = await db.execute(
+        select(func.count())
+        .select_from(QuizSession)
+        .where(QuizSession.created_at >= cutoff_24h)
+    )
+    quizzes_today = quizzes_today_result.scalar() or 0
+
+    total_quiz_jobs_result = await db.execute(
+        select(func.count()).select_from(Job).where(Job.job_type == "generate_quiz")
+    )
+    total_quiz_jobs = total_quiz_jobs_result.scalar() or 0
+
+    total_storage_result = await db.execute(
+        select(func.sum(User.storage_used_bytes))
+        .select_from(User)
+        .where(User.deleted_at.is_(None))
+    )
+    total_storage_bytes = total_storage_result.scalar() or 0
+
+    top_storage_result = await db.execute(
+        select(User.username, User.storage_used_bytes)
+        .where(User.deleted_at.is_(None))
+        .order_by(User.storage_used_bytes.desc())
+        .limit(5)
+    )
+    top_users_by_storage = [
+        TopStorageUser(username=row[0], storage_used_bytes=row[1])
+        for row in top_storage_result.fetchall()
+    ]
+
+    ai_token_result = await db.execute(
+        select(func.count())
+        .select_from(SystemLog)
+        .where(
+            SystemLog.event_type == "ai_token_usage", SystemLog.created_at >= cutoff_24h
+        )
+    )
+    ai_token_usage_24h = ai_token_result.scalar() or 0
+
+    errors_result = await db.execute(
+        select(SystemLog.event_type, func.count().label("cnt"))
+        .where(
+            SystemLog.level.in_(["ERROR", "CRITICAL"]),
+            SystemLog.created_at >= cutoff_24h,
+        )
+        .group_by(SystemLog.event_type)
+        .order_by(func.count().desc())
+        .limit(3)
+    )
+    top_errors_24h = [
+        TopErrorItem(event_type=row[0], count=row[1])
+        for row in errors_result.fetchall()
+    ]
+
+    signups_result = await db.execute(
+        select(func.count())
+        .select_from(User)
+        .where(User.created_at >= cutoff_7d, User.deleted_at.is_(None))
+    )
+    signups_7d = signups_result.scalar() or 0
+
+    dau_result = await db.execute(
+        select(func.count())
+        .select_from(User)
+        .where(User.last_login_at >= cutoff_24h, User.deleted_at.is_(None))
+    )
+    dau = dau_result.scalar() or 0
+
+    job_queue_result = await db.execute(
+        select(Job.status, Job.job_type, func.count().label("cnt")).group_by(
+            Job.status, Job.job_type
+        )
+    )
+    job_queue = [
+        JobQueueItem(status=row[0], job_type=row[1], count=row[2])
+        for row in job_queue_result.fetchall()
+    ]
+
+    return AdminDashboardKPIs(
+        quizzes_today=quizzes_today,
+        total_quiz_jobs=total_quiz_jobs,
+        total_storage_bytes=total_storage_bytes,
+        ai_token_usage_24h=ai_token_usage_24h,
+        signups_7d=signups_7d,
+        dau=dau,
+        top_users_by_storage=top_users_by_storage,
+        top_errors_24h=top_errors_24h,
+        job_queue=job_queue,
     )

@@ -130,3 +130,31 @@ class SystemHealthResponse(BaseModel):
     checked_at: datetime
     components: dict[str, SystemHealthComponent]
     stats: dict[str, int | float]
+
+
+class TopStorageUser(BaseModel):
+    username: str
+    storage_used_bytes: int
+
+
+class TopErrorItem(BaseModel):
+    event_type: str
+    count: int
+
+
+class JobQueueItem(BaseModel):
+    status: str
+    job_type: str
+    count: int
+
+
+class AdminDashboardKPIs(BaseModel):
+    quizzes_today: int
+    total_quiz_jobs: int
+    total_storage_bytes: int
+    ai_token_usage_24h: int
+    signups_7d: int
+    dau: int
+    top_users_by_storage: list[TopStorageUser]
+    top_errors_24h: list[TopErrorItem]
+    job_queue: list[JobQueueItem]

@@ -206,13 +206,11 @@ class TestListLogs:
 
 class TestModelUsage:
     async def test_get_model_usage(self, admin_client: AsyncClient):
-        """admin GETs /admin/model-usage → 200, usage list with model_name fields"""
         resp = await admin_client.get("/admin/model-usage")
         assert resp.status_code == 200
         data = resp.json()
         assert "usage" in data
-        assert len(data["usage"]) >= 1
-        # Check model_name field exists
+        assert isinstance(data["usage"], list)
         for item in data["usage"]:
             assert "model_name" in item
 
@@ -518,6 +516,118 @@ class TestAuditLogs:
         assert data["total"] >= 10
 
     async def test_user_cannot_list_audit_logs(self, auth_client: AsyncClient):
-        """Regular user → 403"""
         resp = await auth_client.get("/admin/audit-logs")
+        assert resp.status_code == 403
+
+
+class TestDashboardKPIs:
+    async def test_dashboard_kpis_returns_all_fields(self, admin_client: AsyncClient):
+        resp = await admin_client.get("/admin/dashboard-kpis")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        for field in (
+            "quizzes_today",
+            "total_quiz_jobs",
+            "total_storage_bytes",
+            "ai_token_usage_24h",
+            "signups_7d",
+            "dau",
+            "top_users_by_storage",
+            "top_errors_24h",
+            "job_queue",
+        ):
+            assert field in data, f"missing field: {field}"
+
+        assert data["quizzes_today"] >= 0
+        assert data["total_quiz_jobs"] >= 0
+        assert data["total_storage_bytes"] >= 0
+        assert data["ai_token_usage_24h"] >= 0
+        assert data["signups_7d"] >= 0
+        assert data["dau"] >= 0
+        assert isinstance(data["top_users_by_storage"], list)
+        assert isinstance(data["top_errors_24h"], list)
+        assert isinstance(data["job_queue"], list)
+
+    async def test_dashboard_kpis_counts_quiz_jobs(
+        self, db_session, admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        job = Job(
+            id=str(uuid.uuid4()),
+            job_type="generate_quiz",
+            status="completed",
+        )
+        db_session.add(job)
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/dashboard-kpis")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_quiz_jobs"] >= 1
+
+    async def test_dashboard_kpis_counts_ai_token_usage_24h(
+        self, db_session, admin_client: AsyncClient
+    ):
+        from app.models import SystemLog
+
+        log = SystemLog(
+            id=str(uuid.uuid4()),
+            level="INFO",
+            service_name="ai_client",
+            event_type="ai_token_usage",
+            message="Token usage for model gpt-4o",
+            meta_json={
+                "model": "gpt-4o",
+                "prompt_tokens": 100,
+                "completion_tokens": 50,
+                "total_tokens": 150,
+            },
+        )
+        db_session.add(log)
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/dashboard-kpis")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ai_token_usage_24h"] >= 1
+
+    async def test_dashboard_kpis_top_users_no_email(
+        self, db_session, admin_client: AsyncClient, test_user
+    ):
+        resp = await admin_client.get("/admin/dashboard-kpis")
+        assert resp.status_code == 200
+        data = resp.json()
+
+        for entry in data["top_users_by_storage"]:
+            assert "email" not in entry
+            assert "username" in entry
+            assert "storage_used_bytes" in entry
+
+    async def test_dashboard_kpis_job_queue_groups_by_status_and_type(
+        self, db_session, admin_client: AsyncClient
+    ):
+        from app.models import Job
+
+        for status in ("pending", "completed"):
+            db_session.add(
+                Job(
+                    id=str(uuid.uuid4()),
+                    job_type="generate_quiz",
+                    status=status,
+                )
+            )
+        await db_session.commit()
+
+        resp = await admin_client.get("/admin/dashboard-kpis")
+        assert resp.status_code == 200
+        data = resp.json()
+        for entry in data["job_queue"]:
+            assert "status" in entry
+            assert "job_type" in entry
+            assert "count" in entry
+
+    async def test_user_cannot_get_dashboard_kpis(self, auth_client: AsyncClient):
+        resp = await auth_client.get("/admin/dashboard-kpis")
         assert resp.status_code == 403

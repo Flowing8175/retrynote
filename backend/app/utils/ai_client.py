@@ -1,5 +1,7 @@
+import asyncio
 import json
 import logging
+import uuid
 from openai import AsyncOpenAI
 from app.config import settings
 from typing import Any
@@ -20,6 +22,36 @@ __all__ = [
 client = AsyncOpenAI(api_key=settings.openai_api_key)
 
 _gemini_client = None
+
+
+async def _log_token_usage(
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    total_tokens: int,
+) -> None:
+    try:
+        from app.database import async_session
+        from app.models.admin import SystemLog
+
+        async with async_session() as session:
+            log = SystemLog(
+                id=str(uuid.uuid4()),
+                level="INFO",
+                service_name="ai_client",
+                event_type="ai_token_usage",
+                message=f"Token usage for model {model}",
+                meta_json={
+                    "model": model,
+                    "prompt_tokens": prompt_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": total_tokens,
+                },
+            )
+            session.add(log)
+            await session.commit()
+    except Exception as exc:
+        logger.warning("Failed to log token usage: %s", exc)
 
 
 def _get_gemini_client():
@@ -298,7 +330,18 @@ async def _call_gemini_structured(
     )
     if not response.text:
         raise ValueError("Gemini returned empty response")
-    return json.loads(response.text)
+    result = json.loads(response.text)
+    usage = response.usage_metadata
+    if usage is not None:
+        asyncio.create_task(
+            _log_token_usage(
+                model,
+                getattr(usage, "prompt_token_count", 0) or 0,
+                getattr(usage, "candidates_token_count", 0) or 0,
+                getattr(usage, "total_token_count", 0) or 0,
+            )
+        )
+    return result
 
 
 async def call_ai_structured(
@@ -343,6 +386,15 @@ async def call_ai_structured(
     if content is None:
         raise ValueError("AI returned empty response")
     result = json.loads(content)
+    if response.usage is not None:
+        asyncio.create_task(
+            _log_token_usage(
+                model,
+                response.usage.prompt_tokens,
+                response.usage.completion_tokens,
+                response.usage.total_tokens,
+            )
+        )
     return result
 
 
