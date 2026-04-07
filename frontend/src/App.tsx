@@ -83,16 +83,18 @@ function App() {
                </PublicRoute>
              }
            />
-           <Route
-             path="/pricing"
-             element={
-               <Layout>
-                 <Suspense fallback={<LoadingSpinner />}>
-                   <PricingPage />
-                 </Suspense>
-               </Layout>
-             }
-           />
+            <Route
+              path="/pricing"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Suspense fallback={<LoadingSpinner />}>
+                      <PricingPage />
+                    </Suspense>
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
            <Route path="/terms" element={<Suspense fallback={<LoadingSpinner />}><Terms /></Suspense>} />
            <Route path="/privacy" element={<Suspense fallback={<LoadingSpinner />}><Privacy /></Suspense>} />
            <Route path="/refund" element={<Suspense fallback={<LoadingSpinner />}><Refund /></Suspense>} />
