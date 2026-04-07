@@ -10,5 +10,6 @@ export { default as AdminImpersonationTab } from './AdminImpersonationTab';
 export { default as AdminModelSettingsTab } from './AdminModelSettingsTab';
 export { default as AdminKPIsPanel } from './AdminKPIsPanel';
 export { default as AdminJobsTab } from './AdminJobsTab';
+export { default as AdminDbTab } from './AdminDbTab';
 export { formatDateTime, formatRelative, LogLevelBadge, HealthStatusBadge, ComponentStatusDot, tabs, LOG_LEVELS } from './adminUtils';
 export type { TabKey } from './adminUtils';

@@ -17,6 +17,7 @@ import {
   AdminModelSettingsTab,
   AdminKPIsPanel,
   AdminJobsTab,
+  AdminDbTab,
   tabs,
 } from '@/components/admin';
 import type { TabKey } from '@/components/admin';
@@ -266,6 +267,10 @@ export default function Admin() {
 
       {activeTab === 'jobs' && (
         <AdminJobsTab isVerified={isVerified} activeTab={activeTab} />
+      )}
+
+      {activeTab === 'db' && (
+        <AdminDbTab isVerified={isVerified} activeTab={activeTab} />
       )}
     </div>
   );
