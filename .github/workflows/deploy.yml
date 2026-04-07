@@ -51,6 +51,8 @@ jobs:
           ssh -i ~/.ssh/deploy_key ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             "sudo cp /tmp/retrynote.nginx.conf /etc/nginx/sites-enabled/retrynote && \
              sudo cp /tmp/rate-limiting.conf /etc/nginx/rate-limiting.conf && \
+             grep -q 'rate-limiting.conf' /etc/nginx/nginx.conf || \
+               sudo sed -i 's|http {|http {\n\tinclude /etc/nginx/rate-limiting.conf;|' /etc/nginx/nginx.conf && \
              sudo nginx -t"
 
       # ── 5. 프론트엔드 전송 ───────────────────────────────────
