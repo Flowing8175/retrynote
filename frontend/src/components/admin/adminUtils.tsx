@@ -29,16 +29,14 @@ export function formatRelative(value: string | null): string {
 
 export function LogLevelBadge({ level }: { level: string }) {
   const normalized = level.toUpperCase();
-  let cls = '';
-  if (normalized === 'ERROR' || normalized === 'CRITICAL') {
-    cls = 'bg-red-500/15 text-red-400 border border-red-500/20';
-  } else if (normalized === 'WARNING' || normalized === 'WARN') {
-    cls = 'bg-amber-500/15 text-amber-400 border border-amber-500/20';
-  } else if (normalized === 'INFO') {
-    cls = 'bg-teal-500/15 text-teal-300 border border-teal-500/20';
-  } else {
-    cls = 'bg-white/5 text-content-muted border border-white/[0.07]';
-  }
+  const cls =
+    normalized === 'ERROR' || normalized === 'CRITICAL'
+      ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+      : normalized === 'WARNING' || normalized === 'WARN'
+        ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+        : normalized === 'INFO'
+          ? 'bg-teal-500/15 text-teal-300 border border-teal-500/20'
+          : 'bg-white/5 text-content-muted border border-white/[0.07]';
   return (
     <span className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-xs font-medium ${cls}`}>
       {normalized}
