@@ -1,5 +1,13 @@
 {
   "venvPath": ".",
   "venv": ".venv",
-  "pythonVersion": "3.12"
+  "pythonVersion": "3.12",
+  "include": ["app"],
+  "exclude": [
+    ".venv",
+    "alembic",
+    "storage",
+    "tests",
+    "**/__pycache__"
+  ]
 }
