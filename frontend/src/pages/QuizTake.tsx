@@ -511,8 +511,25 @@ export default function QuizTake() {
                 <textarea
                   value={userAnswer}
                   onChange={(e) => setUserAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (
+                        !userAnswer.trim() ||
+                        submitAnswerMutation.isPending ||
+                        saveDraftAnswerMutation.isPending ||
+                        (isSubmitted && !isExamMode) ||
+                        isCompleted
+                      ) return;
+                      if (isExamMode) {
+                        saveDraftAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                      } else {
+                        submitAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                      }
+                    }
+                  }}
                   disabled={(isSubmitted && !isExamMode) || isCompleted}
-                  placeholder="답변을 입력하세요..."
+                  placeholder="답변을 입력하세요... (Enter로 제출, Shift+Enter로 줄바꿈)"
                   className="w-full bg-surface border border-white/[0.05] rounded-2xl text-base px-6 py-6 placeholder:text-content-muted focus:ring-2 focus:ring-brand-500 transition-shadow min-h-[200px] resize-y"
                 />
               </div>
