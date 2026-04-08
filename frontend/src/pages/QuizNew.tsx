@@ -148,7 +148,11 @@ export default function QuizNew() {
     generationModelOptions.find((o) => o.is_default)?.tier ??
     generationModelOptions.find((o) => o.value === defaultModel)?.tier ??
     null;
-  const activeTier = preferredTier ?? defaultTier;
+  const validPreferredTier =
+    preferredTier && generationModelOptions.some((o) => o.tier === preferredTier)
+      ? preferredTier
+      : null;
+  const activeTier = validPreferredTier ?? defaultTier;
   const activeModel =
     generationModelOptions.find((o) => o.tier === activeTier)?.value ?? defaultModel;
 
