@@ -20,6 +20,13 @@ function getBarColor(pct: number): string {
   return 'oklch(0.72 0.18 160)';                 // green
 }
 
+function formatStorageBytes(bytes: number): string {
+  const gb = 1024 * 1024 * 1024;
+  return bytes >= gb
+    ? `${(bytes / gb).toFixed(1)} GB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function getTierBadgeClass(tier: UserTier): string {
   switch (tier) {
     case 'pro':
@@ -147,7 +154,13 @@ export default function UsageBar({ expanded = true }: UsageBarProps) {
               <div className="flex items-center justify-between gap-1">
                 <span className="text-xs text-content-muted truncate">{label}</span>
                 <span className="text-xs text-content-secondary font-medium shrink-0">
-                  {isUnlimited ? '무제한' : `${win.consumed} / ${win.limit}`}
+                  {win.resourceType === 'storage'
+                    ? isUnlimited
+                      ? '무제한'
+                      : `${formatStorageBytes(win.consumed)} / ${formatStorageBytes(win.limit)}`
+                    : isUnlimited
+                      ? '무제한'
+                      : `${win.consumed} / ${win.limit}`}
                 </span>
               </div>
               {!isUnlimited && (
