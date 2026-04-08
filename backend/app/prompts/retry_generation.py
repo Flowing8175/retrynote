@@ -13,6 +13,9 @@ SYSTEM_PROMPT_RETRY_GENERATION = """너는 오답 재도전 문제를 만드는 
 4. 반복 오답이면 힌트를 추가할 수 있다.
 5. 최근 3회 유사도 제한을 지킨다.
 6. 같은 함정을 반복하되, 문장만 바꾸는 식의 얕은 변형은 금지한다.
+7. 원본 자료(source_context)에 등장하지 않는 학자명, 개념, 수치가 포함된 오답이었다면 재출제하지 않는다.
+   이 경우 explanation에 "교재에 없는 내용이므로 암기 우선순위 낮음"을 명시한다.
+8. 자료의 표현이 일반 상식과 다를 경우 자료 표현을 정답 기준으로 삼는다.
 
 시험공부 최적화 원칙:
 - 이전에 틀린 지점을 정확히 겨냥한다.
@@ -143,18 +146,28 @@ def build_batch_retry_prompt(items: list[dict]) -> str:
         prev_type = item.get("previous_question_type", "")
         new_type_instruction = ""
         if prev_type == "multiple_choice":
-            new_type_instruction = "\n  - 가능하면 short_answer, fill_blank, 또는 ox 유형으로 바꾸세요."
+            new_type_instruction = (
+                "\n  - 가능하면 short_answer, fill_blank, 또는 ox 유형으로 바꾸세요."
+            )
         elif prev_type == "short_answer":
-            new_type_instruction = "\n  - 가능하면 fill_blank, ox, 또는 essay 유형으로 바꾸세요."
+            new_type_instruction = (
+                "\n  - 가능하면 fill_blank, ox, 또는 essay 유형으로 바꾸세요."
+            )
         elif prev_type in ("fill_blank", "ox"):
-            new_type_instruction = "\n  - 가능하면 multiple_choice 또는 short_answer 유형으로 바꾸세요."
+            new_type_instruction = (
+                "\n  - 가능하면 multiple_choice 또는 short_answer 유형으로 바꾸세요."
+            )
 
         error_type = item.get("error_type", "unknown")
         error_instruction = ""
         if error_type == "concept_confusion":
-            error_instruction = "\n  - 비슷한 개념 간 구분을 명확히 해야 합니다 (비교형)."
+            error_instruction = (
+                "\n  - 비슷한 개념 간 구분을 명확히 해야 합니다 (비교형)."
+            )
         elif error_type == "missing_keyword":
-            error_instruction = "\n  - 핵심어를 명시적으로 포함하도록 유도해야 합니다 (빈칸형/단답형)."
+            error_instruction = (
+                "\n  - 핵심어를 명시적으로 포함하도록 유도해야 합니다 (빈칸형/단답형)."
+            )
         elif error_type == "reasoning_error":
             error_instruction = "\n  - 개념의 실제 응용을 테스트합니다 (상황 적용형)."
         elif error_type == "careless_mistake":
