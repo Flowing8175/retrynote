@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { dashboardApi } from '@/api';
-import CoachingStream from '@/components/CoachingStream';
+import CoachingDisplay from '@/components/CoachingDisplay';
 import DiagramModal from '@/components/DiagramModal';
 import type { DashboardResponse, RetryLocationState } from '@/types';
 
@@ -270,11 +270,8 @@ export default function Dashboard() {
             <h1 className="text-4xl font-semibold tracking-tight text-white leading-tight">
               {headline}
             </h1>
-            <CoachingStream
-              range={range}
-              fileId={selectedFileId}
-              categoryTag={selectedCategoryTag}
-              hasData={hasData}
+            <CoachingDisplay
+              message={dashboardData.coaching_summary}
               fallbackMessage={fallbackCoaching}
             />
           </div>

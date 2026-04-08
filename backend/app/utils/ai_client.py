@@ -450,16 +450,17 @@ async def stream_ai_text(
     token_limit_key = (
         "max_completion_tokens" if model.startswith("gpt-5") else "max_tokens"
     )
-    stream = await client.chat.completions.create(
-        model=model,
-        messages=[
+    kwargs: dict[str, Any] = {
+        "model": model,
+        "messages": [
             {"role": "system", "content": system_message},
             {"role": "user", "content": prompt},
         ],
-        temperature=temperature,
-        **{token_limit_key: max_tokens},
-        stream=True,
-    )
+        "temperature": temperature,
+        token_limit_key: max_tokens,
+        "stream": True,
+    }
+    stream = await client.chat.completions.create(**kwargs)  # type: ignore[call-overload]
     async for chunk in stream:
         delta = chunk.choices[0].delta if chunk.choices else None
         if delta and delta.content:

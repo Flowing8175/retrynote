@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func, and_, false
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -17,11 +16,6 @@ import json
 
 router = APIRouter()
 COACHING_SUMMARY_CACHE_TTL_SECONDS = 60 * 60
-
-
-def sse_data(text: str) -> str:
-    lines = text.split("\n")
-    return "".join(f"data: {line}\n" for line in lines) + "\n"
 
 
 def format_question_type_label(question_type: str) -> str:
@@ -107,207 +101,55 @@ def build_coaching_prompt(
 한두 문장의 코칭 메시지만 출력하세요. JSON이 아닌 순수 텍스트로 응답하세요."""
 
 
-@router.get("/coaching-stream")
-async def stream_coaching(
+async def generate_coaching_summary(
     request: Request,
-    range: str = Query("7d", pattern="^(7d|30d|all)$"),
-    file_id: str | None = Query(None),
-    category_tag: str | None = Query(None),
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    now = datetime.now(timezone.utc)
-    if range == "7d":
-        since = now - timedelta(days=7)
-    elif range == "30d":
-        since = now - timedelta(days=30)
-    else:
-        since = datetime(2000, 1, 1)
-
-    base_query = (
-        select(AnswerLog)
-        .join(QuizItem, AnswerLog.quiz_item_id == QuizItem.id)
-        .join(QuizSession, AnswerLog.quiz_session_id == QuizSession.id)
-        .where(
-            AnswerLog.user_id == user.id,
-            AnswerLog.is_active_result == True,
-            AnswerLog.deleted_at.is_(None),
-            AnswerLog.graded_at >= since,
-        )
-    )
-
-    if file_id:
-        from app.models.quiz import QuizSessionFile
-
-        base_query = base_query.join(
-            QuizSessionFile, QuizSessionFile.quiz_session_id == QuizSession.id
-        ).where(QuizSessionFile.file_id == file_id)
-    if category_tag:
-        base_query = base_query.where(QuizItem.category_tag == category_tag)
-
-    result = await db.execute(base_query)
-    answers = result.scalars().all()
-
-    quiz_item_ids = list({a.quiz_item_id for a in answers})
-    items_result = await db.execute(
-        select(QuizItem).where(QuizItem.id.in_(quiz_item_ids))
-    )
-    quiz_items_by_id: dict[str, QuizItem] = {
-        item.id: item for item in items_result.scalars().all()
-    }
-
-    total_count = len(answers)
-    if total_count == 0:
-
-        async def empty_stream():
-            yield sse_data("좋은 흐름입니다. 꾸준히 학습을 이어가세요.")
-            yield "data: [DONE]\n\n"
-
-        return StreamingResponse(empty_stream(), media_type="text/event-stream")
-
-    correct_count = sum(1 for a in answers if a.judgement == Judgement.correct)
-    partial_count = sum(1 for a in answers if a.judgement == Judgement.partial)
-    total_score = sum(a.score_awarded for a in answers)
-    max_score_total = sum(a.max_score for a in answers)
-    overall_accuracy = correct_count / total_count if total_count > 0 else 0.0
-    score_rate = total_score / max_score_total if max_score_total > 0 else 0.0
-
-    seen_concept_keys = {
-        quiz_items_by_id[a.quiz_item_id].concept_key
-        for a in answers
-        if a.quiz_item_id in quiz_items_by_id
-        and quiz_items_by_id[a.quiz_item_id].concept_key
-    }
-    weak_query = select(WeakPoint).where(WeakPoint.user_id == user.id)
-    if seen_concept_keys:
-        weak_query = weak_query.where(WeakPoint.concept_key.in_(seen_concept_keys))
-    else:
-        weak_query = weak_query.where(false())
-    weak_result = await db.execute(
-        weak_query.order_by(
-            (
-                WeakPoint.wrong_count + WeakPoint.partial_count + WeakPoint.skip_count
-            ).desc()
-        ).limit(5)
-    )
-    weak_concepts = weak_result.scalars().all()
-
-    weak_concepts_data = []
-    for w in weak_concepts:
-        total_for_concept = 0
-        correct_for_concept = 0
-        for a in answers:
-            item = quiz_items_by_id.get(a.quiz_item_id)
-            if item and item.concept_key == w.concept_key:
-                total_for_concept += 1
-                if a.judgement == Judgement.correct:
-                    correct_for_concept += 1
-        accuracy = (
-            correct_for_concept / total_for_concept if total_for_concept > 0 else 0.0
-        )
-        weak_concepts_data.append(
-            {
-                "concept_key": w.concept_key,
-                "concept_label": w.concept_label,
-                "wrong_count": w.wrong_count,
-                "accuracy": accuracy,
-            }
-        )
-
-    type_accuracy: dict[str, dict] = {}
-    for a in answers:
-        item = quiz_items_by_id.get(a.quiz_item_id)
-        if item:
-            qt = item.question_type.value
-            if qt not in type_accuracy:
-                type_accuracy[qt] = {"correct": 0, "total": 0}
-            type_accuracy[qt]["total"] += 1
-            if a.judgement == Judgement.correct:
-                type_accuracy[qt]["correct"] += 1
-
-    weak_types = sorted(
-        [
-            {
-                "question_type": format_question_type_label(qt),
-                "accuracy": data["correct"] / data["total"]
-                if data["total"] > 0
-                else 0.0,
-            }
-            for qt, data in type_accuracy.items()
-        ],
-        key=lambda item: item["question_type"],
-    )
-
-    coaching_prompt = build_coaching_prompt(
-        total_count,
-        correct_count,
-        partial_count,
-        overall_accuracy,
-        score_rate,
-        weak_concepts_data,
-        weak_types,
-    )
-
+    user_id: str,
+    range_value: str,
+    file_id: str | None,
+    category_tag: str | None,
+    overall_accuracy: float,
+    coaching_prompt: str,
+) -> str:
     redis_client = getattr(request.app.state, "redis", None)
-    cache_key = build_coaching_summary_cache_key(user.id, range, file_id, category_tag)
+    cache_key = build_coaching_summary_cache_key(
+        user_id, range_value, file_id, category_tag
+    )
 
-    try:
-        if redis_client is not None:
+    if redis_client is not None:
+        try:
             cached = await redis_client.get(cache_key)
             if cached is not None:
                 sanitized = sanitize_coaching_summary(cached) or cached
-                toned = apply_coaching_tone(sanitized, overall_accuracy)
-
-                async def cached_stream():
-                    yield sse_data(toned)
-                    yield "data: [DONE]\n\n"
-
-                return StreamingResponse(
-                    cached_stream(), media_type="text/event-stream"
-                )
-    except Exception:
-        redis_client = None
-
-    async def token_stream():
-        collected = ""
-        try:
-            async for chunk in stream_ai_text(
-                coaching_prompt,
-                COACHING_STREAM_SYSTEM_PROMPT,
-                model=cfg.balanced_generation_model,
-                max_tokens=256,
-            ):
-                collected += chunk
-                yield sse_data(chunk)
+                return apply_coaching_tone(sanitized, overall_accuracy)
         except Exception:
-            if not collected:
-                fallback = apply_coaching_tone(
-                    f"정답률 {overall_accuracy:.0%}입니다. 취약 개념 위주로 복습해보세요.",
-                    overall_accuracy,
-                )
-                yield sse_data(fallback)
+            redis_client = None
 
-        yield "data: [DONE]\n\n"
+    collected = ""
+    try:
+        async for chunk in stream_ai_text(
+            coaching_prompt,
+            COACHING_STREAM_SYSTEM_PROMPT,
+            model=cfg.balanced_generation_model,
+            max_tokens=256,
+        ):
+            collected += chunk
+    except Exception:
+        pass
 
-        sanitized = sanitize_coaching_summary(collected) if collected else None
+    if collected:
+        sanitized = sanitize_coaching_summary(collected)
+        result = apply_coaching_tone(sanitized or collected, overall_accuracy)
         if redis_client is not None and sanitized:
             try:
                 await redis_client.setex(
-                    cache_key,
-                    COACHING_SUMMARY_CACHE_TTL_SECONDS,
-                    sanitized,
+                    cache_key, COACHING_SUMMARY_CACHE_TTL_SECONDS, sanitized
                 )
             except Exception:
                 pass
+        return result
 
-    return StreamingResponse(
-        token_stream(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
+    fallback = f"정답률 {overall_accuracy:.0%}입니다. 취약 개념 위주로 복습해보세요."
+    return apply_coaching_tone(fallback, overall_accuracy)
 
 
 @router.get("", response_model=DashboardResponse)
@@ -400,7 +242,7 @@ async def get_dashboard(
         for w in weak_result.scalars().all()
     ]
 
-    type_accuracy = {}
+    type_accuracy: dict[str, dict] = {}
     for a in answers:
         item = quiz_items_by_id.get(a.quiz_item_id)
         if item:
@@ -420,7 +262,7 @@ async def get_dashboard(
         for qt, data in type_accuracy.items()
     ]
 
-    subject_accuracy = {}
+    subject_accuracy: dict[str, dict] = {}
     for a in answers:
         item = quiz_items_by_id.get(a.quiz_item_id)
         if item and item.category_tag:
@@ -502,12 +344,64 @@ async def get_dashboard(
                 }
             )
 
-    static_coaching_summary: str | None = None
+    coaching_summary: str | None = None
     if total_count > 0:
-        fallback_msg = (
-            f"정답률 {overall_accuracy:.0%}입니다. 취약 개념 위주로 복습해보세요."
+        weak_concepts_data = []
+        for w in weak_concepts[:5]:
+            total_for_concept = 0
+            correct_for_concept = 0
+            for a in answers:
+                item = quiz_items_by_id.get(a.quiz_item_id)
+                if item and item.concept_key == w["concept_key"]:
+                    total_for_concept += 1
+                    if a.judgement == Judgement.correct:
+                        correct_for_concept += 1
+            accuracy = (
+                correct_for_concept / total_for_concept
+                if total_for_concept > 0
+                else 0.0
+            )
+            weak_concepts_data.append(
+                {
+                    "concept_key": w["concept_key"],
+                    "concept_label": w["concept_label"],
+                    "wrong_count": w["wrong_count"],
+                    "accuracy": accuracy,
+                }
+            )
+
+        weak_types = sorted(
+            [
+                {
+                    "question_type": format_question_type_label(qt),
+                    "accuracy": data["correct"] / data["total"]
+                    if data["total"] > 0
+                    else 0.0,
+                }
+                for qt, data in type_accuracy.items()
+            ],
+            key=lambda item: item["question_type"],
         )
-        static_coaching_summary = apply_coaching_tone(fallback_msg, overall_accuracy)
+
+        coaching_prompt = build_coaching_prompt(
+            total_count,
+            correct_count,
+            partial_count,
+            overall_accuracy,
+            score_rate,
+            weak_concepts_data,
+            weak_types,
+        )
+
+        coaching_summary = await generate_coaching_summary(
+            request,
+            user.id,
+            range,
+            file_id,
+            category_tag,
+            overall_accuracy,
+            coaching_prompt,
+        )
 
     return DashboardResponse(
         overall_accuracy=overall_accuracy,
@@ -519,5 +413,5 @@ async def get_dashboard(
         accuracy_by_file=accuracy_by_file,
         retry_recommendations=retry_recommendations,
         recent_wrong_notes=recent_wrong_notes,
-        coaching_summary=static_coaching_summary,
+        coaching_summary=coaching_summary,
     )
