@@ -76,8 +76,7 @@ async def get_quiz_config(
     tier = UserTier(user.tier)
     allowed_models = TIER_LIMITS[tier].allowed_models
 
-    # Determine the default: prefer BALANCED tier, fall back to provider defaults.
-    default_model = cfg.balanced_generation_model or cfg.openai_generation_model
+    default_model = cfg.eco_generation_model or cfg.openai_generation_model
 
     configured_tiers = [
         ("ECO", cfg.eco_generation_model),

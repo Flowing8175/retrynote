@@ -107,7 +107,17 @@ export default function QuizNew() {
   const [difficulty, setDifficulty] = useState('');
   const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>([]);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
-  const [preferredTier, setPreferredTier] = useState<string | null>(null);
+  const [preferredTier, setPreferredTierState] = useState<string | null>(
+    () => localStorage.getItem('quiz_preferred_tier')
+  );
+  const setPreferredTier = (tier: string | null) => {
+    if (tier === null) {
+      localStorage.removeItem('quiz_preferred_tier');
+    } else {
+      localStorage.setItem('quiz_preferred_tier', tier);
+    }
+    setPreferredTierState(tier);
+  };
   const [showNoSourceModal, setShowNoSourceModal] = useState(false);
   const [noSourceConfirmed, setNoSourceConfirmed] = useState(false);
   const [topic, setTopic] = useState('');
