@@ -1,4 +1,5 @@
 export { default as AdminBanner } from './AdminBanner';
+export { default as AnnouncementBanner } from './AnnouncementBanner';
 export { default as AppErrorBoundary } from './AppErrorBoundary';
 export { default as EmptyState } from './EmptyState';
 export { default as LoadingSpinner, PillShimmer } from './LoadingSpinner';

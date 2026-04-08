@@ -7,3 +7,5 @@ export { retryApi } from './retry';
 export { dashboardApi } from './dashboard';
 export { searchApi } from './search';
 export { adminApi } from './admin';
+export { announcementsApi } from './announcements';
+export type { PublicAnnouncement } from './announcements';

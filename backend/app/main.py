@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from app.config import settings
 
 app_metadata = {
@@ -137,3 +139,36 @@ app.include_router(billing_router, prefix="/billing", tags=["billing"])
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/announcements", tags=["announcements"])
+async def list_active_announcements():
+    from sqlalchemy import select, or_
+    from app.database import async_session
+    from app.models.admin import Announcement
+
+    now = datetime.now(timezone.utc)
+    async with async_session() as db:
+        result = await db.execute(
+            select(Announcement)
+            .where(
+                Announcement.is_active.is_(True),
+                or_(Announcement.starts_at.is_(None), Announcement.starts_at <= now),
+                or_(Announcement.ends_at.is_(None), Announcement.ends_at >= now),
+            )
+            .order_by(Announcement.created_at.desc())
+            .limit(5)
+        )
+        announcements = result.scalars().all()
+
+    return [
+        {
+            "id": a.id,
+            "title": a.title,
+            "body": a.body,
+            "starts_at": a.starts_at.isoformat() if a.starts_at else None,
+            "ends_at": a.ends_at.isoformat() if a.ends_at else None,
+            "created_at": a.created_at.isoformat() if a.created_at else None,
+        }
+        for a in announcements
+    ]

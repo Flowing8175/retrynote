@@ -103,6 +103,10 @@ export const adminApi = {
     return response.data;
   },
 
+  deleteAnnouncement: async (id: string): Promise<void> => {
+    await apiClient.delete(`/admin/announcements/${id}`);
+  },
+
   getAuditLogs: async (
     page: number = 1,
     size: number = 20

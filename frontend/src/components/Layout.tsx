@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu, X, CreditCard } from 'lucide-react';
+import AnnouncementBanner from './AnnouncementBanner';
 import Navbar from './Navbar';
 import UsageBar from './UsageBar';
 
@@ -35,6 +36,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
       <Navbar />
+      <AnnouncementBanner />
       <div className="mx-auto flex w-full max-w-[1600px] items-start">
         {showSidebar && (
           <>

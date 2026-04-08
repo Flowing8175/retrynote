@@ -420,7 +420,12 @@ async def retry_file(
         raise HTTPException(status_code=404, detail="File not found")
     if file.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
-    if file.status not in (FileStatus.failed_partial, FileStatus.failed_terminal):
+    retryable = {
+        FileStatus.failed_partial,
+        FileStatus.failed_terminal,
+        FileStatus.uploaded,
+    }
+    if file.status not in retryable:
         raise HTTPException(status_code=400, detail="File is not in a retryable state")
     if file.retry_count >= settings.max_retry_count:
         raise HTTPException(status_code=400, detail="Max retry count exceeded")

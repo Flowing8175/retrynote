@@ -152,6 +152,13 @@ export default function Admin() {
     },
   });
 
+  const deleteAnnouncementMutation = useMutation({
+    mutationFn: (id: string) => adminApi.deleteAnnouncement(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-announcements'] });
+    },
+  });
+
   const startImpersonationMutation = useMutation({
     mutationFn: (targetUserId: string) =>
       adminApi.startImpersonation({ target_user_id: targetUserId, reason: '관리자 점검' }),
@@ -331,6 +338,7 @@ export default function Admin() {
           announcementForm={announcementForm}
           setAnnouncementForm={setAnnouncementForm}
           createAnnouncementMutation={createAnnouncementMutation}
+          deleteAnnouncementMutation={deleteAnnouncementMutation}
         />
       )}
 

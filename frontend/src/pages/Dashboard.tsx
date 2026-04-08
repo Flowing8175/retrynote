@@ -18,19 +18,19 @@ function DashboardSkeleton() {
             <div className="skeleton h-5 w-96 max-w-full rounded-md" />
           </div>
           {/* Metrics */}
-          <div className="flex items-start gap-8 pt-2">
+          <div className="flex items-start gap-4 sm:gap-8 pt-2">
             <div className="space-y-2">
-              <div className="skeleton h-12 w-20 rounded-md" />
+              <div className="skeleton h-8 sm:h-12 w-16 sm:w-20 rounded-md" />
               <div className="skeleton h-3 w-16 rounded-md" />
             </div>
             <div className="w-px self-stretch bg-white/[0.08]" />
             <div className="space-y-2">
-              <div className="skeleton h-12 w-24 rounded-md" />
+              <div className="skeleton h-8 sm:h-12 w-16 sm:w-24 rounded-md" />
               <div className="skeleton h-3 w-12 rounded-md" />
             </div>
             <div className="w-px self-stretch bg-white/[0.08]" />
             <div className="space-y-2">
-              <div className="skeleton h-12 w-24 rounded-md" />
+              <div className="skeleton h-8 sm:h-12 w-16 sm:w-24 rounded-md" />
               <div className="skeleton h-3 w-12 rounded-md" />
             </div>
           </div>
@@ -278,22 +278,22 @@ export default function Dashboard() {
 
           {/* Editorial metrics — pure typography, no cards */}
           <div className="flex items-start pt-2">
-            <div className="pr-8">
-              <div className="text-5xl font-semibold tabular-nums text-content-primary leading-none">
+            <div className="pr-4 sm:pr-8">
+              <div className="text-3xl sm:text-5xl font-semibold tabular-nums text-content-primary leading-none">
                 {dashboardData.learning_volume}
               </div>
               <div className="mt-2 text-xs font-medium uppercase tracking-widest text-content-muted">학습량 · 문제</div>
             </div>
             <div className="w-px self-stretch bg-white/[0.08]" />
-            <div className="px-8">
-              <div className="text-5xl font-semibold tabular-nums text-brand-300 leading-none">
+            <div className="px-4 sm:px-8">
+              <div className="text-3xl sm:text-5xl font-semibold tabular-nums text-brand-300 leading-none">
                 {formatPercent(dashboardData.overall_accuracy)}
               </div>
               <div className="mt-2 text-xs font-medium uppercase tracking-widest text-content-muted">정답률</div>
             </div>
             <div className="w-px self-stretch bg-white/[0.08]" />
-            <div className="pl-8">
-              <div className="text-5xl font-semibold tabular-nums text-content-primary leading-none">
+            <div className="pl-4 sm:pl-8">
+              <div className="text-3xl sm:text-5xl font-semibold tabular-nums text-content-primary leading-none">
                 {formatPercent(dashboardData.score_rate)}
               </div>
               <div className="mt-2 text-xs font-medium uppercase tracking-widest text-content-muted">점수율</div>

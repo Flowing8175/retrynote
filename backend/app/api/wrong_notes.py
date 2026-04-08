@@ -37,6 +37,7 @@ async def list_wrong_notes(
             AnswerLog.user_id == user.id,
             AnswerLog.is_active_result == True,
             AnswerLog.deleted_at.is_(None),
+            QuizSession.deleted_at.is_(None),
             QuizSession.source_mode != "no_source",
         )
     )

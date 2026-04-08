@@ -562,6 +562,32 @@ async def create_announcement(
     return AnnouncementResponse.model_validate(announcement)
 
 
+@router.delete("/announcements/{announcement_id}", status_code=204)
+async def delete_announcement(
+    announcement_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin_verified),
+):
+    result = await db.execute(
+        select(Announcement).where(Announcement.id == announcement_id)
+    )
+    announcement = result.scalar_one_or_none()
+    if not announcement:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+
+    await log_audit(
+        db,
+        admin.id,
+        "delete_announcement",
+        request,
+        target_type="announcement",
+        target_id=announcement_id,
+    )
+    await db.delete(announcement)
+    await db.commit()
+
+
 @router.get("/audit-logs")
 async def list_audit_logs(
     request: Request,

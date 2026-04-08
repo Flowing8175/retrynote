@@ -137,14 +137,14 @@ export default function QuizHistory() {
                   <div className="flex items-center gap-3 lg:shrink-0">
                     <Link
                       to={`/quiz/${session.id}`}
-                      className="text-sm text-brand-300 hover:text-brand-400 transition-colors"
+                      className="inline-flex items-center py-2.5 px-3 text-sm text-brand-300 hover:text-brand-400 transition-colors"
                     >
                       열어보기 →
                     </Link>
                     <button
                       type="button"
                       onClick={() => setDeletingId(session.id)}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.07] bg-surface px-3 py-2 text-xs font-medium text-content-secondary transition-colors hover:border-semantic-error/30 hover:bg-semantic-error-bg/60 hover:text-semantic-error"
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.07] bg-surface px-3 py-2.5 text-xs font-medium text-content-secondary transition-colors hover:border-semantic-error/30 hover:bg-semantic-error-bg/60 hover:text-semantic-error"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
                       삭제

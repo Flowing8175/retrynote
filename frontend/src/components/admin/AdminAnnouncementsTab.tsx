@@ -1,4 +1,5 @@
 import type { UseMutationResult } from '@tanstack/react-query';
+import { X } from 'lucide-react';
 import { StatusBadge } from '@/components';
 import type { AnnouncementCreate, AnnouncementResponse } from '@/types';
 import { formatDateTime } from './adminUtils';
@@ -8,6 +9,7 @@ interface AdminAnnouncementsTabProps {
   announcementForm: AnnouncementCreate;
   setAnnouncementForm: React.Dispatch<React.SetStateAction<AnnouncementCreate>>;
   createAnnouncementMutation: UseMutationResult<AnnouncementResponse, unknown, AnnouncementCreate>;
+  deleteAnnouncementMutation: UseMutationResult<void, unknown, string>;
 }
 
 export default function AdminAnnouncementsTab({
@@ -15,10 +17,12 @@ export default function AdminAnnouncementsTab({
   announcementForm,
   setAnnouncementForm,
   createAnnouncementMutation,
+  deleteAnnouncementMutation,
 }: AdminAnnouncementsTabProps) {
   return (
     <section className="space-y-6">
       <div className="overflow-hidden rounded-3xl border border-white/[0.07] bg-surface">
+        <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-white/[0.07]">
           <thead className="bg-surface-raised">
             <tr>
@@ -27,6 +31,7 @@ export default function AdminAnnouncementsTab({
               <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-[0.18em] text-content-muted">상태</th>
               <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-[0.18em] text-content-muted">시작일</th>
               <th className="px-6 py-4 text-left text-xs font-medium uppercase tracking-[0.18em] text-content-muted">종료일</th>
+              <th className="px-6 py-4" />
             </tr>
           </thead>
           <tbody className="divide-y divide-white/[0.07] bg-surface">
@@ -45,15 +50,26 @@ export default function AdminAnnouncementsTab({
                 <td className="px-6 py-5 whitespace-nowrap text-sm text-content-secondary">
                   {ann.ends_at ? formatDateTime(ann.ends_at) : '—'}
                 </td>
+                <td className="px-6 py-5 whitespace-nowrap text-right">
+                  <button
+                    onClick={() => deleteAnnouncementMutation.mutate(ann.id)}
+                    disabled={deleteAnnouncementMutation.isPending}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full text-content-muted transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
+                    aria-label="삭제"
+                  >
+                    <X size={14} />
+                  </button>
+                </td>
               </tr>
             ))}
             {(!announcementsData || announcementsData.length === 0) && (
               <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-sm text-content-muted">등록된 공지가 없습니다.</td>
+                <td colSpan={6} className="px-6 py-12 text-center text-sm text-content-muted">등록된 공지가 없습니다.</td>
               </tr>
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       <div className="rounded-3xl border border-white/[0.07] bg-surface p-6 md:p-7">

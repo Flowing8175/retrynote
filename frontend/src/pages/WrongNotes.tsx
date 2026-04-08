@@ -135,17 +135,17 @@ export default function WrongNotes() {
             </p>
           </div>
           
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value)}
-              className="bg-surface border border-white/[0.05] rounded-xl text-sm font-medium px-4 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none"
+              className="w-full sm:w-auto bg-surface border border-white/[0.05] rounded-xl text-sm font-medium px-4 py-2.5 focus:ring-2 focus:ring-brand-500 focus:outline-none"
             >
               <option value="concept">개념순 정렬</option>
               <option value="date">날짜순 정렬</option>
               <option value="question">문제순 정렬</option>
             </select>
-            <label className="flex items-center gap-2 bg-surface border border-white/[0.05] rounded-xl px-4 py-2.5 cursor-pointer hover:bg-surface-hover transition-colors">
+            <label className="flex items-center gap-2 w-full sm:w-auto bg-surface border border-white/[0.05] rounded-xl px-4 py-2.5 cursor-pointer hover:bg-surface-hover transition-colors">
               <input
                 type="checkbox"
                 checked={judgementFilter.includes('incorrect')}

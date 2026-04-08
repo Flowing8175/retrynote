@@ -197,8 +197,8 @@ export default function QuizNew() {
       (file) => selectedFolderId === null || file.folder_id === selectedFolderId
     );
     const readyFiles = visibleFiles.filter((file) => file.is_quiz_eligible && (file.status === 'ready' || file.status === 'failed_partial'));
-    const processingFiles = visibleFiles.filter((file) => file.is_quiz_eligible && isFileProcessingStatus(file.status));
-    const unavailableFiles = visibleFiles.filter((file) => !file.is_quiz_eligible || (!isFileProcessingStatus(file.status) && file.status !== 'ready' && file.status !== 'failed_partial'));
+    const processingFiles = visibleFiles.filter((file) => isFileProcessingStatus(file.status));
+    const unavailableFiles = visibleFiles.filter((file) => !file.is_quiz_eligible && !isFileProcessingStatus(file.status));
 
     return { readyFiles, processingFiles, unavailableFiles };
   }, [allFiles, selectedFolderId]);
@@ -368,7 +368,7 @@ export default function QuizNew() {
                   </button>
                 ))}
               </div>
-              <Link to="/files" className="text-xs font-medium text-brand-300 hover:text-white transition-colors">
+              <Link to="/files" className="inline-flex items-center py-2 px-2 text-xs font-medium text-brand-300 hover:text-white transition-colors">
                 자료 관리 →
               </Link>
             </div>
@@ -404,7 +404,24 @@ export default function QuizNew() {
                   </label>
                 );
               })}
-              {fileGroups.readyFiles.length === 0 && (
+              {fileGroups.processingFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-surface-deep border border-white/[0.05] opacity-60 cursor-not-allowed"
+                >
+                  <div className="w-5 h-5 rounded border border-white/20 bg-surface shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-white truncate mb-1">
+                      {file.original_filename || '제목 없는 자료'}
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-content-muted">{formatFileSource(file.source_type)}</span>
+                    </div>
+                  </div>
+                  <StatusBadge status={file.status} />
+                </div>
+              ))}
+              {fileGroups.readyFiles.length === 0 && fileGroups.processingFiles.length === 0 && (
                 <div className="text-center py-10 text-sm text-content-muted bg-surface-deep rounded-2xl border border-white/[0.05]">
                   사용 가능한 자료가 없습니다.
                 </div>
