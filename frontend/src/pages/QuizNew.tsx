@@ -200,10 +200,15 @@ export default function QuizNew() {
     setFormMessage(null);
   };
 
-  const daysUntilTrial = useMemo(() => {
-    if (!freeTrialUsedAt) return 7;
-    const daysSince = Math.floor((Date.now() - new Date(freeTrialUsedAt).getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max(0, 7 - daysSince);
+  const trialCooldownLabel = useMemo(() => {
+    if (!freeTrialUsedAt) return '7일 후';
+    const msRemaining = Math.max(0, new Date(freeTrialUsedAt).getTime() + 7 * 24 * 60 * 60 * 1000 - Date.now());
+    const totalHours = Math.floor(msRemaining / (1000 * 60 * 60));
+    const days = Math.floor(totalHours / 24);
+    const hours = totalHours % 24;
+    if (days > 0 && hours > 0) return `${days}일 ${hours}시간 후`;
+    if (days > 0) return `${days}일 후`;
+    return `${hours}시간 후`;
   }, [freeTrialUsedAt]);
 
   const fileGroups = useMemo(() => {
@@ -581,7 +586,7 @@ export default function QuizNew() {
                       ) : freeTrialUsedAt ? (
                         <div className="px-4 py-3 rounded-xl bg-surface-deep border border-white/[0.05]">
                           <span className="text-xs text-content-muted">
-                            다음 체험: {daysUntilTrial}일 후
+                            다음 체험: {trialCooldownLabel}
                           </span>
                         </div>
                       ) : null}
