@@ -447,6 +447,9 @@ async def stream_ai_text(
                 yield chunk.text
         return
 
+    token_limit_key = (
+        "max_completion_tokens" if model.startswith("gpt-5") else "max_tokens"
+    )
     stream = await client.chat.completions.create(
         model=model,
         messages=[
@@ -454,7 +457,7 @@ async def stream_ai_text(
             {"role": "user", "content": prompt},
         ],
         temperature=temperature,
-        max_tokens=max_tokens,
+        **{token_limit_key: max_tokens},
         stream=True,
     )
     async for chunk in stream:
