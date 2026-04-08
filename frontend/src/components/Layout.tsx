@@ -75,7 +75,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
             </aside>
 
             {/* Desktop Sidebar */}
-            <aside className={`sticky top-16 hidden h-[calc(100vh-4rem)] border-r border-white/[0.05] transition-all duration-300 lg:block ${sidebarExpanded ? 'w-64' : 'w-20'}`}>
+            <aside className={`fixed top-16 left-0 z-40 hidden h-[calc(100vh-4rem)] border-r border-white/[0.05] transition-all duration-300 lg:block ${sidebarExpanded ? 'w-64' : 'w-20'}`}>
               <div className="flex flex-col h-full bg-surface-deep/30">
                 <div className="p-4 border-b border-white/[0.05]">
                   <button
@@ -112,7 +112,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
           </>
         )}
         
-        <main className="flex-1 min-w-0 px-4 py-6 sm:px-6 lg:px-12 lg:py-10">
+        <main className={`flex-1 min-w-0 px-4 py-6 sm:px-6 lg:px-12 lg:py-10 ${showSidebar ? (sidebarExpanded ? 'lg:ml-64' : 'lg:ml-20') : ''}`}>
           {showSidebar && (
             <div className="mb-6 lg:hidden">
               <button
