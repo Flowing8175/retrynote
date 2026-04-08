@@ -342,7 +342,7 @@ export default function Dashboard() {
                       {concept.concept_label}
                     </h3>
                     <div className="flex items-center gap-1.5 text-xs text-content-muted">
-                      {concept.category_tag && (
+                      {concept.category_tag && !concept.category_tag.includes('_') && (
                         <>
                           <span className="text-brand-300/60">{concept.category_tag}</span>
                           <span>·</span>
