@@ -2,6 +2,7 @@ import uuid
 import pytest
 from httpx import AsyncClient
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, patch
 
 from app.models.quiz import (
     QuizSession,
@@ -24,6 +25,38 @@ from app.middleware.auth import hash_password, create_access_token, create_admin
 from .conftest import make_quiz_items
 
 
+@pytest.fixture(autouse=True)
+def _mock_turnstile_e2e():
+    with patch(
+        "app.api.auth.verify_turnstile_token", new_callable=AsyncMock, return_value=True
+    ):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _mock_send_verification_email_e2e():
+    with patch("app.api.auth.send_verification_email", new_callable=AsyncMock):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter_e2e():
+    from app.rate_limit import limiter
+
+    limiter._storage.reset()
+    yield
+
+
+async def _set_email_verified(db_session, user_id: str) -> None:
+    from sqlalchemy import select
+    from app.models.user import User
+
+    result = await db_session.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one()
+    user.email_verified = True
+    await db_session.commit()
+
+
 class TestE2EScenario1FullUserFlow:
     """회원가입 → 로그인 → 파일 업로드 → 처리 완료 → 퀴즈 생성 → 일반 모드 풀이 → 채점 → 오답노트 확인"""
 
@@ -39,6 +72,7 @@ class TestE2EScenario1FullUserFlow:
         )
         assert signup_resp.status_code == 200
         user_id = signup_resp.json()["user_id"]
+        await _set_email_verified(db_session, user_id)
 
         # Step 2: Login
         login_resp = await client.post(
@@ -157,6 +191,7 @@ class TestE2EScenario2ExamModeFlow:
             },
         )
         user_id = signup_resp.json()["user_id"]
+        await _set_email_verified(db_session, user_id)
         login_resp = await client.post(
             "/auth/login",
             json={
@@ -277,6 +312,7 @@ class TestE2EScenario3RetryFlow:
             },
         )
         user_id = signup_resp.json()["user_id"]
+        await _set_email_verified(db_session, user_id)
         login_resp = await client.post(
             "/auth/login",
             json={
@@ -436,6 +472,7 @@ class TestE2EScenario4ObjectionFlow:
             },
         )
         user_id = signup_resp.json()["user_id"]
+        await _set_email_verified(db_session, user_id)
         login_resp = await client.post(
             "/auth/login",
             json={
@@ -612,6 +649,7 @@ class TestE2EScenario5AdminImpersonation:
             },
         )
         target_user_id = target_signup.json()["user_id"]
+        await _set_email_verified(db_session, target_user_id)
 
         target_login = await client.post(
             "/auth/login",

@@ -24,6 +24,7 @@ from app.models.admin import DashboardSnapshot, SystemLog, AdminAuditLog, Announ
 from app.models.search import (
     EmbeddingStore,
     PasswordResetToken,
+    EmailVerificationToken,
     ImpersonationSession,
     DraftAnswer,
     Job,
@@ -65,6 +66,7 @@ __all__ = [
     "Announcement",
     "EmbeddingStore",
     "PasswordResetToken",
+    "EmailVerificationToken",
     "ImpersonationSession",
     "DraftAnswer",
     "Job",

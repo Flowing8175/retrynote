@@ -1,18 +1,19 @@
+import logging
 import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 import jwt
 from jwt import InvalidTokenError as JWTError
-from sqlalchemy import select, or_
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta, timezone
 
 from app.config import settings
 from app.database import get_db
 from app.models.user import User
-from app.models.search import PasswordResetToken, RefreshToken
-from app.rate_limit import limiter
+from app.models.search import PasswordResetToken, RefreshToken, EmailVerificationToken
+from app.rate_limit import limiter, _get_real_client_ip
 from app.schemas.auth import (
     SignupRequest,
     SignupResponse,
@@ -20,6 +21,8 @@ from app.schemas.auth import (
     LoginResponse,
     PasswordResetRequest,
     PasswordResetConfirm,
+    EmailVerificationRequest,
+    ResendVerificationRequest,
     UserProfile,
     RefreshTokenRequest,
     DeleteAccountRequest,
@@ -31,9 +34,12 @@ from app.middleware.auth import (
     create_refresh_token,
     get_current_user,
 )
-from app.utils.email import send_password_reset_email
+from app.utils.email import send_password_reset_email, send_verification_email
+from app.utils.disposable_email import is_disposable_email
+from app.utils.turnstile import verify_turnstile_token
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/signup", response_model=SignupResponse)
@@ -41,33 +47,114 @@ router = APIRouter()
 async def signup(
     request: Request, req: SignupRequest, db: AsyncSession = Depends(get_db)
 ):
+    client_ip = _get_real_client_ip(request)
+
+    if not await verify_turnstile_token(req.turnstile_token, client_ip):
+        raise HTTPException(
+            status_code=400,
+            detail="보안 인증에 실패했습니다. 페이지를 새로고침하세요.",
+        )
+
+    if is_disposable_email(req.email):
+        raise HTTPException(
+            status_code=400,
+            detail="해당 이메일 도메인은 사용할 수 없습니다.",
+        )
+
     existing = await db.execute(
         select(User).where(
             ((User.username == req.username) | (User.email == req.email)),
             User.deleted_at.is_(None),
         )
     )
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=409,
-            detail="Registration failed. Please try different credentials.",
-        )
+    existing_user = existing.scalar_one_or_none()
+    if existing_user:
+        # Case 1: Unverified user with matching email — check if verification is still pending
+        if not existing_user.email_verified and existing_user.email == req.email:
+            active_token_result = await db.execute(
+                select(EmailVerificationToken).where(
+                    EmailVerificationToken.user_id == existing_user.id,
+                    EmailVerificationToken.expires_at > datetime.now(timezone.utc),
+                    EmailVerificationToken.used_at.is_(None),
+                )
+            )
+            if active_token_result.scalars().first():
+                # Active verification token exists — tell user to check email
+                raise HTTPException(
+                    status_code=409,
+                    detail="인증 대기중입니다. 이메일을 확인해 주세요.",
+                )
+            else:
+                # All tokens expired/used — delete old account and continue with fresh signup
+                try:
+                    await db.execute(
+                        delete(EmailVerificationToken).where(
+                            EmailVerificationToken.user_id == existing_user.id
+                        )
+                    )
+                    await db.delete(existing_user)
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
+                    # Concurrent modification — treat as duplicate
+                    raise HTTPException(
+                        status_code=409,
+                        detail="이미 가입되어 있는 계정입니다. 다시 시도해주세요.",
+                    )
+                # Fall through to create new user below
+        else:
+            if existing_user.email == req.email:
+                raise HTTPException(
+                    status_code=409,
+                    detail="이미 가입되어 있는 이메일입니다.",
+                )
+            raise HTTPException(
+                status_code=409,
+                detail="이미 사용 중인 사용자 이름입니다.",
+            )
+
+    # Auto-verify when SMTP is not configured (local development)
+    smtp_configured = bool(settings.smtp_host and settings.smtp_user)
 
     user = User(
         username=req.username,
         email=req.email,
         password_hash=hash_password(req.password),
+        email_verified=not smtp_configured,
+        signup_ip=client_ip,
     )
     db.add(user)
     try:
-        await db.commit()
-        await db.refresh(user)
+        await db.flush()
     except Exception:
         await db.rollback()
         raise HTTPException(
             status_code=409,
-            detail="Registration failed. Please try different credentials.",
+            detail="이미 가입되어 있는 계정입니다. 다시 시도해주세요.",
         )
+
+    if smtp_configured:
+        token = secrets.token_urlsafe(32)
+        selector = token[:16]
+        verifier = token[16:]
+        verifier_hash = hash_password(verifier)
+        verification_token = EmailVerificationToken(
+            user_id=user.id,
+            selector=selector,
+            token_hash=verifier_hash,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+        )
+        db.add(verification_token)
+
+    await db.commit()
+    await db.refresh(user)
+
+    if smtp_configured:
+        try:
+            await send_verification_email(user.email, token)
+        except Exception:
+            logger.warning("Failed to send verification email to %s", user.email)
+
     return SignupResponse(
         user_id=user.id, username=user.username, created_at=user.created_at
     )
@@ -90,6 +177,14 @@ async def login(
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Account is deactivated")
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=403,
+            detail={
+                "code": "email_not_verified",
+                "message": "이메일 인증이 필요합니다. 받은 편지함을 확인하세요.",
+            },
+        )
 
     user.last_login_at = datetime.now(timezone.utc)
 
@@ -100,6 +195,7 @@ async def login(
         role=user.role.value,
         tier=user.tier,
         is_active=user.is_active,
+        email_verified=user.email_verified,
         storage_used_bytes=user.storage_used_bytes,
         storage_quota_bytes=user.storage_quota_bytes,
         last_login_at=user.last_login_at,
@@ -146,7 +242,48 @@ async def password_reset_request(
     db.add(reset_token)
     await db.commit()
 
-    await send_password_reset_email(user.email, token)
+    try:
+        await send_password_reset_email(user.email, token)
+    except Exception:
+        logger.warning("Failed to send password reset email to %s", user.email)
+
+    return {"status": "accepted"}
+
+
+@router.post("/resend-verification")
+@limiter.limit("3/hour")
+async def resend_verification(
+    request: Request, req: ResendVerificationRequest, db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(User).where(User.email == req.email))
+    user = result.scalar_one_or_none()
+    if not user or user.email_verified:
+        return {"status": "accepted"}
+
+    await db.execute(
+        delete(EmailVerificationToken).where(
+            EmailVerificationToken.user_id == user.id,
+            EmailVerificationToken.used_at.is_(None),
+        )
+    )
+
+    token = secrets.token_urlsafe(32)
+    selector = token[:16]
+    verifier = token[16:]
+    verifier_hash = hash_password(verifier)
+    verification_token = EmailVerificationToken(
+        user_id=user.id,
+        selector=selector,
+        token_hash=verifier_hash,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+    )
+    db.add(verification_token)
+    await db.commit()
+
+    try:
+        await send_verification_email(user.email, token)
+    except Exception:
+        logger.warning("Failed to send verification email to %s", user.email)
 
     return {"status": "accepted"}
 
@@ -192,6 +329,44 @@ async def password_reset_confirm(
 
     await db.commit()
     return {"status": "success"}
+
+
+@router.post("/verify-email")
+@limiter.limit("10/minute")
+async def verify_email(
+    request: Request, req: EmailVerificationRequest, db: AsyncSession = Depends(get_db)
+):
+    selector = req.token[:16]
+    verifier = req.token[16:]
+
+    result = await db.execute(
+        select(EmailVerificationToken).where(
+            EmailVerificationToken.selector == selector
+        )
+    )
+    token_record = result.scalar_one_or_none()
+    if not token_record:
+        raise HTTPException(status_code=400, detail="Invalid token")
+    if token_record.used_at:
+        return {"status": "already_verified"}
+    if datetime.now(timezone.utc) > token_record.expires_at:
+        raise HTTPException(status_code=400, detail="Token expired")
+    if not verify_password(verifier, token_record.token_hash):
+        raise HTTPException(status_code=400, detail="Invalid token")
+
+    user_result = await db.execute(select(User).where(User.id == token_record.user_id))
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=400,
+            detail="인증 링크가 만료되었습니다. 다시 가입해 주세요.",
+        )
+
+    token_record.used_at = datetime.now(timezone.utc)
+    user.email_verified = True
+    await db.commit()
+
+    return {"status": "verified"}
 
 
 @router.post("/refresh")
@@ -275,6 +450,7 @@ async def get_me(user: User = Depends(get_current_user)):
         role=user.role.value,
         tier=user.tier,
         is_active=user.is_active,
+        email_verified=user.email_verified,
         storage_used_bytes=user.storage_used_bytes,
         storage_quota_bytes=user.storage_quota_bytes,
         last_login_at=user.last_login_at,

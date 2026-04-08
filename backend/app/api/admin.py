@@ -1032,13 +1032,8 @@ async def get_files_pipeline(
     )
 
 
-@router.get("/db-diagnostics", response_model=AdminDbDiagnostics)
-async def get_db_diagnostics(
-    request: Request,
-    db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_super_admin),
-):
-    tables_result = await db.execute(
+async def _fetch_pg_table_info(db: AsyncSession) -> list[AdminDbTableInfo]:
+    result = await db.execute(
         text(
             "SELECT tablename, "
             "  pg_size_pretty(pg_total_relation_size(quote_ident(tablename))) AS total_size, "
@@ -1048,12 +1043,28 @@ async def get_db_diagnostics(
             "ORDER BY tablename"
         )
     )
-    tables = [
+    return [
         AdminDbTableInfo(
             name=row[0], row_estimate=max(0, row[2] or 0), total_size=row[1] or "N/A"
         )
-        for row in tables_result.fetchall()
+        for row in result.fetchall()
     ]
+
+
+async def _fetch_pg_db_size(db: AsyncSession) -> str:
+    result = await db.execute(
+        text("SELECT pg_size_pretty(pg_database_size(current_database()))")
+    )
+    return result.scalar() or "N/A"
+
+
+@router.get("/db-diagnostics", response_model=AdminDbDiagnostics)
+async def get_db_diagnostics(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_super_admin),
+):
+    tables = await _fetch_pg_table_info(db)
 
     migration_version: str | None = None
     try:
@@ -1064,10 +1075,7 @@ async def get_db_diagnostics(
     except Exception:
         pass
 
-    db_size_result = await db.execute(
-        text("SELECT pg_size_pretty(pg_database_size(current_database()))")
-    )
-    db_total_size = db_size_result.scalar() or "N/A"
+    db_total_size = await _fetch_pg_db_size(db)
 
     return AdminDbDiagnostics(
         tables=tables,

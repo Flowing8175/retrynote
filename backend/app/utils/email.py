@@ -45,3 +45,21 @@ async def send_password_reset_email(to: str, token: str) -> None:
   </p>
 </div>"""
     await send_email(to, "비밀번호 재설정 안내", html)
+
+
+async def send_verification_email(to: str, token: str) -> None:
+    verify_url = f"{settings.app_url}/verify-email?token={token}"
+    html = f"""\
+<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto;">
+  <h2>이메일 인증 안내</h2>
+  <p>아래 버튼을 클릭하여 계정을 활성화하세요. 이 링크는 24시간 동안 유효합니다.</p>
+  <a href="{verify_url}"
+     style="display: inline-block; padding: 12px 24px; background: #2563eb;
+            color: #fff; text-decoration: none; border-radius: 6px;">
+    이메일 인증하기
+  </a>
+  <p style="margin-top: 24px; font-size: 13px; color: #6b7280;">
+    본인이 요청하지 않았다면 이 메일을 무시하세요.
+  </p>
+</div>"""
+    await send_email(to, "이메일 인증 안내", html)

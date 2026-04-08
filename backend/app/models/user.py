@@ -52,6 +52,10 @@ class User(CommonMixin, Base):
     free_trial_used_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sa.false()
+    )
+    signup_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
 
     folders = relationship("Folder", back_populates="user", lazy="selectin")
     files = relationship("File", back_populates="user", lazy="selectin")

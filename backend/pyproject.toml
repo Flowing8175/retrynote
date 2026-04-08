@@ -39,6 +39,7 @@ dependencies = [
     # Security
     "slowapi>=0.1.9,<1.0.0",
     "python-magic>=0.4.27,<1.0.0",
+    "disposable-email-domains>=0.0.1",
     # Utils
     "python-dateutil>=2.8.2,<3.0.0",
     "pytz>=2024.1",

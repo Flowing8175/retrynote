@@ -54,4 +54,14 @@ export const authApi = {
     const response = await apiClient.delete<{ status: string }>('/auth/me', { data });
     return response.data;
   },
+
+  verifyEmail: async (token: string): Promise<{ status: string }> => {
+    const response = await apiClient.post<{ status: string }>('/auth/verify-email', { token });
+    return response.data;
+  },
+
+  resendVerification: async (email: string): Promise<{ status: string }> => {
+    const response = await apiClient.post<{ status: string }>('/auth/resend-verification', { email });
+    return response.data;
+  },
 };

@@ -6,6 +6,7 @@ class SignupRequest(BaseModel):
     username: str = Field(min_length=3, max_length=50, pattern=r"^[a-zA-Z0-9_]+$")
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    turnstile_token: str = ""  # Optional for backward compat in tests
 
 
 class SignupResponse(BaseModel):
@@ -35,6 +36,7 @@ class UserProfile(BaseModel):
     role: str
     tier: str
     is_active: bool
+    email_verified: bool = False
     storage_used_bytes: int
     storage_quota_bytes: int
     last_login_at: datetime | None = None
@@ -47,6 +49,14 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirm(BaseModel):
     token: str = Field(min_length=1, max_length=255)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class EmailVerificationRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=255)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
 
 
 class TokenPayload(BaseModel):

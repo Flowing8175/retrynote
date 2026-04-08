@@ -7,6 +7,7 @@ import { Layout } from '@/components';
 import Login from '@/pages/Login';
 import Signup from '@/pages/Signup';
 import PasswordReset from '@/pages/PasswordReset';
+import VerifyEmail from '@/pages/VerifyEmail';
 import Dashboard from '@/pages/Dashboard';
 import Files from '@/pages/Files';
 import QuizNew from '@/pages/QuizNew';
@@ -84,6 +85,7 @@ function App() {
                </PublicRoute>
              }
            />
+           <Route path="/verify-email" element={<VerifyEmail />} />
             <Route
               path="/pricing"
               element={

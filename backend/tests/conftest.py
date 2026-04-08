@@ -42,6 +42,7 @@ from app.models import (
     Announcement,
     EmbeddingStore,
     PasswordResetToken,
+    EmailVerificationToken,
     ImpersonationSession,
     DraftAnswer,
     Job,
@@ -112,6 +113,7 @@ async def test_user(db_session):
         password_hash=hash_password("TestPass123!"),
         role=UserRole.user,
         is_active=True,
+        email_verified=True,
     )
     db_session.add(user)
     await db_session.commit()
@@ -139,6 +141,7 @@ async def admin_user(db_session):
         password_hash=hash_password("AdminPass123!"),
         role=UserRole.admin,
         is_active=True,
+        email_verified=True,
     )
     db_session.add(user)
     await db_session.commit()
@@ -182,6 +185,7 @@ async def super_admin_user(db_session):
         password_hash=hash_password("SuperAdmin123!"),
         role=UserRole.super_admin,
         is_active=True,
+        email_verified=True,
     )
     db_session.add(user)
     await db_session.commit()

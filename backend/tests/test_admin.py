@@ -1,5 +1,6 @@
 import uuid
 import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 from httpx import AsyncClient
 
 from app.models import (
@@ -1113,7 +1114,23 @@ class TestRateLimits:
 
 class TestDbDiagnostics:
     async def test_super_admin_gets_diagnostics(self, super_admin_client: AsyncClient):
-        resp = await super_admin_client.get("/admin/db-diagnostics")
+        from app.schemas.admin import AdminDbTableInfo
+
+        mock_tables = [
+            AdminDbTableInfo(name="users", total_size="8 kB", row_estimate=10),
+            AdminDbTableInfo(name="files", total_size="16 kB", row_estimate=5),
+        ]
+        with (
+            patch(
+                "app.api.admin._fetch_pg_table_info",
+                new=AsyncMock(return_value=mock_tables),
+            ),
+            patch(
+                "app.api.admin._fetch_pg_db_size",
+                new=AsyncMock(return_value="24 kB"),
+            ),
+        ):
+            resp = await super_admin_client.get("/admin/db-diagnostics")
         assert resp.status_code == 200
         data = resp.json()
         assert "tables" in data

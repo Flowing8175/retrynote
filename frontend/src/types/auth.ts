@@ -2,6 +2,7 @@ export interface SignupRequest {
   username: string;
   email: string;
   password: string;
+  turnstile_token?: string;
 }
 
 export interface SignupResponse {
@@ -28,6 +29,7 @@ export interface UserProfile {
   email: string;
   role: string;
   is_active: boolean;
+  email_verified: boolean;
   storage_used_bytes: number;
   storage_quota_bytes: number;
   last_login_at: string | null;
@@ -48,4 +50,12 @@ export interface RefreshTokenRequest {
 
 export interface DeleteAccountRequest {
   password: string;
+}
+
+export interface EmailVerificationRequest {
+  token: string;
+}
+
+export interface ResendVerificationRequest {
+  email: string;
 }

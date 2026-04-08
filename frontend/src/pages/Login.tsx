@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuthStore } from '@/stores';
 import { authApi } from '@/api';
 
@@ -7,15 +7,31 @@ const INPUT_CLASS = "w-full rounded-2xl border border-white/[0.10] bg-surface-de
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isJustVerified = searchParams.get('verified') === 'true';
   const { setUser, setTokens } = useAuthStore();
   const [usernameOrEmail, setUsernameOrEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showUnverified, setShowUnverified] = useState(false);
+  const [resendStatus, setResendStatus] = useState<'idle' | 'sending' | 'sent'>('idle');
+
+  const handleResend = async () => {
+    setResendStatus('sending');
+    try {
+      await authApi.resendVerification(usernameOrEmail);
+      setResendStatus('sent');
+    } catch {
+      setResendStatus('idle');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setShowUnverified(false);
+    setResendStatus('idle');
     setLoading(true);
     try {
       const response = await authApi.login({ username_or_email: usernameOrEmail, password });
@@ -23,12 +39,18 @@ export default function Login() {
       setTokens(response.access_token, response.refresh_token);
       navigate('/');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { status?: number; data?: { detail?: string } } };
+      const axiosError = err as { response?: { status?: number; data?: { detail?: unknown } } };
       const status = axiosError.response?.status;
       if (status === 401) {
         setError('사용자명 또는 비밀번호가 올바르지 않습니다.');
       } else if (status === 403) {
-        setError('계정이 비활성화되었습니다. 관리자에게 문의하세요.');
+        const detail = axiosError.response?.data?.detail;
+        if (typeof detail === 'object' && detail !== null && (detail as { code?: string }).code === 'email_not_verified') {
+          setShowUnverified(true);
+          setError('이메일 인증이 필요합니다.');
+        } else {
+          setError('계정이 비활성화되었습니다. 관리자에게 문의하세요.');
+        }
       } else if (status === 429) {
         setError('로그인 시도 횟수를 초과했습니다. 잠시 후 다시 시도해주세요.');
       } else if (!status || status >= 500) {
@@ -64,9 +86,31 @@ export default function Login() {
             </h2>
 
             <form className="mt-8 grid gap-[1.1rem]" onSubmit={handleSubmit}>
+              {isJustVerified && (
+                <div className="rounded-2xl border border-brand-500/20 bg-brand-500/10 px-4 py-3 text-sm leading-relaxed text-brand-300">
+                  이메일 인증이 완료되었습니다. 로그인하세요.
+                </div>
+              )}
+
               {error && (
                 <div className="rounded-2xl border border-semantic-error-border bg-semantic-error-bg px-4 py-3 text-sm leading-relaxed text-semantic-error">
                   {error}
+                  {showUnverified && (
+                    <div className="mt-2">
+                      {resendStatus === 'sent' ? (
+                        <p className="text-sm text-brand-300">인증 메일을 다시 보냈습니다. 받은 편지함을 확인하세요.</p>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={handleResend}
+                          disabled={resendStatus === 'sending'}
+                          className="text-sm font-semibold text-brand-300 hover:text-brand-400 disabled:opacity-60"
+                        >
+                          {resendStatus === 'sending' ? '전송 중…' : '인증 메일 재전송'}
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
