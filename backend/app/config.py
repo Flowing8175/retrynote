@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     paddle_storage_20gb_price_id: str = ""
     paddle_storage_50gb_price_id: str = ""
 
+    # Cloudflare Turnstile — production keys must be set via Doppler
+    # Development test key: 1x0000000000000000000000000000000AA (always passes)
+    cloudflare_turnstile_secret_key: str = ""
+
 
 @lru_cache()
 def get_settings() -> Settings:
@@ -158,6 +162,11 @@ def _normalize_redis_url(redis_url: str) -> str:
 settings.database_url = _normalize_database_url(settings.database_url)
 settings.database_url_sync = _normalize_database_url(settings.database_url_sync)
 settings.redis_url = _normalize_redis_url(settings.redis_url)
+
+if settings.b2_endpoint_url and not settings.b2_endpoint_url.startswith(
+    ("http://", "https://")
+):
+    settings.b2_endpoint_url = f"https://{settings.b2_endpoint_url}"
 
 _INSECURE_JWT_DEFAULTS = {
     "change-me-to-a-secure-random-string",
