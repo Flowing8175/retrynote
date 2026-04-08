@@ -502,6 +502,13 @@ async def get_dashboard(
                 }
             )
 
+    static_coaching_summary: str | None = None
+    if total_count > 0:
+        fallback_msg = (
+            f"정답률 {overall_accuracy:.0%}입니다. 취약 개념 위주로 복습해보세요."
+        )
+        static_coaching_summary = apply_coaching_tone(fallback_msg, overall_accuracy)
+
     return DashboardResponse(
         overall_accuracy=overall_accuracy,
         score_rate=score_rate,
@@ -512,5 +519,5 @@ async def get_dashboard(
         accuracy_by_file=accuracy_by_file,
         retry_recommendations=retry_recommendations,
         recent_wrong_notes=recent_wrong_notes,
-        coaching_summary=None,
+        coaching_summary=static_coaching_summary,
     )

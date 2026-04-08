@@ -50,11 +50,11 @@ const colorMap: Record<string, string> = {
   partial: 'text-semantic-warning',
   warning: 'text-semantic-warning',
   
-  failed_terminal: 'text-destructive',
-  generation_failed: 'text-destructive',
-  incorrect: 'text-destructive',
-  error: 'text-destructive',
-  critical: 'text-destructive',
+  failed_terminal: 'text-semantic-error',
+  generation_failed: 'text-semantic-error',
+  incorrect: 'text-semantic-error',
+  error: 'text-semantic-error',
+  critical: 'text-semantic-error',
   
   deleted: 'text-content-muted',
   closed: 'text-content-muted',
@@ -62,18 +62,27 @@ const colorMap: Record<string, string> = {
 };
 
 function formatFallbackLabel(status: string) {
-  return status.replace(/[_-]+/g, ' ').toUpperCase();
+  return status
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export default function StatusBadge({ status }: StatusBadgeProps) {
   const normalizedStatus = status.toLowerCase();
   const label = labelMap[normalizedStatus] || formatFallbackLabel(status);
   const colorClass = colorMap[normalizedStatus] || 'text-content-secondary';
+  const isPulsing =
+    normalizedStatus.includes('processing') ||
+    normalizedStatus.includes('ing') ||
+    normalizedStatus === 'in_progress';
 
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${colorClass}`}>
-      <span className="relative flex h-1.5 w-1.5">
-        {(normalizedStatus.includes('processing') || normalizedStatus.includes('ing') || normalizedStatus === 'in_progress') && (
+      <span
+        aria-hidden="true"
+        className={`relative flex h-1.5 w-1.5${isPulsing ? ' animate-pulse' : ''}`}
+      >
+        {isPulsing && (
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-current opacity-40" />
         )}
         <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-current opacity-80" />
