@@ -192,7 +192,7 @@ export interface AdminDbTableInfo {
 
 export interface AdminDbDiagnostics {
   tables: AdminDbTableInfo[];
-  migration_version: string;
+  migration_version: string | null;
   db_total_size: string;
   checked_at: string;
 }

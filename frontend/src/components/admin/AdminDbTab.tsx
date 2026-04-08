@@ -31,16 +31,20 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
 }
 
 export default function AdminDbTab({ isVerified, activeTab }: AdminDbTabProps) {
-  const { data, isLoading, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['admin-db'],
     queryFn: adminApi.getDbDiagnostics,
     enabled: isVerified && activeTab === 'db',
     staleTime: 0,
+    retry: false,
   });
 
   const sortedTables: AdminDbTableInfo[] = data
     ? [...data.tables].sort((a, b) => b.row_estimate - a.row_estimate)
     : [];
+
+  const httpStatus = (error as { response?: { status?: number } } | null)?.response?.status;
+  const is403 = httpStatus === 403;
 
   return (
     <section className="space-y-4">
@@ -95,6 +99,14 @@ export default function AdminDbTab({ isVerified, activeTab }: AdminDbTabProps) {
         </div>
       </div>
 
+      {error && (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] px-5 py-4 text-sm text-red-400">
+          {is403
+            ? 'DB 진단은 super_admin 권한이 필요합니다.'
+            : `데이터를 불러오지 못했습니다${httpStatus ? ` (HTTP ${httpStatus})` : ''}. 잠시 후 다시 시도해 주세요.`}
+        </div>
+      )}
+
       {data?.checked_at && (
         <p className="px-1 text-xs text-content-muted">
           마지막 점검: <span className="font-mono">{new Date(data.checked_at).toLocaleString('ko-KR')}</span>
@@ -125,7 +137,7 @@ export default function AdminDbTab({ isVerified, activeTab }: AdminDbTabProps) {
               </tr>
             )}
 
-            {!isLoading && sortedTables.length === 0 && (
+            {!isLoading && !error && sortedTables.length === 0 && (
               <tr>
                 <td colSpan={3} className="px-6 py-12 text-center text-sm text-content-muted">
                   테이블 정보가 없습니다.
