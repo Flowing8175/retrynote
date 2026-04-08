@@ -99,17 +99,6 @@ function App() {
            <Route path="/privacy" element={<Suspense fallback={<LoadingSpinner />}><Privacy /></Suspense>} />
            <Route path="/refund" element={<Suspense fallback={<LoadingSpinner />}><Refund /></Suspense>} />
 
-           {import.meta.env.DEV && (
-            <Route
-              path="/preview/quiz/new"
-              element={
-                <Layout>
-                  <QuizNew />
-                </Layout>
-              }
-            />
-          )}
-
           {/* Protected Routes */}
           <Route path="/" element={
             <ProtectedRoute>
