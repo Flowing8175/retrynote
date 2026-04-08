@@ -6,11 +6,21 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl';
 }
 
-export default function Modal({ isOpen, onClose, title, children }: ModalProps) {
+export default function Modal({ isOpen, onClose, title, children, size = 'lg' }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+
+  const sizeClasses: Record<string, string> = {
+    sm: 'max-w-sm',
+    md: 'max-w-md',
+    lg: 'max-w-lg',
+    xl: 'max-w-xl',
+    '2xl': 'max-w-2xl',
+    '4xl': 'max-w-4xl',
+  };
 
   const focusElementSafely = (element: HTMLElement | null) => {
     if (!element || !element.isConnected) {
@@ -89,7 +99,7 @@ export default function Modal({ isOpen, onClose, title, children }: ModalProps) 
         role="dialog"
         aria-modal="true"
         aria-labelledby="modal-title"
-        className="relative w-full max-w-lg overflow-y-auto rounded-3xl border border-white/[0.07] bg-surface shadow-2xl shadow-black/50"
+        className={`relative w-full ${sizeClasses[size]} overflow-y-auto rounded-3xl border border-white/[0.07] bg-surface shadow-2xl shadow-black/50`}
       >
         <div className="flex items-center justify-between border-b border-white/[0.05] px-5 py-4 sm:px-6">
           <h2 id="modal-title" className="text-lg font-semibold text-content-primary sm:text-xl">

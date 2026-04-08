@@ -6,6 +6,7 @@ import { useQuizStore } from '@/stores';
 import { LoadingSpinner, PillShimmer } from '@/components';
 import type { AnswerLogEntry, AnswerResponse } from '@/types';
 import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import DiagramModal from '@/components/DiagramModal';
 
 const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded', 'closed']);
 const AUTO_SUBMIT_QUESTION_TYPES = new Set(['multiple_choice', 'ox']);
@@ -92,6 +93,7 @@ export default function QuizTake() {
   const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>({});
   const [answerResultsByItemId, setAnswerResultsByItemId] = useState<Record<string, AnswerResponse>>({});
   const [furthestAvailableIndex, setFurthestAvailableIndex] = useState(0);
+  const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
 
   const { data: sessionData, isLoading: sessionLoading, isError: sessionIsError, error: sessionError } = useQuery({
     queryKey: ['quizSession', sessionId],
@@ -450,6 +452,14 @@ export default function QuizTake() {
               <span className="text-xs font-medium text-content-muted">
                 {currentItem.concept_label || '개념'}
               </span>
+              {currentItem.concept_key && (
+                <button
+                  onClick={() => setDiagramModal({ conceptKey: currentItem.concept_key!, conceptLabel: currentItem.concept_label || currentItem.concept_key! })}
+                  className="text-xs font-medium text-brand-300/60 hover:text-brand-300 transition-colors"
+                >
+                  개념 확인하기
+                </button>
+              )}
             </div>
             <h2 className="text-3xl font-semibold leading-relaxed text-white">
               {currentItem.question_text}
@@ -587,6 +597,12 @@ export default function QuizTake() {
           )}
         </div>
       </footer>
+      <DiagramModal
+        isOpen={diagramModal !== null}
+        onClose={() => setDiagramModal(null)}
+        conceptKey={diagramModal?.conceptKey ?? ''}
+        conceptLabel={diagramModal?.conceptLabel ?? ''}
+      />
     </div>
   );
 }

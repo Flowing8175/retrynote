@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { dashboardApi } from '@/api';
 import CoachingStream from '@/components/CoachingStream';
+import DiagramModal from '@/components/DiagramModal';
 import type { DashboardResponse, RetryLocationState } from '@/types';
 
 function DashboardSkeleton() {
@@ -155,6 +156,7 @@ export default function Dashboard() {
   const [range, setRange] = useState<'7d' | '30d' | 'all'>('7d');
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedCategoryTag, setSelectedCategoryTag] = useState<string | null>(null);
+  const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
 
   const navigate = useNavigate();
   const handleStartQuiz = () => navigate('/quiz/new');
@@ -238,6 +240,7 @@ export default function Dashboard() {
   }
 
   return (
+    <>
     <div className="space-y-20 py-8">
       {/* Hero Section */}
       <section className="grid gap-12 lg:grid-cols-[1fr_300px] items-start">
@@ -353,13 +356,12 @@ export default function Dashboard() {
                       <span>부분정답 {concept.partial_count}</span>
                     </div>
                   </div>
-                  <Link
-                    to="/retry"
-                    state={{ conceptKeys: [concept.concept_key], conceptLabels: { [concept.concept_key]: concept.concept_label } } satisfies RetryLocationState}
+                  <button
+                    onClick={() => setDiagramModal({ conceptKey: concept.concept_key, conceptLabel: concept.concept_label })}
                     className="shrink-0 text-xs font-medium text-content-muted hover:text-white transition-colors"
                   >
                     복습하기 →
-                  </Link>
+                  </button>
                 </div>
               ))}
             </div>
@@ -478,5 +480,12 @@ export default function Dashboard() {
         </div>
       </section>
     </div>
+    <DiagramModal
+      isOpen={diagramModal !== null}
+      onClose={() => setDiagramModal(null)}
+      conceptKey={diagramModal?.conceptKey ?? ''}
+      conceptLabel={diagramModal?.conceptLabel ?? ''}
+    />
+    </>
   );
 }

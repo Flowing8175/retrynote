@@ -107,6 +107,7 @@ class QuizItemResponse(BaseModel):
     question_text: str
     options: dict | list | None = None
     difficulty: str | None = None
+    concept_key: str | None = None
     concept_label: str | None = None
     category_tag: str | None = None
 

@@ -28,6 +28,7 @@ const BillingPage = React.lazy(() => import('@/pages/BillingPage'));
 const Terms = React.lazy(() => import('@/pages/Terms'));
 const Privacy = React.lazy(() => import('@/pages/Privacy'));
 const Refund = React.lazy(() => import('@/pages/Refund'));
+const DiagramPage = React.lazy(() => import('@/pages/DiagramPage'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -181,6 +182,15 @@ function App() {
               <Layout>
                 <LazyRoute>
                   <Retry />
+                </LazyRoute>
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/diagram/:conceptKey" element={
+            <ProtectedRoute>
+              <Layout>
+                <LazyRoute>
+                  <DiagramPage />
                 </LazyRoute>
               </Layout>
             </ProtectedRoute>

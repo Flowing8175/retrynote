@@ -20,6 +20,7 @@ from app.models.quiz import (
     ErrorType,
 )
 from app.models.objection import Objection, ObjectionStatus, WeakPoint
+from app.models.diagram import ConceptDiagram
 from app.models.admin import DashboardSnapshot, SystemLog, AdminAuditLog, Announcement
 from app.models.search import (
     EmbeddingStore,
@@ -60,6 +61,7 @@ __all__ = [
     "Objection",
     "ObjectionStatus",
     "WeakPoint",
+    "ConceptDiagram",
     "DashboardSnapshot",
     "SystemLog",
     "AdminAuditLog",

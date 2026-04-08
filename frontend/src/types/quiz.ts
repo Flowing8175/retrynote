@@ -68,6 +68,7 @@ export interface QuizItemResponse {
   question_text: string;
   options: Record<string, unknown> | unknown[] | null;
   difficulty: string | null;
+  concept_key: string | null;
   concept_label: string | null;
   category_tag: string | null;
 }

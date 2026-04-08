@@ -1,0 +1,127 @@
+import { useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { isAxiosError } from 'axios';
+import MermaidDiagram from '@/components/MermaidDiagram';
+import { diagramApi, type DiagramResponse } from '@/api/diagram';
+
+type PageState = 'loading' | 'success' | 'error' | 'not-found';
+
+export default function DiagramPage() {
+  const { conceptKey } = useParams<{ conceptKey: string }>();
+  const navigate = useNavigate();
+  const decodedKey = decodeURIComponent(conceptKey ?? '');
+
+  const [pageState, setPageState] = useState<PageState>('loading');
+  const [diagram, setDiagram] = useState<DiagramResponse | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const fetchDiagram = async (force: boolean = false) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setPageState('loading');
+
+    try {
+      let data: DiagramResponse;
+      if (force) {
+        data = await diagramApi.generateDiagram(decodedKey, true, controller.signal);
+      } else {
+        data = await diagramApi.getCachedDiagram(decodedKey, controller.signal);
+      }
+      setDiagram(data);
+      setPageState('success');
+    } catch (err) {
+      if ((err as Error).name === 'CanceledError' || (err as Error).name === 'AbortError') return;
+      if (isAxiosError(err) && err.response?.status === 404) {
+        setPageState('not-found');
+      } else {
+        setPageState('error');
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (decodedKey) {
+      fetchDiagram(false);
+    }
+    return () => {
+      abortRef.current?.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decodedKey]);
+
+  const handleRegenerate = () => fetchDiagram(true);
+  const handleBack = () => navigate(-1);
+
+  if (pageState === 'loading') {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="text-sm text-content-muted">불러오는 중...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (pageState === 'not-found') {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-sm text-content-muted">다이어그램을 찾을 수 없습니다</p>
+          <button
+            onClick={handleBack}
+            className="rounded-lg bg-surface-hover px-4 py-2 text-sm font-medium text-content-secondary hover:bg-surface-hover/80 transition-colors"
+          >
+            ← 돌아가기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (pageState === 'error') {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-sm text-content-muted">불러오기 실패</p>
+          <button
+            onClick={() => fetchDiagram(false)}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90 transition-colors"
+          >
+            재시도
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 py-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={handleBack}
+            className="text-sm font-medium text-content-muted hover:text-white transition-colors"
+          >
+            ← 돌아가기
+          </button>
+          <h1 className="text-lg font-semibold text-content-primary">
+            {diagram?.concept_label} — {diagram?.title}
+          </h1>
+        </div>
+        <button
+          onClick={handleRegenerate}
+          className="rounded-lg bg-surface-hover px-3 py-1.5 text-xs font-medium text-content-secondary hover:bg-surface-hover/80 transition-colors"
+        >
+          재생성
+        </button>
+      </div>
+
+      <div className="min-h-[60vh]">
+        {diagram && <MermaidDiagram code={diagram.mermaid_code} className="w-full" />}
+      </div>
+    </div>
+  );
+}
