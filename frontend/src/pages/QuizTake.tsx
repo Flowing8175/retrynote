@@ -17,6 +17,14 @@ const DEFAULT_OX_OPTIONS: Record<string, string> = {
 
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
 
+const QUESTION_TYPE_LABELS: Record<string, string> = {
+  multiple_choice: '객관식',
+  fill_blank: '빈칸 채우기',
+  short_answer: '단답형',
+  essay: '서술형',
+  ox: 'O/X',
+};
+
 function normalizeOxValue(value: unknown) {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
@@ -437,7 +445,7 @@ export default function QuizTake() {
           <div className="space-y-6">
             <div className="flex items-center gap-3">
               <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2.5 py-1 rounded-md border border-brand-500/20">
-                {currentQuestionType ? currentQuestionType.replace('_', ' ') : '문항'}
+                {currentQuestionType ? (QUESTION_TYPE_LABELS[currentQuestionType] ?? currentQuestionType.replace('_', ' ')) : '문항'}
               </span>
               <span className="text-xs font-medium text-content-muted">
                 {currentItem.concept_label || '개념'}
