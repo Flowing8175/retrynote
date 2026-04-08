@@ -13,6 +13,7 @@ import type {
   DraftAnswerResponse,
   ExamSubmit,
   ExamSubmitResponse,
+  SessionCompleteResponse,
 } from '@/types';
 
 export const quizApi = {
@@ -68,6 +69,13 @@ export const quizApi = {
     const response = await apiClient.post<ExamSubmitResponse>(
       `/quiz-sessions/${sessionId}/submit`,
       data
+    );
+    return response.data;
+  },
+
+  completeQuizSession: async (sessionId: string): Promise<SessionCompleteResponse> => {
+    const response = await apiClient.post<SessionCompleteResponse>(
+      `/quiz-sessions/${sessionId}/complete`
     );
     return response.data;
   },

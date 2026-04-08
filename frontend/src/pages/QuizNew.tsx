@@ -154,8 +154,8 @@ export default function QuizNew() {
       (query.state.data?.files ?? []).some((file) => isFileProcessingStatus(file.status)) ? 2000 : false,
   });
 
-  const folders = Array.isArray(foldersData) ? foldersData : [];
-  const allFiles = Array.isArray(filesData?.files) ? filesData.files : [];
+  const folders = useMemo(() => (Array.isArray(foldersData) ? foldersData : []), [foldersData]);
+  const allFiles = useMemo(() => (Array.isArray(filesData?.files) ? filesData.files : []), [filesData?.files]);
 
   const createQuizMutation = useMutation({
     mutationFn: () => {

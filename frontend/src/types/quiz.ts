@@ -118,6 +118,12 @@ export interface ExamSubmitResponse {
   job_id: string | null;
 }
 
+export interface SessionCompleteResponse {
+  status: string;
+  total_score: number;
+  max_score: number;
+}
+
 export interface AnswerLogEntry {
   item_id: string;
   answer_log_id: string;

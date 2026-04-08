@@ -1,5 +1,6 @@
+import { useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { StatusBadge, LoadingSpinner } from '@/components';
 import { ChevronRight, AlertCircle, Flame } from 'lucide-react';
@@ -8,7 +9,7 @@ function formatMode(mode: string) {
   return mode === 'exam' ? '시험 모드' : '일반 모드';
 }
 
-function getPerformanceTier(scorePercentage: number) {
+function getPerformanceTier(scorePercentage: number, canReviewWrongNotes: boolean) {
   if (scorePercentage >= 90) {
     return {
       badge: '탁월한 성취',
@@ -27,8 +28,10 @@ function getPerformanceTier(scorePercentage: number) {
       bgClass: 'bg-brand-500/10',
       borderClass: 'border-brand-500/30',
       headline: '좋은 기반이 다져지고 있습니다.',
-      message: '일부 사소한 오답만 보완한다면 개념을 완벽히 마스터할 수 있습니다. 오답노트를 확인해보세요.',
-      primaryAction: { label: '오답노트 복습하기', to: '/wrong-notes' }
+      message: '일부 사소한 오답만 보완한다면 개념을 완벽히 마스터할 수 있습니다.',
+      primaryAction: canReviewWrongNotes
+        ? { label: '오답노트 복습하기', to: '/wrong-notes' }
+        : { label: '새 퀴즈 시작하기', to: '/quiz/new' }
     };
   }
   return {
@@ -38,17 +41,24 @@ function getPerformanceTier(scorePercentage: number) {
     borderClass: 'border-semantic-warning/30',
     headline: '핵심 개념의 복습이 필요합니다.',
     message: '부분적으로 혼동이 있는 개념들이 발견되었습니다. 해설을 읽어보고 다시 한 번 도전해 보세요.',
-    primaryAction: { label: '오답노트 확인하기', to: '/wrong-notes' }
+    primaryAction: canReviewWrongNotes
+      ? { label: '오답노트 확인하기', to: '/wrong-notes' }
+      : { label: '새 퀴즈 시작하기', to: '/quiz/new' }
   };
 }
 
 export default function QuizResults() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const queryClient = useQueryClient();
 
   const { data: session, isLoading: sessionLoading, isError: sessionIsError } = useQuery({
     queryKey: ['quizSession', sessionId],
     queryFn: () => quizApi.getQuizSession(sessionId || ''),
     enabled: !!sessionId,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      return status === 'submitted' || status === 'grading' ? 2000 : false;
+    },
   });
 
   const { data: items, isLoading: itemsLoading, isError: itemsIsError } = useQuery({
@@ -61,11 +71,40 @@ export default function QuizResults() {
     queryKey: ['quizAnswerLogs', sessionId],
     queryFn: () => quizApi.getAnswerLogs(sessionId || ''),
     enabled: !!sessionId,
+    refetchInterval: session?.status === 'submitted' || session?.status === 'grading' ? 2000 : false,
   });
+
+  const completeQuizMutation = useMutation({
+    mutationFn: () => quizApi.completeQuizSession(sessionId || ''),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] }),
+        queryClient.invalidateQueries({ queryKey: ['quiz-history'] }),
+        queryClient.invalidateQueries({ queryKey: ['quiz-history-full'] }),
+        queryClient.invalidateQueries({ queryKey: ['wrongNotes'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      ]);
+    },
+  });
+
+  const shouldFinalizeNormalSession =
+    !!sessionId &&
+    session?.mode === 'normal' &&
+    (session.status === 'ready' || session.status === 'in_progress') &&
+    (items?.length ?? 0) > 0 &&
+    answerLogs?.length === items?.length;
+
+  useEffect(() => {
+    if (shouldFinalizeNormalSession && completeQuizMutation.status === 'idle') {
+      completeQuizMutation.mutate();
+    }
+  }, [shouldFinalizeNormalSession, completeQuizMutation]);
 
   const scoreRate = session && session.max_score ? session.total_score! / session.max_score : 0;
   const scorePercentage = scoreRate * 100;
-  const tier = getPerformanceTier(scorePercentage);
+  const hasWrongAnswers = answerLogs?.some((log) => log.judgement !== 'correct') ?? false;
+  const canReviewWrongNotes = session?.source_mode !== 'no_source' && hasWrongAnswers;
+  const tier = getPerformanceTier(scorePercentage, canReviewWrongNotes);
 
   if (sessionIsError || itemsIsError) {
     return (
@@ -89,6 +128,14 @@ export default function QuizResults() {
 
   if (sessionLoading || itemsLoading || !session) {
     return <LoadingSpinner message="결과를 분석하고 있습니다" />;
+  }
+
+  if (completeQuizMutation.isPending || shouldFinalizeNormalSession) {
+    return <LoadingSpinner message="결과를 정리하고 있습니다" />;
+  }
+
+  if (session.status === 'submitted' || session.status === 'grading') {
+    return <LoadingSpinner message="채점 결과를 정리하고 있습니다" />;
   }
 
   return (

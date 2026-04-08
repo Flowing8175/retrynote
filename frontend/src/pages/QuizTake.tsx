@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import { LoadingSpinner, PillShimmer } from '@/components';
@@ -68,6 +68,7 @@ function ParticleEffect() {
 export default function QuizTake() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { currentSession, currentAnswerMap, setCurrentSession, setCurrentItems, setCurrentAnswer } = useQuizStore();
   const currentAnswerMapRef = useRef(currentAnswerMap);
   
@@ -164,6 +165,23 @@ export default function QuizTake() {
       setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
       setAnswerResultsByItemId((prev) => ({ ...prev, [variables.itemId]: result }));
       setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
+
+      if (!result.next_item_id && sessionData?.mode === 'normal' && sessionId) {
+        completeQuizMutation.mutate();
+      }
+    },
+  });
+
+  const completeQuizMutation = useMutation({
+    mutationFn: () => quizApi.completeQuizSession(sessionId || ''),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] }),
+        queryClient.invalidateQueries({ queryKey: ['quiz-history'] }),
+        queryClient.invalidateQueries({ queryKey: ['quiz-history-full'] }),
+        queryClient.invalidateQueries({ queryKey: ['wrongNotes'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+      ]);
     },
   });
 
@@ -225,6 +243,24 @@ export default function QuizTake() {
       setAnswerResult(answerResultsByItemId[itemsData[prevIndex].id] || null);
       setUserAnswer(submittedAnswers[itemsData[prevIndex].id] || draftAnswers[itemsData[prevIndex].id] || '');
     }
+  };
+
+  const handleViewResults = async () => {
+    if (!sessionId) {
+      return;
+    }
+
+    const shouldFinalizeNormalSession =
+      sessionData?.mode === 'normal' &&
+      sessionData.status !== 'graded' &&
+      sessionData.status !== 'regraded' &&
+      sessionData.status !== 'closed';
+
+    if (shouldFinalizeNormalSession) {
+      await completeQuizMutation.mutateAsync();
+    }
+
+    navigate(`/quiz/${sessionId}/results`);
   };
 
   if (sessionLoading || (!sessionData && !sessionIsError)) {
@@ -531,10 +567,13 @@ export default function QuizTake() {
               </button>
             ) : (
               <button
-                onClick={() => navigate(`/quiz/${sessionId}/results`)}
+                onClick={() => {
+                  void handleViewResults();
+                }}
+                disabled={completeQuizMutation.isPending}
                 className="w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5"
               >
-                결과 보기
+                {completeQuizMutation.isPending ? '결과 정리 중...' : '결과 보기'}
               </button>
             )
           )}

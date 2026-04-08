@@ -4,25 +4,25 @@ import React, { Suspense } from 'react';
 import AppErrorBoundary from '@/components/AppErrorBoundary';
 import { useAuthStore } from '@/stores';
 import { Layout } from '@/components';
-import Login from '@/pages/Login';
-import Signup from '@/pages/Signup';
-import PasswordReset from '@/pages/PasswordReset';
-import VerifyEmail from '@/pages/VerifyEmail';
-import Dashboard from '@/pages/Dashboard';
-import Files from '@/pages/Files';
-import QuizNew from '@/pages/QuizNew';
-import QuizHistory from '@/pages/QuizHistory';
-import QuizTake from '@/pages/QuizTake';
-import QuizResults from '@/pages/QuizResults';
-import WrongNotes from '@/pages/WrongNotes';
-import Retry from '@/pages/Retry';
-import Search from '@/pages/Search';
-import Admin from '@/pages/Admin';
-import Settings from '@/pages/Settings';
-import NotFound from '@/pages/NotFound';
 import UpgradeModal from '@/components/UpgradeModal';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
+const Login = React.lazy(() => import('@/pages/Login'));
+const Signup = React.lazy(() => import('@/pages/Signup'));
+const PasswordReset = React.lazy(() => import('@/pages/PasswordReset'));
+const VerifyEmail = React.lazy(() => import('@/pages/VerifyEmail'));
+const Dashboard = React.lazy(() => import('@/pages/Dashboard'));
+const Files = React.lazy(() => import('@/pages/Files'));
+const QuizNew = React.lazy(() => import('@/pages/QuizNew'));
+const QuizHistory = React.lazy(() => import('@/pages/QuizHistory'));
+const QuizTake = React.lazy(() => import('@/pages/QuizTake'));
+const QuizResults = React.lazy(() => import('@/pages/QuizResults'));
+const WrongNotes = React.lazy(() => import('@/pages/WrongNotes'));
+const Retry = React.lazy(() => import('@/pages/Retry'));
+const Search = React.lazy(() => import('@/pages/Search'));
+const Admin = React.lazy(() => import('@/pages/Admin'));
+const Settings = React.lazy(() => import('@/pages/Settings'));
+const NotFound = React.lazy(() => import('@/pages/NotFound'));
 const PricingPage = React.lazy(() => import('@/pages/PricingPage'));
 const BillingPage = React.lazy(() => import('@/pages/BillingPage'));
 const Terms = React.lazy(() => import('@/pages/Terms'));
@@ -54,6 +54,10 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   return isAdmin ? <>{children}</> : <Navigate to="/" replace />;
 }
 
+function LazyRoute({ children }: { children: React.ReactNode }) {
+  return <Suspense fallback={<LoadingSpinner />}>{children}</Suspense>;
+}
+
 function App() {
   return (
     <AppErrorBoundary>
@@ -65,7 +69,9 @@ function App() {
             path="/login"
             element={
               <PublicRoute>
-                <Login />
+                <LazyRoute>
+                  <Login />
+                </LazyRoute>
               </PublicRoute>
             }
           />
@@ -73,7 +79,9 @@ function App() {
             path="/signup"
             element={
               <PublicRoute>
-                <Signup />
+                <LazyRoute>
+                  <Signup />
+                </LazyRoute>
               </PublicRoute>
             }
           />
@@ -81,117 +89,141 @@ function App() {
              path="/password-reset"
              element={
                <PublicRoute>
-                 <PasswordReset />
-               </PublicRoute>
-             }
-           />
-           <Route path="/verify-email" element={<VerifyEmail />} />
-            <Route
-              path="/pricing"
-              element={
-                <ProtectedRoute>
-                  <Layout>
-                    <Suspense fallback={<LoadingSpinner />}>
-                      <PricingPage />
-                    </Suspense>
-                  </Layout>
-                </ProtectedRoute>
+                  <LazyRoute>
+                    <PasswordReset />
+                  </LazyRoute>
+                </PublicRoute>
               }
             />
-           <Route path="/terms" element={<Suspense fallback={<LoadingSpinner />}><Terms /></Suspense>} />
-           <Route path="/privacy" element={<Suspense fallback={<LoadingSpinner />}><Privacy /></Suspense>} />
-           <Route path="/refund" element={<Suspense fallback={<LoadingSpinner />}><Refund /></Suspense>} />
+            <Route path="/verify-email" element={<LazyRoute><VerifyEmail /></LazyRoute>} />
+             <Route
+               path="/pricing"
+               element={
+                 <ProtectedRoute>
+                   <Layout>
+                     <LazyRoute>
+                       <PricingPage />
+                     </LazyRoute>
+                   </Layout>
+                 </ProtectedRoute>
+               }
+             />
+            <Route path="/terms" element={<LazyRoute><Terms /></LazyRoute>} />
+            <Route path="/privacy" element={<LazyRoute><Privacy /></LazyRoute>} />
+            <Route path="/refund" element={<LazyRoute><Refund /></LazyRoute>} />
 
           {/* Protected Routes */}
           <Route path="/" element={
             <ProtectedRoute>
               <Layout>
-                <Dashboard />
+                <LazyRoute>
+                  <Dashboard />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } />
           <Route path="/files" element={
             <ProtectedRoute>
               <Layout>
-                <Files />
+                <LazyRoute>
+                  <Files />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } />
           <Route path="/quiz/new" element={
             <ProtectedRoute>
               <Layout>
-                <QuizNew />
+                <LazyRoute>
+                  <QuizNew />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } />
           <Route path="/quiz/history" element={
             <ProtectedRoute>
               <Layout>
-                <QuizHistory />
+                <LazyRoute>
+                  <QuizHistory />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } />
           <Route path="/quiz/:sessionId" element={
             <ProtectedRoute>
               <Layout showSidebar={false}>
-                <QuizTake />
+                <LazyRoute>
+                  <QuizTake />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } />
           <Route path="/quiz/:sessionId/results" element={
             <ProtectedRoute>
               <Layout showSidebar={false}>
-                <QuizResults />
+                <LazyRoute>
+                  <QuizResults />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } />
           <Route path="/wrong-notes" element={
             <ProtectedRoute>
               <Layout>
-                <WrongNotes />
+                <LazyRoute>
+                  <WrongNotes />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } />
           <Route path="/retry" element={
             <ProtectedRoute>
               <Layout>
-                <Retry />
+                <LazyRoute>
+                  <Retry />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } />
           <Route path="/search" element={
             <ProtectedRoute>
               <Layout>
-                <Search />
+                <LazyRoute>
+                  <Search />
+                </LazyRoute>
               </Layout>
             </ProtectedRoute>
           } />
            <Route path="/settings" element={
-             <ProtectedRoute>
-               <Layout>
-                 <Settings />
-               </Layout>
-             </ProtectedRoute>
-           } />
-           <Route path="/settings/billing" element={
-             <ProtectedRoute>
-               <Layout>
-                 <Suspense fallback={<LoadingSpinner />}>
-                   <BillingPage />
-                 </Suspense>
-               </Layout>
-             </ProtectedRoute>
-           } />
-           <Route path="/admin" element={
-            <ProtectedRoute>
-              <AdminRoute>
-                <Layout showSidebar={false}>
-                  <Admin />
+              <ProtectedRoute>
+                <Layout>
+                  <LazyRoute>
+                    <Settings />
+                  </LazyRoute>
                 </Layout>
-              </AdminRoute>
-            </ProtectedRoute>
-          } />
-          <Route path="*" element={<NotFound />} />
+              </ProtectedRoute>
+            } />
+           <Route path="/settings/billing" element={
+              <ProtectedRoute>
+                <Layout>
+                  <LazyRoute>
+                    <BillingPage />
+                  </LazyRoute>
+                </Layout>
+              </ProtectedRoute>
+            } />
+           <Route path="/admin" element={
+             <ProtectedRoute>
+               <AdminRoute>
+                 <Layout showSidebar={false}>
+                   <LazyRoute>
+                     <Admin />
+                   </LazyRoute>
+                 </Layout>
+               </AdminRoute>
+             </ProtectedRoute>
+           } />
+          <Route path="*" element={<LazyRoute><NotFound /></LazyRoute>} />
         </Routes>
           <UpgradeModal />
         </BrowserRouter>

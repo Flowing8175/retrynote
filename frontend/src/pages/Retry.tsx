@@ -16,8 +16,14 @@ export default function Retry() {
     Array.isArray(locationState.conceptKeys) &&
     locationState.conceptKeys.length > 0;
 
-  const selectedConceptKeys = hasSelectedConcepts ? locationState!.conceptKeys : [];
-  const selectedConceptLabels = hasSelectedConcepts ? locationState!.conceptLabels : {};
+  const selectedConceptKeys = useMemo(
+    () => (hasSelectedConcepts ? locationState!.conceptKeys : []),
+    [hasSelectedConcepts, locationState]
+  );
+  const selectedConceptLabels = useMemo(
+    () => (hasSelectedConcepts ? locationState!.conceptLabels : {}),
+    [hasSelectedConcepts, locationState]
+  );
   const selectedCount = selectedConceptKeys.length;
 
   const [conceptMode, setConceptMode] = useState<'manual' | 'ai'>('ai');
