@@ -18,6 +18,7 @@ import Retry from '@/pages/Retry';
 import Search from '@/pages/Search';
 import Admin from '@/pages/Admin';
 import Settings from '@/pages/Settings';
+import NotFound from '@/pages/NotFound';
 import UpgradeModal from '@/components/UpgradeModal';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
@@ -188,6 +189,7 @@ function App() {
               </AdminRoute>
             </ProtectedRoute>
           } />
+          <Route path="*" element={<NotFound />} />
         </Routes>
           <UpgradeModal />
         </BrowserRouter>
