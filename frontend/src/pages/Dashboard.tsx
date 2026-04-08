@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { dashboardApi } from '@/api';
+import CoachingStream from '@/components/CoachingStream';
 import type { DashboardResponse, RetryLocationState } from '@/types';
 
 function DashboardSkeleton() {
@@ -108,11 +109,7 @@ function formatDateTime(value: string | null) {
   }).format(new Date(value));
 }
 
-function getCoachingMessage(dashboardData: DashboardResponse) {
-  if (dashboardData.coaching_summary) {
-    return dashboardData.coaching_summary;
-  }
-
+function getFallbackCoachingMessage(dashboardData: DashboardResponse) {
   if (dashboardData.retry_recommendations.length > 0) {
     return '반복된 오답 개념부터 다시 복습해 보세요.';
   }
@@ -187,7 +184,7 @@ export default function Dashboard() {
   }
 
   const hasData = dashboardData.learning_volume > 0;
-  const coachingMessage = getCoachingMessage(dashboardData);
+  const fallbackCoaching = getFallbackCoachingMessage(dashboardData);
   const headline = getHeadline(dashboardData);
   const retryRecommendations = dashboardData.retry_recommendations.slice(0, 3);
   const recentWrongNotes = dashboardData.recent_wrong_notes.slice(0, 4);
@@ -266,14 +263,17 @@ export default function Dashboard() {
             <span className="text-xs text-content-muted">{rangeLabel}</span>
           </div>
 
-          {/* Punchy headline + demoted coaching message */}
           <div className="space-y-3">
             <h1 className="text-4xl font-semibold tracking-tight text-white leading-tight">
               {headline}
             </h1>
-            <p className="text-base text-content-secondary leading-relaxed max-w-xl">
-              {coachingMessage}
-            </p>
+            <CoachingStream
+              range={range}
+              fileId={selectedFileId}
+              categoryTag={selectedCategoryTag}
+              hasData={hasData}
+              fallbackMessage={fallbackCoaching}
+            />
           </div>
 
           {/* Editorial metrics — pure typography, no cards */}

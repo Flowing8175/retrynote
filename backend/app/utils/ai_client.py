@@ -17,6 +17,7 @@ __all__ = [
     "COACHING_SCHEMA",
     "call_ai_structured",
     "call_ai_with_fallback",
+    "stream_ai_text",
 ]
 
 client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -416,3 +417,47 @@ async def call_ai_with_fallback(
             fallback_model,
         )
         return await call_ai_structured(prompt, schema, model=fallback_model, **kwargs)
+
+
+async def stream_ai_text(
+    prompt: str,
+    system_message: str,
+    model: str | None = None,
+    temperature: float = 0.3,
+    max_tokens: int = 512,
+):
+    """Yield text chunks from OpenAI streaming API (non-structured, plain text)."""
+    model = model or settings.openai_grading_model
+
+    if model.startswith("gemini-"):
+        from google.genai import types
+
+        gemini = _get_gemini_client()
+        stream = await gemini.aio.models.generate_content_stream(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=system_message,
+                temperature=temperature,
+                max_output_tokens=max_tokens,
+            ),
+        )
+        async for chunk in stream:
+            if chunk.text:
+                yield chunk.text
+        return
+
+    stream = await client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=temperature,
+        max_tokens=max_tokens,
+        stream=True,
+    )
+    async for chunk in stream:
+        delta = chunk.choices[0].delta if chunk.choices else None
+        if delta and delta.content:
+            yield delta.content
