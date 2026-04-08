@@ -488,13 +488,7 @@ async def delete_file(
 
     import logging
 
-    async def _dispatch():
-        try:
-            await dispatch_task("file_cleanup", [job.id])
-        except Exception as exc:
-            logger.warning("file_cleanup dispatch failed for job %s: %s", job.id, exc)
-
-    background_tasks.add_task(_dispatch)
+    background_tasks.add_task(dispatch_task, "file_cleanup", [job.id])
 
     return {"status": "success"}
 

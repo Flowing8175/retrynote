@@ -469,7 +469,7 @@ async def regrade_item(
     )
     await db.commit()
 
-    await dispatch_task("admin_regrade", [job.id])
+    dispatch_task("admin_regrade", [job.id])
 
     return RegradeResponse(regrade_job_id=job.id)
 
@@ -898,7 +898,7 @@ async def retry_job(
 
     task_name = _JOB_TYPE_TASK_MAP.get(job.job_type)
     if task_name:
-        await dispatch_task(task_name, [job.id])
+        dispatch_task(task_name, [job.id])
 
     return {"status": "ok", "job_id": job_id}
 

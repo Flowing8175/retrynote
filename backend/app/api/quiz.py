@@ -337,7 +337,7 @@ async def create_quiz_session(
     await db.commit()
     await db.refresh(session)
 
-    await dispatch_task("generate_quiz", [job_id])
+    dispatch_task("generate_quiz", [job_id])
 
     return QuizSessionResponse(
         quiz_session_id=session.id,
@@ -842,7 +842,7 @@ async def submit_exam(
     session.status = QuizSessionStatus.grading
     await db.commit()
 
-    await dispatch_task("grade_exam", [job.id])
+    dispatch_task("grade_exam", [job.id])
 
     return ExamSubmitResponse(status=session.status.value, job_id=job.id)
 
@@ -974,6 +974,6 @@ async def create_objection(
     await db.commit()
     await db.refresh(objection)
 
-    await dispatch_task("review_objection", [job.id])
+    dispatch_task("review_objection", [job.id])
 
     return ObjectionResponse(objection_id=objection.id, status=objection.status.value)

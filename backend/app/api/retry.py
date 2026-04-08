@@ -154,6 +154,6 @@ async def create_retry_set(
     await db.commit()
     await db.refresh(session)
 
-    await dispatch_task("generate_quiz", [job.id])
+    dispatch_task("generate_quiz", [job.id])
 
     return RetrySetResponse(quiz_session_id=session.id, job_id=job.id)
