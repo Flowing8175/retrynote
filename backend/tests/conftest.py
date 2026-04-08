@@ -302,7 +302,6 @@ async def quiz_session_ready(db_session, test_user, ready_file):
         status=QuizSessionStatus.ready,
         question_count=3,
         generation_model_name="gpt-4o",
-        grading_model_name="gpt-4o-mini",
     )
     db_session.add(session)
     await db_session.flush()
@@ -333,7 +332,6 @@ async def exam_session_ready(db_session, test_user, ready_file):
         status=QuizSessionStatus.ready,
         question_count=3,
         generation_model_name="gpt-4o",
-        grading_model_name="gpt-4o-mini",
     )
     db_session.add(session)
     await db_session.flush()

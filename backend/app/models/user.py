@@ -66,14 +66,8 @@ class AdminSettings(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True, default=lambda: str(uuid.uuid4()))
     active_generation_model: Mapped[str] = mapped_column(String(100), default="gpt-4o")
-    active_grading_model: Mapped[str] = mapped_column(
-        String(100), default="gpt-4o-mini"
-    )
     fallback_generation_model: Mapped[str] = mapped_column(
         String(100), default="gpt-4o-mini"
-    )
-    fallback_grading_model: Mapped[str] = mapped_column(
-        String(100), default="gpt-3.5-turbo"
     )
     max_upload_total_mb: Mapped[int] = mapped_column(Integer, default=100)
     daily_quiz_generation_limit: Mapped[int] = mapped_column(Integer, default=50)

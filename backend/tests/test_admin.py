@@ -380,7 +380,6 @@ class TestModelSettings:
             "/admin/settings/models",
             json={
                 "active_generation_model": "gpt-4o",
-                "active_grading_model": "gpt-4o-mini",
             },
         )
         assert resp.status_code == 200
@@ -388,7 +387,6 @@ class TestModelSettings:
         assert data["status"] == "success"
         assert "settings" in data
         assert data["settings"]["active_generation_model"] == "gpt-4o"
-        assert data["settings"]["active_grading_model"] == "gpt-4o-mini"
 
     async def test_admin_cannot_update_settings(self, admin_client: AsyncClient):
         """Regular admin → 403"""

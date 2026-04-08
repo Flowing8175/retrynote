@@ -76,18 +76,14 @@ export const adminApi = {
     status: string;
     settings: {
       active_generation_model: string | null;
-      active_grading_model: string | null;
       fallback_generation_model: string | null;
-      fallback_grading_model: string | null;
     };
   }> => {
     const response = await apiClient.post<{
       status: string;
       settings: {
         active_generation_model: string | null;
-        active_grading_model: string | null;
         fallback_generation_model: string | null;
-        fallback_grading_model: string | null;
       };
     }>('/admin/settings/models', data);
     return response.data;

@@ -274,7 +274,7 @@ async def stream_coaching(
             async for chunk in stream_ai_text(
                 coaching_prompt,
                 COACHING_STREAM_SYSTEM_PROMPT,
-                model=cfg.openai_grading_model,
+                model=cfg.balanced_generation_model,
                 max_tokens=256,
             ):
                 collected += chunk

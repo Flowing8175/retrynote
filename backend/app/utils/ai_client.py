@@ -353,7 +353,7 @@ async def call_ai_structured(
     temperature: float = 0.3,
     max_tokens: int = 4096,
 ) -> dict[str, Any]:
-    model = model or settings.openai_generation_model
+    model = model or settings.balanced_generation_model
 
     if model.startswith("gemini-"):
         return await _call_gemini_structured(
@@ -427,7 +427,7 @@ async def stream_ai_text(
     max_tokens: int = 512,
 ):
     """Yield text chunks from OpenAI streaming API (non-structured, plain text)."""
-    model = model or settings.openai_grading_model
+    model = model or settings.balanced_generation_model
 
     if model.startswith("gemini-"):
         from google.genai import types

@@ -34,16 +34,8 @@ class Settings(BaseSettings):
     admin_master_password: str = ""
 
     openai_api_key: str = ""
-    openai_generation_model: str = "gpt-5.4-mini"
-    openai_grading_model: str = "gpt-5.4-mini"
-    openai_fallback_generation_model: str = "gpt-4.1-mini"
-    openai_fallback_grading_model: str = "gpt-4.1-mini"
 
     gemini_api_key: str = ""
-    gemini_generation_model: str = "gemini-3.1-flash-lite"
-    gemini_grading_model: str = "gemini-3.1-flash-lite"
-    gemini_fallback_generation_model: str = "gemini-3-flash"
-    gemini_fallback_grading_model: str = "gemini-3-flash"
 
     # Provider-agnostic model tiers — set to any model string; provider is
     # auto-detected from the model name prefix (e.g. "gemini-" → Gemini API).

@@ -490,12 +490,8 @@ async def update_model_settings(
 
     if req.active_generation_model:
         admin_settings.active_generation_model = req.active_generation_model
-    if req.active_grading_model:
-        admin_settings.active_grading_model = req.active_grading_model
     if req.fallback_generation_model:
         admin_settings.fallback_generation_model = req.fallback_generation_model
-    if req.fallback_grading_model:
-        admin_settings.fallback_grading_model = req.fallback_grading_model
 
     admin_settings.updated_at = datetime.now(timezone.utc)
     admin_settings.updated_by = admin.id
@@ -513,9 +509,7 @@ async def update_model_settings(
         "status": "success",
         "settings": {
             "active_generation_model": admin_settings.active_generation_model,
-            "active_grading_model": admin_settings.active_grading_model,
             "fallback_generation_model": admin_settings.fallback_generation_model,
-            "fallback_grading_model": admin_settings.fallback_grading_model,
         },
     }
 

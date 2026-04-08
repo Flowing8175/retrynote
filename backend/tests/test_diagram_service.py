@@ -62,7 +62,6 @@ async def quiz_session_with_items(db_session, test_user):
         status=QuizSessionStatus.ready,
         question_count=6,
         generation_model_name="gpt-4o",
-        grading_model_name="gpt-4o-mini",
     )
     db_session.add(session)
     await db_session.flush()

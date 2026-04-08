@@ -10,9 +10,7 @@ interface AdminModelSettingsTabProps {
       status: string;
       settings: {
         active_generation_model: string | null;
-        active_grading_model: string | null;
         fallback_generation_model: string | null;
-        fallback_grading_model: string | null;
       };
     },
     unknown,
@@ -46,17 +44,6 @@ export default function AdminModelSettingsTab({
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-content-primary" htmlFor="ms-grade">채점 모델</label>
-          <input
-            id="ms-grade"
-            type="text"
-            value={modelForm.active_grading_model ?? ''}
-            onChange={(e) => setModelForm((f) => ({ ...f, active_grading_model: e.target.value || null }))}
-            placeholder="gpt-4o-mini"
-            className="mt-2 w-full rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-3 text-sm text-content-primary placeholder-content-muted"
-          />
-        </div>
-        <div>
           <label className="block text-sm font-medium text-content-primary" htmlFor="ms-gen-fb">생성 폴백 모델</label>
           <input
             id="ms-gen-fb"
@@ -67,18 +54,6 @@ export default function AdminModelSettingsTab({
             className="mt-2 w-full rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-3 text-sm text-content-primary placeholder-content-muted"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-content-primary" htmlFor="ms-grade-fb">채점 폴백 모델</label>
-          <input
-            id="ms-grade-fb"
-            type="text"
-            value={modelForm.fallback_grading_model ?? ''}
-            onChange={(e) => setModelForm((f) => ({ ...f, fallback_grading_model: e.target.value || null }))}
-            placeholder="gpt-3.5-turbo"
-            className="mt-2 w-full rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-3 text-sm text-content-primary placeholder-content-muted"
-          />
-        </div>
-
         {modelSaveMsg && (
           <div
             className={`rounded-2xl px-4 py-3 text-sm font-medium ${

@@ -76,7 +76,7 @@ async def get_quiz_config(
     tier = UserTier(user.tier)
     allowed_models = TIER_LIMITS[tier].allowed_models
 
-    default_model = cfg.eco_generation_model or cfg.openai_generation_model
+    default_model = cfg.eco_generation_model or cfg.balanced_generation_model
 
     configured_tiers = [
         ("ECO", cfg.eco_generation_model),
@@ -105,22 +105,10 @@ async def get_quiz_config(
                 generation_model_options.append(trial_opt)
 
     if not generation_model_options:
-        # Fall back to raw provider defaults when no tiers are configured.
-        openai_fallback = cfg.openai_generation_model
+        fallback = cfg.balanced_generation_model or cfg.eco_generation_model
         generation_model_options = [
-            _describe_generation_model("BALANCED", openai_fallback, openai_fallback),
-            _describe_generation_model(
-                "ECO", cfg.openai_fallback_generation_model, openai_fallback
-            ),
+            _describe_generation_model("BALANCED", fallback, fallback),
         ]
-        if cfg.gemini_generation_model:
-            generation_model_options.append(
-                _describe_generation_model(
-                    "BALANCED",
-                    cfg.gemini_generation_model,
-                    cfg.gemini_generation_model,
-                )
-            )
 
     available_generation_models = [
         option["value"] for option in generation_model_options
@@ -228,7 +216,7 @@ async def create_quiz_session(
     tier = UserTier(user.tier)
     allowed_models = TIER_LIMITS[tier].allowed_models
 
-    preferred = req.preferred_model or cfg.openai_generation_model
+    preferred = req.preferred_model or cfg.balanced_generation_model
     model_tier_label = None
     if preferred == cfg.eco_generation_model:
         model_tier_label = MODEL_ECO
@@ -292,8 +280,7 @@ async def create_quiz_session(
         difficulty=req.difficulty,
         question_count=req.question_count,
         generation_priority=req.generation_priority,
-        generation_model_name=req.preferred_model or cfg.openai_generation_model,
-        grading_model_name=cfg.openai_grading_model,
+        generation_model_name=req.preferred_model or cfg.balanced_generation_model,
         idempotency_key=req.idempotency_key,
     )
     db.add(session)
@@ -373,7 +360,6 @@ async def get_quiz_session(
         difficulty=session.difficulty,
         question_count=session.question_count,
         generation_model_name=session.generation_model_name,
-        grading_model_name=session.grading_model_name,
         started_at=session.started_at,
         submitted_at=session.submitted_at,
         graded_at=session.graded_at,
@@ -523,9 +509,9 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
                 ai_result = await call_ai_with_fallback(
                     prompt,
                     GRADING_SCHEMA,
-                    primary_model=session.grading_model_name
-                    or cfg.openai_grading_model,
-                    fallback_model=cfg.openai_fallback_grading_model,
+                    primary_model=session.generation_model_name
+                    or cfg.balanced_generation_model,
+                    fallback_model=cfg.eco_generation_model,
                     system_message=SYSTEM_PROMPT_GRADING_SHORT,
                 )
                 judgement = Judgement(ai_result["judgement"])
@@ -556,8 +542,9 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
             ai_result = await call_ai_with_fallback(
                 prompt,
                 GRADING_SCHEMA,
-                primary_model=session.grading_model_name or cfg.openai_grading_model,
-                fallback_model=cfg.openai_fallback_grading_model,
+                primary_model=session.generation_model_name
+                or cfg.balanced_generation_model,
+                fallback_model=cfg.eco_generation_model,
                 system_message=SYSTEM_PROMPT_GRADING_ESSAY,
             )
             judgement = Judgement(ai_result["judgement"])

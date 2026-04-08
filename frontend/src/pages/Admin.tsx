@@ -48,9 +48,7 @@ export default function Admin() {
 
   const [modelForm, setModelForm] = useState<ModelSettingsUpdate>({
     active_generation_model: null,
-    active_grading_model: null,
     fallback_generation_model: null,
-    fallback_grading_model: null,
   });
   const [modelSaveMsg, setModelSaveMsg] = useState<string | null>(null);
 

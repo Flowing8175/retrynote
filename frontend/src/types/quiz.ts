@@ -38,7 +38,6 @@ export interface QuizSessionDetail {
   difficulty: string | null;
   question_count: number | null;
   generation_model_name: string | null;
-  grading_model_name: string | null;
   started_at: string | null;
   submitted_at: string | null;
   graded_at: string | null;

@@ -77,9 +77,7 @@ export interface RegradeResponse {
 
 export interface ModelSettingsUpdate {
   active_generation_model: string | null;
-  active_grading_model: string | null;
   fallback_generation_model: string | null;
-  fallback_grading_model: string | null;
 }
 
 export interface AnnouncementCreate {

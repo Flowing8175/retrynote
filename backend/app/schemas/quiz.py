@@ -36,14 +36,6 @@ class QuizSessionCreate(BaseModel):
             if model_name
         }
 
-        if not allowed_models:
-            allowed_models = {
-                cfg.openai_generation_model,
-                cfg.openai_fallback_generation_model,
-                cfg.gemini_generation_model,
-                cfg.gemini_fallback_generation_model,
-            } - {""}  # exclude unconfigured empty strings
-
         if value not in allowed_models:
             raise ValueError(
                 f"preferred_model must be one of the server-configured generation models: {', '.join(sorted(allowed_models))}"
@@ -74,7 +66,6 @@ class QuizSessionDetail(BaseModel):
     difficulty: str | None
     question_count: int | None
     generation_model_name: str | None
-    grading_model_name: str | None
     started_at: datetime | None
     submitted_at: datetime | None
     graded_at: datetime | None

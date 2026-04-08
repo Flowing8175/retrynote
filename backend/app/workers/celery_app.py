@@ -182,9 +182,9 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
                         ai_result = await call_ai_with_fallback(
                             prompt,
                             GRADING_SCHEMA,
-                            primary_model=session.grading_model_name
-                            or cfg.openai_grading_model,
-                            fallback_model=cfg.openai_fallback_grading_model,
+                            primary_model=session.generation_model_name
+                            or cfg.balanced_generation_model,
+                            fallback_model=cfg.eco_generation_model,
                             system_message=SYSTEM_PROMPT_GRADING_SHORT,
                         )
                         new_judgement = ai_result["judgement"]

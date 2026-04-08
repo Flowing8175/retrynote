@@ -485,8 +485,8 @@ async def generate_quiz(job_id: str):
                     batch_prompt,
                     BATCH_RETRY_GENERATION_SCHEMA,
                     primary_model=session.generation_model_name
-                    or cfg.openai_generation_model,
-                    fallback_model=cfg.openai_fallback_generation_model,
+                    or cfg.balanced_generation_model,
+                    fallback_model=cfg.eco_generation_model,
                     system_message=SYSTEM_PROMPT_RETRY_GENERATION,
                 )
 
@@ -602,8 +602,8 @@ async def generate_quiz(job_id: str):
                 prompt,
                 GENERATION_SCHEMA,
                 primary_model=session.generation_model_name
-                or cfg.openai_generation_model,
-                fallback_model=cfg.openai_fallback_generation_model,
+                or cfg.balanced_generation_model,
+                fallback_model=cfg.eco_generation_model,
                 system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
             )
 
@@ -741,9 +741,9 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
                             ai_result = await call_ai_with_fallback(
                                 prompt,
                                 GRADING_SCHEMA,
-                                primary_model=session.grading_model_name
-                                or cfg.openai_grading_model,
-                                fallback_model=cfg.openai_fallback_grading_model,
+                                primary_model=session.generation_model_name
+                                or cfg.balanced_generation_model,
+                                fallback_model=cfg.eco_generation_model,
                                 system_message=SYSTEM_PROMPT_GRADING_SHORT,
                             )
                             judgement = Judgement(ai_result["judgement"])
@@ -870,8 +870,8 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
             ai_result = await call_ai_with_fallback(
                 prompt,
                 OBJECTION_REVIEW_SCHEMA,
-                primary_model=cfg.openai_grading_model,
-                fallback_model=cfg.openai_fallback_grading_model,
+                primary_model=cfg.balanced_generation_model,
+                fallback_model=cfg.eco_generation_model,
                 system_message=SYSTEM_PROMPT_OBJECTION_REVIEW,
             )
 

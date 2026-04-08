@@ -504,7 +504,6 @@ class TestQuestionTypes:
             source_mode=SourceMode.document_based,
             status=QuizSessionStatus.ready,
             question_count=1,
-            grading_model_name="gpt-4o-mini",
         )
         db_session.add(session)
         await db_session.flush()

@@ -91,9 +91,7 @@ class RegradeResponse(BaseModel):
 
 class ModelSettingsUpdate(BaseModel):
     active_generation_model: str | None = Field(default=None, max_length=100)
-    active_grading_model: str | None = Field(default=None, max_length=100)
     fallback_generation_model: str | None = Field(default=None, max_length=100)
-    fallback_grading_model: str | None = Field(default=None, max_length=100)
 
 
 class AnnouncementCreate(BaseModel):
