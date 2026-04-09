@@ -146,8 +146,9 @@ async def generate_diagram(
             concept_key,
         )
         fix_prompt = (
+            f"{prompt}\n\n"
             "이전 응답의 Mermaid 구문이 유효하지 않습니다. "
-            "올바른 Mermaid 구문으로 다시 생성하세요."
+            "위 개념을 그대로 유지하면서 올바른 Mermaid 구문으로 다시 생성하세요."
         )
         ai_result = await call_ai_structured(
             fix_prompt,
