@@ -6,6 +6,7 @@ import type { BillingCycle, UserTier } from '@/types/billing';
 
 interface TierMeta {
   name: string;
+  description: string;
   monthlyPrice: string;
   quarterlyPrice: string;
   priceSuffix: { monthly: string; quarterly: string };
@@ -15,18 +16,21 @@ interface TierMeta {
 const TIER_META: Record<UserTier, TierMeta> = {
   free: {
     name: 'Free',
+    description: '체험해 보세요',
     monthlyPrice: '₩0',
     quarterlyPrice: '₩0',
     priceSuffix: { monthly: '', quarterly: '' },
   },
   lite: {
     name: 'Lite',
+    description: '가벼운 학습용',
     monthlyPrice: '₩6,900',
     quarterlyPrice: '₩17,600',
     priceSuffix: { monthly: '/월', quarterly: '/분기' },
   },
   standard: {
     name: 'Standard',
+    description: '본격적인 시험 준비',
     monthlyPrice: '₩14,900',
     quarterlyPrice: '₩38,100',
     priceSuffix: { monthly: '/월', quarterly: '/분기' },
@@ -34,6 +38,7 @@ const TIER_META: Record<UserTier, TierMeta> = {
   },
   pro: {
     name: 'Pro',
+    description: '대량 학습 · 팀 사용',
     monthlyPrice: '₩26,900',
     quarterlyPrice: '₩68,600',
     priceSuffix: { monthly: '/월', quarterly: '/분기' },
@@ -222,6 +227,7 @@ export default function PricingPage() {
                     i < TIERS.length - 1 ? 'border-r' : '',
                     currentTier === tier ? 'bg-brand-500/[0.06]' : '',
                     isHighlight ? 'relative bg-brand-500/[0.09]' : '',
+                    tier === 'free' && currentTier !== 'free' ? 'opacity-60' : '',
                   ].join(' ')}
                   style={
                     isHighlight
@@ -234,12 +240,13 @@ export default function PricingPage() {
                 >
                   {isHighlight && (
                     <span className="mb-2.5 inline-flex items-center rounded-full bg-semantic-success-bg px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-widest text-semantic-success">
-                      인기
+                      추천
                     </span>
                   )}
                   <p className="text-[0.72rem] font-bold uppercase tracking-widest text-content-muted">
                     {TIER_META[tier].name}
                   </p>
+                  <p className="mt-1 text-[0.65rem] text-content-muted">{TIER_META[tier].description}</p>
                   <div className="mt-2 flex items-baseline gap-1">
                     <span className="text-2xl font-semibold text-content-primary">
                       {currentPrice(tier)}
@@ -273,7 +280,8 @@ export default function PricingPage() {
                 <div
                   key={tier}
                   className={[
-                    'px-5 py-6 text-center text-sm text-content-primary',
+                    'px-5 py-6 text-center text-sm',
+                    tier === 'free' ? 'text-content-muted' : 'text-content-primary',
                     i < TIERS.length - 1 ? 'border-r border-white/[0.07]' : '',
                     currentTier === tier ? 'bg-brand-500/[0.06]' : '',
                     TIER_META[tier].highlight ? 'bg-brand-500/[0.07]' : '',
@@ -304,6 +312,9 @@ export default function PricingPage() {
                 style={{ backgroundColor: 'oklch(0.20 0.01 250)' }}
               >
                 <div>
+                  {pack.size === '20gb' && (
+                    <span className="text-[0.6rem] font-bold uppercase tracking-widest text-semantic-success">인기</span>
+                  )}
                   <p className="text-sm font-semibold text-content-primary">{pack.label}</p>
                   <p className="mt-1 text-lg font-semibold text-brand-300">{pack.price}</p>
                   <p className="mt-0.5 text-xs text-content-muted">{pack.unitPrice}</p>

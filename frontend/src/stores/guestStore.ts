@@ -12,22 +12,51 @@ export interface GuestQuestion {
 }
 
 interface GuestState {
+  // Quiz data
   topic: string | null;
   questions: GuestQuestion[];
   setGuestQuiz: (topic: string, questions: GuestQuestion[]) => void;
   clearGuestQuiz: () => void;
+
+  // Session data
+  guestSessionId: string | null;
+  quizSessions: string[];
+  getOrCreateSessionId: () => string;
+  addQuizSession: (sessionId: string) => void;
+  clearGuestData: () => void;
 }
 
 export const useGuestStore = create<GuestState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       topic: null,
       questions: [],
+      guestSessionId: null,
+      quizSessions: [],
+
       setGuestQuiz: (topic, questions) => set({ topic, questions }),
       clearGuestQuiz: () => set({ topic: null, questions: [] }),
+
+      getOrCreateSessionId: () => {
+        const existing = get().guestSessionId;
+        if (existing) return existing;
+        const newId = crypto.randomUUID();
+        set({ guestSessionId: newId });
+        return newId;
+      },
+
+      addQuizSession: (sessionId: string) => {
+        set((state) => ({
+          quizSessions: [...state.quizSessions, sessionId],
+        }));
+      },
+
+      clearGuestData: () => {
+        set({ guestSessionId: null, quizSessions: [], topic: null, questions: [] });
+      },
     }),
     {
-      name: 'guest-quiz',
+      name: 'guest-session',
       storage: createJSONStorage(() => localStorage),
     }
   )

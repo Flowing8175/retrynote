@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import React, { Suspense } from 'react';
 import AppErrorBoundary from '@/components/AppErrorBoundary';
+import GuestErrorBoundary from '@/components/GuestErrorBoundary';
 import { useAuthStore } from '@/stores';
 import { Layout } from '@/components';
 import UpgradeModal from '@/components/UpgradeModal';
@@ -31,6 +32,10 @@ const Terms = React.lazy(() => import('@/pages/Terms'));
 const Privacy = React.lazy(() => import('@/pages/Privacy'));
 const Refund = React.lazy(() => import('@/pages/Refund'));
 const DiagramPage = React.lazy(() => import('@/pages/DiagramPage'));
+const Landing = React.lazy(() => import('@/pages/Landing'));
+const TryQuiz = React.lazy(() => import('@/pages/TryQuiz'));
+const TryQuizTake = React.lazy(() => import('@/pages/TryQuizTake'));
+const TryQuizResults = React.lazy(() => import('@/pages/TryQuizResults'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,6 +66,11 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />;
 }
 
+function SmartHomeRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <>{children}</>;
+}
+
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
@@ -77,7 +87,14 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
         <Routes>
-          {/* Public Routes */}
+          <Route path="/" element={
+            <SmartHomeRoute>
+              <LazyRoute>
+                <Landing />
+              </LazyRoute>
+            </SmartHomeRoute>
+          } />
+
           <Route
             path="/"
             element={
@@ -107,11 +124,9 @@ function App() {
           <Route
             path="/signup"
             element={
-              <PublicRoute>
-                <LazyRoute>
-                  <Signup />
-                </LazyRoute>
-              </PublicRoute>
+              <LazyRoute>
+                <Signup />
+              </LazyRoute>
             }
           />
            <Route
@@ -141,7 +156,14 @@ function App() {
             <Route path="/privacy" element={<LazyRoute><Privacy /></LazyRoute>} />
             <Route path="/refund" element={<LazyRoute><Refund /></LazyRoute>} />
 
+<<<<<<< HEAD
           {/* Protected Routes */}
+=======
+          <Route path="/try" element={<GuestErrorBoundary><LazyRoute><TryQuiz /></LazyRoute></GuestErrorBoundary>} />
+          <Route path="/try/quiz/:sessionId" element={<GuestErrorBoundary><LazyRoute><TryQuizTake /></LazyRoute></GuestErrorBoundary>} />
+          <Route path="/try/quiz/:sessionId/results" element={<GuestErrorBoundary><LazyRoute><TryQuizResults /></LazyRoute></GuestErrorBoundary>} />
+
+>>>>>>> 1fd0aa8d2982ee2d6c5a36bc527d4191e42a2bfe
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <Layout>

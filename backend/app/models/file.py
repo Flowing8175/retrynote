@@ -57,8 +57,11 @@ class FileStatus(str, enum.Enum):
 class File(CommonMixin, Base):
     __tablename__ = "files"
 
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    guest_session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("guest_sessions.id"), nullable=True
     )
     folder_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("folders.id"), nullable=True

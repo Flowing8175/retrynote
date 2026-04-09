@@ -35,6 +35,7 @@ from app.schemas.auth import (
     UserProfile,
     RefreshTokenRequest,
     DeleteAccountRequest,
+    ConvertGuestRequest,
 )
 from app.middleware.auth import (
     hash_password,
@@ -182,6 +183,110 @@ async def signup(
 
     return SignupResponse(
         user_id=user.id, username=user.username, created_at=user.created_at
+    )
+
+
+@router.post("/convert-guest", response_model=LoginResponse)
+@limiter.limit("5/minute")
+async def convert_guest(
+    request: Request, req: ConvertGuestRequest, db: AsyncSession = Depends(get_db)
+):
+    client_ip = _get_real_client_ip(request)
+
+    if not await verify_turnstile_token(req.turnstile_token, client_ip):
+        raise HTTPException(
+            status_code=400,
+            detail="보안 인증에 실패했습니다. 페이지를 새로고침하세요.",
+        )
+
+    if is_disposable_email(req.email):
+        raise HTTPException(
+            status_code=400,
+            detail="해당 이메일 도메인은 사용할 수 없습니다.",
+        )
+
+    existing = await db.execute(
+        select(User).where(
+            ((User.username == req.username) | (User.email == req.email)),
+            User.deleted_at.is_(None),
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="이미 가입되어 있는 계정입니다.")
+
+    from app.services.guest_session_service import GuestSessionService
+    from app.services.guest_conversion_service import GuestConversionService
+
+    guest = await GuestSessionService.get_guest_session(db, req.guest_session_id)
+    if not guest:
+        raise HTTPException(status_code=404, detail="게스트 세션을 찾을 수 없습니다.")
+    if guest.converted_user_id:
+        raise HTTPException(status_code=409, detail="이미 전환된 게스트 세션입니다.")
+
+    user = User(
+        username=req.username,
+        email=req.email,
+        password_hash=hash_password(req.password),
+        email_verified=False,
+        signup_ip=client_ip,
+    )
+    db.add(user)
+    try:
+        await db.flush()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="계정 생성에 실패했습니다.")
+
+    await GuestConversionService.convert_guest_to_user(db, guest.id, user.id)
+    await GuestSessionService.mark_converted(db, req.guest_session_id, user.id)
+
+    smtp_configured = bool(settings.smtp_host and settings.smtp_user)
+    verification_token: str | None = None
+    if smtp_configured:
+        verification_token = await _issue_verification_token(db, user)
+
+    await db.commit()
+    await db.refresh(user)
+
+    if smtp_configured and verification_token:
+        try:
+            await send_verification_email(user.email, verification_token)
+        except Exception:
+            logger.warning("Failed to send verification email to %s", user.email)
+
+    jti = str(uuid.uuid4())
+    access_token = create_access_token(user.id, user.role.value)
+    refresh_token_value = create_refresh_token(user.id, user.role.value, jti=jti)
+    db.add(
+        RefreshToken(
+            id=jti,
+            user_id=user.id,
+            expires_at=datetime.now(timezone.utc)
+            + timedelta(days=settings.refresh_token_expire_days),
+        )
+    )
+    await db.commit()
+
+    try:
+        await GuestConversionService.move_guest_files(db, guest.id, user.id)
+    except Exception:
+        logger.warning("Failed to move guest files for user %s", user.id)
+
+    return LoginResponse(
+        access_token=access_token,
+        refresh_token=refresh_token_value,
+        user=UserProfile(
+            id=user.id,
+            username=user.username,
+            email=user.email,
+            role=user.role.value,
+            tier=user.tier,
+            is_active=user.is_active,
+            email_verified=user.email_verified,
+            storage_used_bytes=user.storage_used_bytes,
+            storage_quota_bytes=user.storage_quota_bytes,
+            last_login_at=user.last_login_at,
+        ),
     )
 
 

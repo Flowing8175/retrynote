@@ -382,21 +382,24 @@ def _create_chunks(
 async def _recalculate_session_totals(
     db: AsyncSession,
     session_id: str,
-    user_id: str,
+    user_id: str | None = None,
+    guest_session_id: str | None = None,
 ) -> tuple[float, float]:
-    """Recompute total_score and max_score for a session from active AnswerLogs.
+    """Recompute total_score and max_score for a session from active AnswerLogs."""
+    conditions = [
+        AnswerLog.quiz_session_id == session_id,
+        AnswerLog.is_active_result.is_(True),
+    ]
+    if user_id:
+        conditions.append(AnswerLog.user_id == user_id)
+    elif guest_session_id:
+        conditions.append(AnswerLog.guest_session_id == guest_session_id)
 
-    Returns (total_score, max_score). Does NOT commit.
-    """
     score_agg = await db.execute(
         select(
             func.sum(AnswerLog.score_awarded),
             func.sum(AnswerLog.max_score),
-        ).where(
-            AnswerLog.quiz_session_id == session_id,
-            AnswerLog.user_id == user_id,
-            AnswerLog.is_active_result.is_(True),
-        )
+        ).where(*conditions)
     )
     row = score_agg.one()
     return float(row[0] or 0.0), float(row[1] or 0.0)
@@ -730,17 +733,18 @@ async def generate_quiz(job_id: str):
                 "essay",
             ]
 
-            recent_concepts_result = await db.execute(
-                select(QuizItem.concept_key)
-                .join(QuizSession, QuizSession.id == QuizItem.quiz_session_id)
-                .where(QuizSession.user_id == session.user_id)
-                .order_by(QuizItem.created_at.desc())
-                .limit(20)
-            )
-            recent_concepts = [r[0] for r in recent_concepts_result.all() if r[0]]
             concept_counts = {}
-            for c in recent_concepts:
-                concept_counts[c] = concept_counts.get(c, 0) + 1
+            if session.user_id:
+                recent_concepts_result = await db.execute(
+                    select(QuizItem.concept_key)
+                    .join(QuizSession, QuizSession.id == QuizItem.quiz_session_id)
+                    .where(QuizSession.user_id == session.user_id)
+                    .order_by(QuizItem.created_at.desc())
+                    .limit(20)
+                )
+                recent_concepts = [r[0] for r in recent_concepts_result.all() if r[0]]
+                for c in recent_concepts:
+                    concept_counts[c] = concept_counts.get(c, 0) + 1
 
             source_context = (
                 "\n\n".join(source_texts[:3])
@@ -907,11 +911,14 @@ async def grade_exam(job_id: str):
                 )
                 db.add(answer_log)
 
-                await _update_weak_point(db, session.user_id, item, grading.judgement)
+                if session.user_id:
+                    await _update_weak_point(
+                        db, session.user_id, item, grading.judgement
+                    )
 
             await db.flush()
             session.total_score, session.max_score = await _recalculate_session_totals(
-                db, session.id, session.user_id
+                db, session.id, user_id=session.user_id
             )
             session.graded_at = datetime.now(timezone.utc)
             session.status = QuizSessionStatus.graded

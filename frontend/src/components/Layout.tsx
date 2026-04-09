@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu, X, CreditCard } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu, X, CreditCard, HelpCircle } from 'lucide-react';
 import AnnouncementBanner from './AnnouncementBanner';
 import Navbar from './Navbar';
 import UsageBar from './UsageBar';
@@ -17,7 +17,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { path: '/', label: '대시보드', icon: <LayoutDashboard size={18} /> },
+  { path: '/dashboard', label: '대시보드', icon: <LayoutDashboard size={18} /> },
   { path: '/files', label: '자료 관리', icon: <FolderOpen size={18} /> },
   { path: '/quiz/new', label: '퀴즈 생성', icon: <CircleHelp size={18} /> },
   { path: '/quiz/history', label: '퀴즈 기록', icon: <History size={18} /> },
@@ -80,6 +80,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
                 <div className="p-4 border-b border-white/[0.05]">
                   <button
                     onClick={() => setSidebarExpanded(!sidebarExpanded)}
+                    aria-label={sidebarExpanded ? '사이드바 접기' : '사이드바 펼치기'}
                     className="flex w-full items-center justify-center bg-surface border border-white/[0.05] py-2.5 rounded-xl text-content-secondary hover:text-white hover:bg-surface-hover transition-colors"
                   >
                     <Menu size={18} />
@@ -106,6 +107,25 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
                     );
                   })}
                 </nav>
+                <div className="px-3 py-3 border-t border-white/[0.05]">
+                  <div className={`flex items-center gap-4 px-4 py-3 text-sm font-medium rounded-xl text-content-muted hover:text-white hover:bg-surface-hover transition-all cursor-default ${!sidebarExpanded ? 'justify-center' : ''}`}>
+                    <HelpCircle size={18} className="shrink-0" />
+                    {sidebarExpanded && (
+                      <div className="space-y-2">
+                        <span className="text-content-secondary text-xs font-medium">학습 흐름</span>
+                        <div className="flex items-center gap-1.5 text-[0.65rem] text-content-muted">
+                          <span>자료</span>
+                          <span className="text-content-muted/50">→</span>
+                          <span>퀴즈</span>
+                          <span className="text-content-muted/50">→</span>
+                          <span>오답</span>
+                          <span className="text-content-muted/50">→</span>
+                          <span className="text-brand-300">재도전</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <UsageBar expanded={sidebarExpanded} />
               </div>
             </aside>

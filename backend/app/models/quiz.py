@@ -69,8 +69,11 @@ class ErrorType(str, enum.Enum):
 class QuizSession(CommonMixin, Base):
     __tablename__ = "quiz_sessions"
 
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    guest_session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("guest_sessions.id"), nullable=True
     )
     mode: Mapped[QuizMode] = mapped_column(Enum(QuizMode), nullable=False)
     source_mode: Mapped[SourceMode] = mapped_column(Enum(SourceMode), nullable=False)
@@ -173,8 +176,11 @@ class AnswerLog(CommonMixin, Base):
     quiz_session_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("quiz_sessions.id"), nullable=False
     )
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id"), nullable=True
+    )
+    guest_session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("guest_sessions.id"), nullable=True
     )
     user_answer_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_answer_normalized: Mapped[str | None] = mapped_column(Text, nullable=True)

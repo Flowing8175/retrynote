@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -296,6 +298,7 @@ textarea:focus-visible,
   .animate-ring-reveal,
   .animate-answer-correct,
   .animate-answer-wrong,
+  .animate-progress-ring,
   .pill-shimmer-wave,
   .coaching-word-fade {
     animation: none;
@@ -375,6 +378,22 @@ textarea:focus-visible,
   border-color: oklch(0.65 0.15 175 / 0.3);
   box-shadow: 0 0 30px oklch(0.65 0.15 175 / 0.1);
   transform: translateY(-2px);
+}
+
+/* ── Quiz Results celebrations ── */
+
+@keyframes progress-ring {
+  from {
+    stroke-dasharray: 0 282.7;
+  }
+}
+
+.animate-progress-ring {
+  animation: progress-ring 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .mermaid-diagram svg {
