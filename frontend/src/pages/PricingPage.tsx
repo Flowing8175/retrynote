@@ -114,13 +114,23 @@ export default function PricingPage() {
     }
 
     if (tier === 'free') {
+      if (currentTier === null) {
+        return (
+          <Link
+            to="/signup"
+            className="block w-full rounded-xl border border-brand-500/60 py-2.5 text-center text-sm font-medium text-brand-400 transition-colors hover:bg-brand-500/10"
+          >
+            시작하기
+          </Link>
+        );
+      }
       return (
-        <Link
-          to="/signup"
-          className="block w-full rounded-xl border border-brand-500/60 py-2.5 text-center text-sm font-medium text-brand-400 transition-colors hover:bg-brand-500/10"
+        <button
+          disabled
+          className="w-full cursor-default rounded-xl border border-white/[0.07] py-2.5 text-sm font-medium text-content-muted"
         >
-          시작하기
-        </Link>
+          다운그레이드
+        </button>
       );
     }
 
