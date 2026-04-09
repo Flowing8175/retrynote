@@ -30,10 +30,29 @@ export default function MermaidDiagram({ code, className }: MermaidDiagramProps)
           mermaid.initialize({
             startOnLoad: false,
             securityLevel: 'loose',
-            theme: 'dark',
+            theme: 'base',
             darkMode: true,
             fontFamily: "'SUIT Variable', 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif",
             fontSize: 14,
+            themeVariables: {
+              darkMode: true,
+              background: 'transparent',
+              fontFamily: "'SUIT Variable', 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif",
+              primaryColor: '#1c3e3c',
+              primaryTextColor: '#dce1e6',
+              primaryBorderColor: '#2d9f8f',
+              secondaryColor: '#1c3040',
+              secondaryTextColor: '#dce1e6',
+              secondaryBorderColor: '#3a8595',
+              tertiaryColor: '#1c3830',
+              tertiaryTextColor: '#dce1e6',
+              tertiaryBorderColor: '#3a9a78',
+              lineColor: '#3a5858',
+              textColor: '#dce1e6',
+              mainBkg: '#1c3e3c',
+              nodeBorder: '#2d9f8f',
+              nodeTextColor: '#dce1e6',
+            },
           });
           mermaidInitialized = true;
         }

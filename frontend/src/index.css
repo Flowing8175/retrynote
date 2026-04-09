@@ -379,14 +379,139 @@ textarea:focus-visible,
 
 .mermaid-diagram svg {
   overflow: visible;
+  max-width: 100%;
+  height: auto;
 }
 
 .mermaid-diagram svg foreignObject {
   overflow: visible;
 }
 
-.mermaid-diagram svg foreignObject > div,
-.mermaid-diagram svg foreignObject > span {
-  overflow: visible;
-  white-space: nowrap;
+.mermaid-diagram .section-0 .node-bkg {
+  fill: oklch(0.26 0.08 175) !important;
+  stroke: oklch(0.54 0.14 175) !important;
+  stroke-width: 2px !important;
+}
+
+.mermaid-diagram .section-0 foreignObject > div,
+.mermaid-diagram .section-0 foreignObject > span {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  width: 100% !important;
+  height: 100% !important;
+  color: oklch(0.90 0.008 240) !important;
+  font-weight: 500 !important;
+}
+
+.mermaid-diagram .mindmap-node:not(.section-0) .node-bkg {
+  display: none !important;
+}
+
+.mermaid-diagram .mindmap-node:not(.section-0) foreignObject {
+  overflow: visible !important;
+}
+
+.mermaid-diagram .mindmap-node:not(.section-0) foreignObject > div,
+.mermaid-diagram .mindmap-node:not(.section-0) foreignObject > span {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  white-space: nowrap !important;
+  width: auto !important;
+  height: auto !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  padding: 6px 14px !important;
+  border-radius: 7px !important;
+  border-width: 1.5px !important;
+  border-style: solid !important;
+  color: oklch(0.90 0.008 240) !important;
+  font-weight: 450 !important;
+  letter-spacing: 0.01em;
+  box-sizing: border-box !important;
+}
+
+.mermaid-diagram .section-1 foreignObject > div,
+.mermaid-diagram .section-1 foreignObject > span {
+  background: oklch(0.22 0.06 250) !important;
+  border-color: oklch(0.50 0.11 250) !important;
+}
+
+.mermaid-diagram .section-2 foreignObject > div,
+.mermaid-diagram .section-2 foreignObject > span {
+  background: oklch(0.23 0.07 145) !important;
+  border-color: oklch(0.52 0.13 145) !important;
+}
+
+.mermaid-diagram .section-3 foreignObject > div,
+.mermaid-diagram .section-3 foreignObject > span {
+  background: oklch(0.24 0.07 75) !important;
+  border-color: oklch(0.55 0.13 75) !important;
+}
+
+.mermaid-diagram .section-4 foreignObject > div,
+.mermaid-diagram .section-4 foreignObject > span {
+  background: oklch(0.23 0.07 15) !important;
+  border-color: oklch(0.52 0.13 15) !important;
+}
+
+.mermaid-diagram .section-5 foreignObject > div,
+.mermaid-diagram .section-5 foreignObject > span {
+  background: oklch(0.22 0.06 300) !important;
+  border-color: oklch(0.50 0.11 300) !important;
+}
+
+.mermaid-diagram .section-6 foreignObject > div,
+.mermaid-diagram .section-6 foreignObject > span {
+  background: oklch(0.22 0.06 215) !important;
+  border-color: oklch(0.50 0.11 215) !important;
+}
+
+.mermaid-diagram .section-7 foreignObject > div,
+.mermaid-diagram .section-7 foreignObject > span {
+  background: oklch(0.23 0.06 110) !important;
+  border-color: oklch(0.52 0.12 110) !important;
+}
+
+.mermaid-diagram .edge.section-edge-color-0 {
+  stroke: oklch(0.40 0.08 175) !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-diagram .edge.section-edge-color-1 {
+  stroke: oklch(0.38 0.07 250) !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-diagram .edge.section-edge-color-2 {
+  stroke: oklch(0.38 0.07 145) !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-diagram .edge.section-edge-color-3 {
+  stroke: oklch(0.40 0.07 75) !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-diagram .edge.section-edge-color-4 {
+  stroke: oklch(0.38 0.07 15) !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-diagram .edge.section-edge-color-5 {
+  stroke: oklch(0.37 0.06 300) !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-diagram .edge.section-edge-color-6 {
+  stroke: oklch(0.37 0.06 215) !important;
+  stroke-width: 1.5px !important;
+}
+
+.mermaid-diagram .edge.section-edge-color-7 {
+  stroke: oklch(0.38 0.06 110) !important;
+  stroke-width: 1.5px !important;
 }
