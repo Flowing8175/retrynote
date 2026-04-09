@@ -21,21 +21,12 @@ function DashboardSkeleton() {
             <div className="skeleton h-5 w-96 max-w-full rounded-md" />
           </div>
           {/* Metrics */}
-          <div className="flex items-start gap-4 sm:gap-8 pt-2">
+          <div className="pt-2 space-y-3">
             <div className="space-y-2">
-              <div className="skeleton h-8 sm:h-12 w-16 sm:w-20 rounded-md" />
-              <div className="skeleton h-3 w-16 rounded-md" />
+              <div className="skeleton h-12 sm:h-20 w-24 sm:w-36 rounded-md" />
+              <div className="skeleton h-3 w-20 rounded-md" />
             </div>
-            <div className="w-px self-stretch bg-white/[0.08]" />
-            <div className="space-y-2">
-              <div className="skeleton h-8 sm:h-12 w-16 sm:w-24 rounded-md" />
-              <div className="skeleton h-3 w-12 rounded-md" />
-            </div>
-            <div className="w-px self-stretch bg-white/[0.08]" />
-            <div className="space-y-2">
-              <div className="skeleton h-8 sm:h-12 w-16 sm:w-24 rounded-md" />
-              <div className="skeleton h-3 w-12 rounded-md" />
-            </div>
+            <div className="skeleton h-4 w-48 rounded-md" />
           </div>
         </div>
         {/* Primary action card */}
@@ -180,29 +171,28 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
-          <Link
-            to="/files"
-            className="group relative overflow-hidden rounded-xl bg-surface p-10 transition-all hover:bg-surface-hover border border-white/[0.05]"
-          >
-            <div className="relative z-10">
-              <div className="mb-4 text-xs font-semibold uppercase tracking-widest text-brand-300">시작하기</div>
-              <h2 className="text-2xl font-semibold text-white">자료 올리기</h2>
-              <p className="mt-3 text-sm leading-relaxed text-content-secondary">PDF나 문서 파일을 분석하여 학습 맵을 구성합니다.</p>
+        <div className="space-y-6">
+          <Link to="/files" className="group flex items-start gap-5 rounded-xl bg-surface p-6 border border-white/[0.05] hover:bg-surface-hover transition-colors">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 text-sm font-bold">1</div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">자료 업로드</h2>
+              <p className="mt-1 text-sm text-content-secondary">PDF, Word, 이미지 등 학습 자료를 올려주세요.</p>
             </div>
           </Link>
-
-          <button
-            type="button"
-            onClick={handleStartQuiz}
-            className="group relative overflow-hidden rounded-xl bg-brand-500/10 p-10 text-left transition-all hover:bg-brand-500/15 border border-brand-500/20"
-          >
-            <div className="relative z-10">
-              <div className="mb-4 text-xs font-semibold uppercase tracking-widest text-brand-300">바로 시작</div>
-              <h2 className="text-2xl font-semibold text-white">퀴즈 시작</h2>
-              <p className="mt-3 text-sm leading-relaxed text-content-secondary">자료 없이도 AI와 함께 바로 학습을 시작할 수 있습니다.</p>
+          <button type="button" onClick={handleStartQuiz} className="group w-full flex items-start gap-5 rounded-xl bg-surface p-6 border border-white/[0.05] hover:bg-surface-hover transition-colors text-left">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 text-sm font-bold">2</div>
+            <div>
+              <h2 className="text-lg font-semibold text-white">퀴즈 생성</h2>
+              <p className="mt-1 text-sm text-content-secondary">AI가 자료를 분석해 핵심 문제를 만들어줍니다.</p>
             </div>
           </button>
+          <div className="flex items-start gap-5 rounded-xl bg-surface-deep/50 p-6 border border-white/[0.05] opacity-60">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-content-muted text-sm font-bold">3</div>
+            <div>
+              <h2 className="text-lg font-semibold text-content-muted">오답 분석 & 재도전</h2>
+              <p className="mt-1 text-sm text-content-muted">틀린 문제를 복습하고 약점을 보완하세요.</p>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -245,27 +235,17 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* Editorial metrics — pure typography, no cards */}
-          <div className="flex items-start pt-2">
-            <div className="pr-4 sm:pr-8">
-              <div className="text-3xl sm:text-5xl font-semibold tabular-nums text-content-primary leading-none">
-                {dashboardData.learning_volume}
-              </div>
-              <div className="mt-2 text-xs font-medium uppercase tracking-widest text-content-muted">학습량 · 문제</div>
-            </div>
-            <div className="w-px self-stretch bg-white/[0.08]" />
-            <div className="px-4 sm:px-8">
-              <div className="text-3xl sm:text-5xl font-semibold tabular-nums text-brand-300 leading-none">
+          <div className="pt-2 space-y-3">
+            <div>
+              <div className="text-5xl sm:text-7xl font-semibold tabular-nums text-brand-300 leading-none">
                 {formatPercent(dashboardData.overall_accuracy)}
               </div>
-              <div className="mt-2 text-xs font-medium uppercase tracking-widest text-content-muted">정답률</div>
+              <div className="mt-2 text-xs font-medium uppercase tracking-widest text-content-muted">전체 정답률</div>
             </div>
-            <div className="w-px self-stretch bg-white/[0.08]" />
-            <div className="pl-4 sm:pl-8">
-              <div className="text-3xl sm:text-5xl font-semibold tabular-nums text-content-primary leading-none">
-                {formatPercent(dashboardData.score_rate)}
-              </div>
-              <div className="mt-2 text-xs font-medium uppercase tracking-widest text-content-muted">점수율</div>
+            <div className="flex items-center gap-3 text-sm text-content-muted">
+              <span>{dashboardData.learning_volume}문제 학습</span>
+              <span>·</span>
+              <span>점수율 {formatPercent(dashboardData.score_rate)}</span>
             </div>
           </div>
         </div>
