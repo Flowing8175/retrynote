@@ -157,6 +157,81 @@ async def cancel_subscription(
     return {"status": "cancellation_scheduled"}
 
 
+async def _handle_subscription_created_or_activated(
+    db: AsyncSession, data: dict
+) -> None:
+    custom_data = data.get("custom_data") or {}
+    user_id = custom_data.get("user_id")
+    sub_status = data.get("status", "")
+
+    if user_id and sub_status in ("active", "trialing"):
+        await subscription_svc.provision_tier(
+            db=db,
+            user_id=user_id,
+            tier=custom_data.get("plan", "learner"),
+            billing_cycle=custom_data.get("billing_cycle", "monthly"),
+            paddle_subscription_id=data["id"],
+            paddle_customer_id=data["customer_id"],
+            current_period_end=parse_paddle_datetime(data.get("next_billed_at")),
+        )
+
+
+async def _handle_subscription_updated(db: AsyncSession, data: dict) -> None:
+    sub_id = data.get("id")
+    if not sub_id:
+        return
+    sub_result = await db.execute(
+        select(Subscription).where(Subscription.paddle_subscription_id == sub_id)
+    )
+    sub = sub_result.scalar_one_or_none()
+    if not sub:
+        return
+    _VALID_SUB_STATUSES = {"active", "past_due", "canceled", "paused", "trialing"}
+    new_status = data.get("status")
+    if new_status in _VALID_SUB_STATUSES:
+        sub.status = new_status
+    period_end = parse_paddle_datetime(data.get("next_billed_at"))
+    if period_end:
+        sub.current_period_end = period_end
+    await db.commit()
+
+
+async def _handle_subscription_canceled(db: AsyncSession, data: dict) -> None:
+    customer_id = data.get("customer_id")
+    if not customer_id:
+        return
+    user_result = await db.execute(
+        select(User).where(User.paddle_customer_id == customer_id)
+    )
+    db_user = user_result.scalar_one_or_none()
+    if db_user:
+        await subscription_svc.cancel_or_downgrade(db, db_user.id)
+
+
+async def _handle_transaction_completed(db: AsyncSession, data: dict) -> None:
+    subscription_id = data.get("subscription_id")
+    custom_data = data.get("custom_data") or {}
+    user_id = custom_data.get("user_id")
+
+    if subscription_id or not user_id or not custom_data.get("credit_type"):
+        return
+    storage_bytes = int(custom_data.get("storage_bytes", 0))
+    if storage_bytes not in VALID_STORAGE_CREDIT_BYTES:
+        logger.error(
+            "Webhook: unexpected storage_bytes value %d for transaction %s",
+            storage_bytes,
+            data.get("id"),
+        )
+        storage_bytes = 0
+    await credit_svc.add_credits(
+        db=db,
+        user_id=user_id,
+        storage_bytes=storage_bytes,
+        ai_count=int(custom_data.get("ai_count", 0)),
+        paddle_transaction_id=data.get("id"),
+    )
+
+
 @router.post("/webhook/paddle", include_in_schema=False)
 async def paddle_webhook(
     request: Request,
@@ -184,81 +259,18 @@ async def paddle_webhook(
         if existing.scalar_one_or_none():
             return {"status": "already_processed"}
 
+    _WEBHOOK_HANDLERS = {
+        "subscription.created": _handle_subscription_created_or_activated,
+        "subscription.activated": _handle_subscription_created_or_activated,
+        "subscription.updated": _handle_subscription_updated,
+        "subscription.canceled": _handle_subscription_canceled,
+        "transaction.completed": _handle_transaction_completed,
+    }
+
     try:
-        if event_type in ("subscription.created", "subscription.activated"):
-            custom_data = data.get("custom_data") or {}
-            user_id = custom_data.get("user_id")
-            sub_status = data.get("status", "")
-
-            if user_id and sub_status in ("active", "trialing"):
-                await subscription_svc.provision_tier(
-                    db=db,
-                    user_id=user_id,
-                    tier=custom_data.get("plan", "learner"),
-                    billing_cycle=custom_data.get("billing_cycle", "monthly"),
-                    paddle_subscription_id=data["id"],
-                    paddle_customer_id=data["customer_id"],
-                    current_period_end=parse_paddle_datetime(
-                        data.get("next_billed_at")
-                    ),
-                )
-
-        elif event_type == "subscription.updated":
-            sub_id = data.get("id")
-            if sub_id:
-                sub_result = await db.execute(
-                    select(Subscription).where(
-                        Subscription.paddle_subscription_id == sub_id
-                    )
-                )
-                sub = sub_result.scalar_one_or_none()
-                if sub:
-                    _VALID_SUB_STATUSES = {
-                        "active",
-                        "past_due",
-                        "canceled",
-                        "paused",
-                        "trialing",
-                    }
-                    new_status = data.get("status")
-                    if new_status in _VALID_SUB_STATUSES:
-                        sub.status = new_status
-                    period_end = parse_paddle_datetime(data.get("next_billed_at"))
-                    if period_end:
-                        sub.current_period_end = period_end
-                    await db.commit()
-
-        elif event_type == "subscription.canceled":
-            customer_id = data.get("customer_id")
-            if customer_id:
-                user_result = await db.execute(
-                    select(User).where(User.paddle_customer_id == customer_id)
-                )
-                db_user = user_result.scalar_one_or_none()
-                if db_user:
-                    await subscription_svc.cancel_or_downgrade(db, db_user.id)
-
-        elif event_type == "transaction.completed":
-            subscription_id = data.get("subscription_id")
-            custom_data = data.get("custom_data") or {}
-            user_id = custom_data.get("user_id")
-
-            if not subscription_id and user_id and custom_data.get("credit_type"):
-                storage_bytes = int(custom_data.get("storage_bytes", 0))
-                if storage_bytes not in VALID_STORAGE_CREDIT_BYTES:
-                    logger.error(
-                        "Webhook: unexpected storage_bytes value %d for transaction %s",
-                        storage_bytes,
-                        data.get("id"),
-                    )
-                    storage_bytes = 0
-                await credit_svc.add_credits(
-                    db=db,
-                    user_id=user_id,
-                    storage_bytes=storage_bytes,
-                    ai_count=int(custom_data.get("ai_count", 0)),
-                    paddle_transaction_id=data.get("id"),
-                )
+        handler = _WEBHOOK_HANDLERS.get(event_type)
+        if handler:
+            await handler(db, data)
 
         if notification_id:
             db.add(WebhookEvent(event_id=notification_id, event_type=event_type))

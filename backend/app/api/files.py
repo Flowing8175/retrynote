@@ -21,7 +21,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.config import settings
+from app.config import settings, Settings
 from app.models.file import File, FileSourceType, FileStatus, Folder
 from app.models.user import User
 from app.models.search import Job
@@ -84,49 +84,26 @@ async def get_owned_folder(folder_id: str, db: AsyncSession, user: User) -> Fold
     return folder
 
 
-@router.post("", response_model=FileUploadResponse)
-async def upload_file(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    file: UploadFile | None = FastAPIFile(default=None),
-    manual_text: str | None = Form(default=None),
-    source_url: str | None = Form(default=None),
-    folder_id: str | None = Form(default=None),
-    db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
-    _rate_limit: None = Depends(pro_rate_limit),
-):
-    effective_user, _ = await get_impersonation_context(request, user, db)
+async def _read_and_validate_upload(
+    file: UploadFile | None,
+    manual_text: str | None,
+    source_url: str | None,
+    settings_ref: Settings,
+) -> tuple[bytes | None, str | None, str | None, FileSourceType, str | None, int]:
+    """Read and validate the upload input.
 
-    if folder_id:
-        folder_check = await db.execute(
-            select(Folder).where(
-                Folder.id == folder_id,
-                Folder.user_id == effective_user.id,
-            )
-        )
-        if not folder_check.scalar_one_or_none():
-            raise HTTPException(status_code=403, detail="Folder not accessible")
-
-    source_type = FileSourceType.upload
-    original_filename = None
-    stored_path = None
-    file_size = 0
-    file_type = None
-    content_hash = None
-    content = None
-
+    Returns: (content_bytes, original_filename, file_type, source_type, content_hash, file_size)
+    Raises HTTPException on validation failure.
+    """
     if file:
-        source_type = FileSourceType.upload
         original_filename = file.filename
         ext = os.path.splitext(file.filename or "")[1].lstrip(".").lower()
         file_type = ext
 
-        if ext not in settings.allowed_file_types.split(","):
+        if ext not in settings_ref.allowed_file_types.split(","):
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
-        # Check size incrementally
-        max_size = settings.max_upload_size_mb * 1024 * 1024
+        max_size = settings_ref.max_upload_size_mb * 1024 * 1024
         chunks = []
         total_size = 0
         while True:
@@ -137,13 +114,11 @@ async def upload_file(
             if total_size > max_size:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"File too large. Maximum size is {settings.max_upload_size_mb}MB.",
+                    detail=f"File too large. Maximum size is {settings_ref.max_upload_size_mb}MB.",
                 )
             chunks.append(chunk)
         content = b"".join(chunks)
-        file_size = total_size
 
-        # Validate MIME type matches extension
         detected_mime = magic.from_buffer(content[:2048], mime=True)
         allowed_mimes = {
             "pdf": ["application/pdf"],
@@ -168,7 +143,106 @@ async def upload_file(
             )
 
         content_hash = hashlib.sha256(content).hexdigest()
+        return (
+            content,
+            original_filename,
+            ext,
+            FileSourceType.upload,
+            content_hash,
+            total_size,
+        )
 
+    elif manual_text:
+        return (
+            None,
+            None,
+            "txt",
+            FileSourceType.manual_text,
+            None,
+            len(manual_text.encode("utf-8")),
+        )
+
+    elif source_url:
+        return None, None, "url", FileSourceType.url, None, 0
+
+    raise HTTPException(
+        status_code=400, detail="Must provide file, manual_text, or source_url"
+    )
+
+
+async def _check_storage_quota(
+    db: AsyncSession,
+    user: User,
+    file_size: int,
+) -> None:
+    """Check user storage quota. Raises HTTPException(402) if exceeded."""
+    if file_size <= 0:
+        return
+    from app.schemas.billing import LimitExceededError
+    from app.tier_config import TIER_LIMITS, UserTier
+    from app.models.billing import CreditBalance
+    from app.services.usage_service import UsageService
+
+    _tier = UserTier(user.tier)
+    _limits = TIER_LIMITS[_tier]
+
+    _credit_result = await db.execute(
+        select(CreditBalance).where(CreditBalance.user_id == user.id)
+    )
+    _credits = _credit_result.scalar_one_or_none()
+    _credit_storage = _credits.storage_credits_bytes if _credits else 0
+    _total_quota = _limits.storage_bytes + _credit_storage
+
+    _allowed, _, _ = await UsageService().check_and_consume(
+        db, user, "storage", file_size
+    )
+    if not _allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="저장 공간이 부족합니다. 요금제를 업그레이드하거나 저장 공간 크레딧을 구매하세요.",
+                limit_type="storage",
+                current_usage=user.storage_used_bytes,
+                limit=_total_quota,
+                upgrade_url="/pricing",
+            ).model_dump(),
+        )
+
+
+@router.post("", response_model=FileUploadResponse)
+async def upload_file(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    file: UploadFile | None = FastAPIFile(default=None),
+    manual_text: str | None = Form(default=None),
+    source_url: str | None = Form(default=None),
+    folder_id: str | None = Form(default=None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+    _rate_limit: None = Depends(pro_rate_limit),
+):
+    effective_user, _ = await get_impersonation_context(request, user, db)
+
+    if folder_id:
+        folder_check = await db.execute(
+            select(Folder).where(
+                Folder.id == folder_id,
+                Folder.user_id == effective_user.id,
+            )
+        )
+        if not folder_check.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Folder not accessible")
+
+    (
+        content,
+        original_filename,
+        file_type,
+        source_type,
+        content_hash,
+        file_size,
+    ) = await _read_and_validate_upload(file, manual_text, source_url, settings)
+
+    if content is not None and content_hash:
         duplicate_result = await db.execute(
             select(File).where(
                 File.user_id == effective_user.id,
@@ -184,58 +258,17 @@ async def upload_file(
                 detail=f"동일한 파일이 이미 존재합니다: '{name}'",
             )
 
+    await _check_storage_quota(db, effective_user, file_size)
+
+    stored_path = None
+    if content is not None and original_filename:
+        ext = file_type or ""
         stored_path = f"{effective_user.id}/{uuid.uuid4().hex}.{ext}"
-
-    elif manual_text:
-        source_type = FileSourceType.manual_text
-        file_size = len(manual_text.encode("utf-8"))
-        file_type = "txt"
-    elif source_url:
-        source_type = FileSourceType.url
-        file_type = "url"
-    else:
-        raise HTTPException(
-            status_code=400, detail="Must provide file, manual_text, or source_url"
-        )
-
-    from app.schemas.billing import LimitExceededError
-    from app.tier_config import TIER_LIMITS, UserTier
-    from app.models.billing import CreditBalance
-    from app.services.usage_service import UsageService
-
-    if file_size > 0:
-        _tier = UserTier(effective_user.tier)
-        _limits = TIER_LIMITS[_tier]
-
-        _credit_result = await db.execute(
-            select(CreditBalance).where(CreditBalance.user_id == effective_user.id)
-        )
-        _credits = _credit_result.scalar_one_or_none()
-        _credit_storage = _credits.storage_credits_bytes if _credits else 0
-        _total_quota = _limits.storage_bytes + _credit_storage
-
-        _allowed, _, _ = await UsageService().check_and_consume(
-            db, effective_user, "storage", file_size
-        )
-        if not _allowed:
-            raise HTTPException(
-                status_code=402,
-                detail=LimitExceededError(
-                    detail="저장 공간이 부족합니다. 요금제를 업그레이드하거나 저장 공간 크레딧을 구매하세요.",
-                    limit_type="storage",
-                    current_usage=effective_user.storage_used_bytes,
-                    limit=_total_quota,
-                    upgrade_url="/pricing",
-                ).model_dump(),
-            )
-
-    if stored_path is not None and content is not None:
         from app.services import storage as _storage
         import mimetypes as _mimetypes
 
         _mime = (
-            _mimetypes.guess_type(original_filename or "")[0]
-            or "application/octet-stream"
+            _mimetypes.guess_type(original_filename)[0] or "application/octet-stream"
         )
         await _storage.upload_file(stored_path, content, _mime)
 
@@ -263,7 +296,6 @@ async def upload_file(
         payload_json={"manual_text": manual_text} if manual_text else {},
     )
     db.add(job)
-
     await db.commit()
     await db.refresh(file_record)
 
@@ -484,7 +516,6 @@ async def delete_file(
     )
     db.add(job)
     await db.commit()
-
 
     background_tasks.add_task(dispatch_task, "file_cleanup", [job.id])
 

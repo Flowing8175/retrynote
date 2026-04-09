@@ -42,6 +42,74 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+async def _handle_existing_user_conflict(
+    db: AsyncSession,
+    existing_user: "User",
+    req: "SignupRequest",
+) -> None:
+    """Handle signup when a user with the same email or username already exists.
+
+    - Unverified + matching email + active token → raise 409 (check email).
+    - Unverified + matching email + expired tokens → delete old account, fall through.
+    - Otherwise → raise 409.
+    """
+    if not existing_user.email_verified and existing_user.email == req.email:
+        active_token_result = await db.execute(
+            select(EmailVerificationToken).where(
+                EmailVerificationToken.user_id == existing_user.id,
+                EmailVerificationToken.expires_at > datetime.now(timezone.utc),
+                EmailVerificationToken.used_at.is_(None),
+            )
+        )
+        if active_token_result.scalars().first():
+            raise HTTPException(
+                status_code=409,
+                detail="인증 대기중입니다. 이메일을 확인해 주세요.",
+            )
+        else:
+            try:
+                await db.execute(
+                    delete(EmailVerificationToken).where(
+                        EmailVerificationToken.user_id == existing_user.id
+                    )
+                )
+                await db.delete(existing_user)
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise HTTPException(
+                    status_code=409,
+                    detail="이미 가입되어 있는 계정입니다. 다시 시도해주세요.",
+                )
+        return  # fall through to create new user
+
+    if existing_user.email == req.email:
+        raise HTTPException(
+            status_code=409,
+            detail="이미 가입되어 있는 이메일입니다.",
+        )
+    raise HTTPException(
+        status_code=409,
+        detail="이미 사용 중인 사용자 이름입니다.",
+    )
+
+
+async def _issue_verification_token(db: AsyncSession, user: "User") -> str:
+    """Create and persist an email verification token. Returns the raw token string."""
+    token = secrets.token_urlsafe(32)
+    selector = token[:16]
+    verifier = token[16:]
+    verifier_hash = hash_password(verifier)
+    verification_token = EmailVerificationToken(
+        user_id=user.id,
+        selector=selector,
+        token_hash=verifier_hash,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
+    )
+    db.add(verification_token)
+    return token
+
+
 @router.post("/signup", response_model=SignupResponse)
 @limiter.limit("5/minute")
 async def signup(
@@ -69,51 +137,8 @@ async def signup(
     )
     existing_user = existing.scalar_one_or_none()
     if existing_user:
-        # Case 1: Unverified user with matching email — check if verification is still pending
-        if not existing_user.email_verified and existing_user.email == req.email:
-            active_token_result = await db.execute(
-                select(EmailVerificationToken).where(
-                    EmailVerificationToken.user_id == existing_user.id,
-                    EmailVerificationToken.expires_at > datetime.now(timezone.utc),
-                    EmailVerificationToken.used_at.is_(None),
-                )
-            )
-            if active_token_result.scalars().first():
-                # Active verification token exists — tell user to check email
-                raise HTTPException(
-                    status_code=409,
-                    detail="인증 대기중입니다. 이메일을 확인해 주세요.",
-                )
-            else:
-                # All tokens expired/used — delete old account and continue with fresh signup
-                try:
-                    await db.execute(
-                        delete(EmailVerificationToken).where(
-                            EmailVerificationToken.user_id == existing_user.id
-                        )
-                    )
-                    await db.delete(existing_user)
-                    await db.commit()
-                except Exception:
-                    await db.rollback()
-                    # Concurrent modification — treat as duplicate
-                    raise HTTPException(
-                        status_code=409,
-                        detail="이미 가입되어 있는 계정입니다. 다시 시도해주세요.",
-                    )
-                # Fall through to create new user below
-        else:
-            if existing_user.email == req.email:
-                raise HTTPException(
-                    status_code=409,
-                    detail="이미 가입되어 있는 이메일입니다.",
-                )
-            raise HTTPException(
-                status_code=409,
-                detail="이미 사용 중인 사용자 이름입니다.",
-            )
+        await _handle_existing_user_conflict(db, existing_user, req)
 
-    # Auto-verify when SMTP is not configured (local development)
     smtp_configured = bool(settings.smtp_host and settings.smtp_user)
 
     user = User(
@@ -133,23 +158,14 @@ async def signup(
             detail="이미 가입되어 있는 계정입니다. 다시 시도해주세요.",
         )
 
+    token: str | None = None
     if smtp_configured:
-        token = secrets.token_urlsafe(32)
-        selector = token[:16]
-        verifier = token[16:]
-        verifier_hash = hash_password(verifier)
-        verification_token = EmailVerificationToken(
-            user_id=user.id,
-            selector=selector,
-            token_hash=verifier_hash,
-            expires_at=datetime.now(timezone.utc) + timedelta(hours=24),
-        )
-        db.add(verification_token)
+        token = await _issue_verification_token(db, user)
 
     await db.commit()
     await db.refresh(user)
 
-    if smtp_configured:
+    if smtp_configured and token:
         try:
             await send_verification_email(user.email, token)
         except Exception:

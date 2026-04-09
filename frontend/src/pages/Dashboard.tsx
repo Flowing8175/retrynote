@@ -5,6 +5,7 @@ import { dashboardApi } from '@/api';
 import CoachingDisplay from '@/components/CoachingDisplay';
 import DiagramModal from '@/components/DiagramModal';
 import type { DashboardResponse, RetryLocationState } from '@/types';
+import { formatPercent, formatQuestionType, formatDateTime } from '@/utils/formatters';
 
 function DashboardSkeleton() {
   return (
@@ -76,39 +77,7 @@ function DashboardSkeleton() {
   );
 }
 
-function formatPercent(value: number) {
-  return `${(value * 100).toFixed(1)}%`;
-}
 
-function formatQuestionType(type: string) {
-  switch (type) {
-    case 'multiple_choice':
-      return '객관식';
-    case 'ox':
-      return 'OX';
-    case 'short_answer':
-      return '단답형';
-    case 'fill_blank':
-      return '빈칸형';
-    case 'essay':
-      return '서술형';
-    default:
-      return type;
-  }
-}
-
-function formatDateTime(value: string | null) {
-  if (!value) {
-    return '기록 시각 없음';
-  }
-
-  return new Intl.DateTimeFormat('ko-KR', {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
-}
 
 function getFallbackCoachingMessage(dashboardData: DashboardResponse) {
   if (dashboardData.retry_recommendations.length > 0) {

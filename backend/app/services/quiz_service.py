@@ -1,4 +1,5 @@
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,6 +31,9 @@ from app.prompts.retry_generation import (
     SYSTEM_PROMPT_RETRY_GENERATION,
     build_batch_retry_prompt,
 )
+from app.utils.ai_client import call_ai_with_fallback, OBJECTION_REVIEW_SCHEMA
+from app.config import settings as cfg
+import json as json_mod
 
 
 async def process_file(job_id: str):
@@ -375,6 +379,174 @@ def _create_chunks(
     return chunks
 
 
+async def _recalculate_session_totals(
+    db: AsyncSession,
+    session_id: str,
+    user_id: str,
+) -> tuple[float, float]:
+    """Recompute total_score and max_score for a session from active AnswerLogs.
+
+    Returns (total_score, max_score). Does NOT commit.
+    """
+    score_agg = await db.execute(
+        select(
+            func.sum(AnswerLog.score_awarded),
+            func.sum(AnswerLog.max_score),
+        ).where(
+            AnswerLog.quiz_session_id == session_id,
+            AnswerLog.user_id == user_id,
+            AnswerLog.is_active_result.is_(True),
+        )
+    )
+    row = score_agg.one()
+    return float(row[0] or 0.0), float(row[1] or 0.0)
+
+
+@dataclass
+class GradingResult:
+    judgement: Judgement
+    score_awarded: float
+    max_score: float = 1.0
+    grading_confidence: float = 1.0
+    grading_rationale: str = ""
+    error_type: "ErrorType | None" = None
+    missing_points: "list | None" = None
+    suggested_feedback: str = ""
+
+
+async def _grade_single_answer(
+    *,
+    item: "QuizItem",
+    user_answer: str,
+    model_name: "str | None" = None,
+    include_essay: bool = False,
+) -> GradingResult:
+    """Grade a single answer against a quiz item. Pure logic, no DB side-effects.
+
+    - MC/OX: exact match against normalized correct answer.
+    - short_answer/fill_blank: exact match first, AI fallback.
+    - essay (only when include_essay=True): AI grading with essay prompt.
+
+    Uses SYSTEM_PROMPT_GRADING_SHORT for short/fill_blank AI fallback.
+    Uses SYSTEM_PROMPT_GRADING_ESSAY for essay.
+    """
+    from app.utils.ai_client import call_ai_with_fallback, GRADING_SCHEMA
+    from app.config import settings as cfg
+    from app.prompts.grading_short import SYSTEM_PROMPT_GRADING_SHORT
+    import json as json_mod
+
+    raw_correct = item.correct_answer_json
+    if isinstance(raw_correct, dict):
+        correct_answer = raw_correct
+    elif isinstance(raw_correct, str):
+        correct_answer = {"answer": raw_correct}
+    else:
+        correct_answer = {}
+
+    normalized = normalize_answer(user_answer)
+    primary = model_name or cfg.balanced_generation_model
+    fallback = cfg.eco_generation_model
+
+    # --- MC / OX: exact match ---
+    if item.question_type in (QuestionType.multiple_choice, QuestionType.ox):
+        correct_val = normalize_answer(str(correct_answer.get("answer", "")))
+        if normalized == correct_val:
+            return GradingResult(
+                judgement=Judgement.correct,
+                score_awarded=1.0,
+                error_type=None,
+            )
+        return GradingResult(
+            judgement=Judgement.incorrect,
+            score_awarded=0.0,
+            error_type=ErrorType.careless_mistake,
+        )
+
+    # --- short_answer / fill_blank: try exact match, then AI ---
+    if item.question_type in (QuestionType.short_answer, QuestionType.fill_blank):
+        accepted = correct_answer.get(
+            "accepted_answers", [correct_answer.get("answer", "")]
+        )
+        for ans in accepted:
+            if normalize_answer(str(ans)) == normalized:
+                return GradingResult(judgement=Judgement.correct, score_awarded=1.0)
+        # AI fallback
+        try:
+            prompt = (
+                f"채점할 답안:\n"
+                f"문제: {item.question_text}\n"
+                f"정답: {json_mod.dumps(correct_answer, ensure_ascii=False)}\n"
+                f"사용자 답: {user_answer}\n"
+                f"정규화된 답: {normalized}\n\n"
+                f"다음 필드를 포함한 JSON으로 응답하세요:\n"
+                f"judgement, score_awarded, max_score, normalized_user_answer, "
+                f"accepted_answers, grading_confidence, grading_rationale, "
+                f"missing_points, error_type, suggested_feedback"
+            )
+            ai = await call_ai_with_fallback(
+                prompt,
+                GRADING_SCHEMA,
+                primary_model=primary,
+                fallback_model=fallback,
+                system_message=SYSTEM_PROMPT_GRADING_SHORT,
+            )
+            return GradingResult(
+                judgement=Judgement(ai["judgement"]),
+                score_awarded=ai["score_awarded"],
+                max_score=ai.get("max_score", 1.0),
+                grading_confidence=ai.get("grading_confidence", 0.7),
+                grading_rationale=ai.get("grading_rationale", ""),
+                error_type=ErrorType(ai["error_type"])
+                if ai.get("error_type")
+                else None,
+                missing_points=ai.get("missing_points"),
+                suggested_feedback=ai.get("suggested_feedback", ""),
+            )
+        except Exception:
+            return GradingResult(judgement=Judgement.incorrect, score_awarded=0.0)
+
+    # --- essay: AI grading (only if include_essay=True) ---
+    if item.question_type == QuestionType.essay and include_essay:
+        try:
+            from app.prompts.grading_essay import SYSTEM_PROMPT_GRADING_ESSAY
+
+            prompt = (
+                f"채점할 서술형 답안:\n"
+                f"문제: {item.question_text}\n"
+                f"모범 답안: {json_mod.dumps(correct_answer, ensure_ascii=False)}\n"
+                f"사용자 답: {user_answer}\n"
+                f"출처 참조: {json_mod.dumps(item.source_refs_json or {}, ensure_ascii=False)}\n\n"
+                f"다음 필드를 포함한 JSON으로 응답하세요:\n"
+                f"judgement, score_awarded, max_score, normalized_user_answer, "
+                f"accepted_answers, grading_confidence, grading_rationale, "
+                f"missing_points, error_type, suggested_feedback"
+            )
+            ai = await call_ai_with_fallback(
+                prompt,
+                GRADING_SCHEMA,
+                primary_model=primary,
+                fallback_model=fallback,
+                system_message=SYSTEM_PROMPT_GRADING_ESSAY,
+            )
+            return GradingResult(
+                judgement=Judgement(ai["judgement"]),
+                score_awarded=ai["score_awarded"],
+                max_score=ai.get("max_score", 1.0),
+                grading_confidence=ai.get("grading_confidence", 0.7),
+                grading_rationale=ai.get("grading_rationale", ""),
+                error_type=ErrorType(ai["error_type"])
+                if ai.get("error_type")
+                else None,
+                missing_points=ai.get("missing_points"),
+                suggested_feedback=ai.get("suggested_feedback", ""),
+            )
+        except Exception:
+            return GradingResult(judgement=Judgement.incorrect, score_awarded=0.0)
+
+    # Fallback for unhandled types
+    return GradingResult(judgement=Judgement.incorrect, score_awarded=0.0)
+
+
 async def generate_quiz(job_id: str):
     async with async_session() as db:
         job_result = await db.execute(select(Job).where(Job.id == job_id))
@@ -682,9 +854,6 @@ async def grade_exam(job_id: str):
             )
             items = items_result.scalars().all()
 
-            total_score = 0.0
-            max_score = 0.0
-
             for item in items:
                 draft_result = await db.execute(
                     select(DraftAnswer).where(
@@ -694,73 +863,21 @@ async def grade_exam(job_id: str):
                     )
                 )
                 draft = draft_result.scalar_one_or_none()
-
                 user_answer = draft.user_answer if draft else ""
-                normalized = normalize_answer(user_answer) if user_answer else ""
+
                 if not user_answer:
-                    judgement = Judgement.skipped
-                    score_awarded = 0.0
-                    error_type = ErrorType.no_response
-                else:
-                    from app.utils.ai_client import (
-                        call_ai_with_fallback,
-                        GRADING_SCHEMA,
+                    grading = GradingResult(
+                        judgement=Judgement.skipped,
+                        score_awarded=0.0,
+                        error_type=ErrorType.no_response,
                     )
-                    from app.config import settings as cfg
-
-                    if item.question_type in (
-                        QuestionType.multiple_choice,
-                        QuestionType.ox,
-                    ):
-                        correct = item.correct_answer_json or {}
-                        correct_val = normalize_answer(str(correct.get("answer", "")))
-                        if normalized == correct_val:
-                            judgement = Judgement.correct
-                            score_awarded = 1.0
-                            error_type = None
-                        else:
-                            judgement = Judgement.incorrect
-                            score_awarded = 0.0
-                            error_type = ErrorType.careless_mistake
-                    else:
-                        try:
-                            import json as json_mod
-
-                            prompt = f"""채점할 답안:
-문제: {item.question_text}
-정답: {json_mod.dumps(item.correct_answer_json or {}, ensure_ascii=False)}
-사용자 답: {user_answer}
-정규화된 답: {normalized}
-
-다음 필드를 포함한 JSON으로 응답하세요:
-judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, grading_confidence, grading_rationale, missing_points, error_type, suggested_feedback"""
-                            ai_result = await call_ai_with_fallback(
-                                prompt,
-                                GRADING_SCHEMA,
-                                primary_model=session.generation_model_name
-                                or cfg.balanced_generation_model,
-                                fallback_model=cfg.eco_generation_model,
-                                system_message=SYSTEM_PROMPT_GRADING_SHORT,
-                            )
-                            judgement = Judgement(ai_result["judgement"])
-                            score_awarded = ai_result["score_awarded"]
-                            error_type = (
-                                ErrorType(ai_result["error_type"])
-                                if ai_result.get("error_type")
-                                else None
-                            )
-                        except Exception as grading_exc:
-                            logger.error(
-                                "AI grading failed for item %s (session %s): %s: %s — "
-                                "defaulting to incorrect; this is a system failure, not a user error",
-                                item.id,
-                                session.id,
-                                type(grading_exc).__name__,
-                                grading_exc,
-                            )
-                            judgement = Judgement.incorrect
-                            score_awarded = 0.0
-                            error_type = ErrorType.reasoning_error
+                else:
+                    grading = await _grade_single_answer(
+                        item=item,
+                        user_answer=user_answer,
+                        model_name=session.generation_model_name,
+                        include_essay=False,
+                    )
 
                 existing = await db.execute(
                     select(AnswerLog).where(
@@ -777,24 +894,25 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
                     quiz_session_id=session.id,
                     user_id=session.user_id,
                     user_answer_raw=user_answer,
-                    user_answer_normalized=normalized if user_answer else "",
-                    judgement=judgement,
-                    score_awarded=score_awarded,
-                    max_score=1.0,
-                    grading_confidence=1.0,
-                    error_type=error_type,
+                    user_answer_normalized=normalize_answer(user_answer)
+                    if user_answer
+                    else "",
+                    judgement=grading.judgement,
+                    score_awarded=grading.score_awarded,
+                    max_score=grading.max_score,
+                    grading_confidence=grading.grading_confidence,
+                    error_type=grading.error_type,
                     is_active_result=True,
                     graded_at=datetime.now(timezone.utc),
                 )
                 db.add(answer_log)
 
-                total_score += score_awarded
-                max_score += 1.0
+                await _update_weak_point(db, session.user_id, item, grading.judgement)
 
-                await _update_weak_point(db, session.user_id, item, judgement)
-
-            session.total_score = total_score
-            session.max_score = max_score
+            await db.flush()
+            session.total_score, session.max_score = await _recalculate_session_totals(
+                db, session.id, session.user_id
+            )
             session.graded_at = datetime.now(timezone.utc)
             session.status = QuizSessionStatus.graded
 
@@ -809,48 +927,124 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
             await db.commit()
 
 
+async def _apply_objection_decision(
+    db: AsyncSession,
+    objection: "Objection",
+    answer_log: "AnswerLog",
+    quiz_item: "QuizItem",
+    ai_result: dict,
+) -> None:
+    """Apply the AI objection decision.
+
+    If upheld/partially_upheld and should_apply:
+      - Deactivate old answer log
+      - Create new AnswerLog with updated scores
+      - Recalculate session totals
+      - Set objection status to 'applied'
+      - Set session status to 'regraded'
+
+    If rejected/other:
+      - Set objection status
+      - If session has no remaining pending objections → restore to 'graded'
+    """
+    decision = ai_result.get("decision", "rejected")
+    if ai_result.get("should_apply") and decision in ("upheld", "partially_upheld"):
+        answer_log.is_active_result = False
+        new_log = AnswerLog(
+            quiz_item_id=objection.quiz_item_id,
+            quiz_session_id=objection.quiz_session_id,
+            user_id=objection.user_id,
+            user_answer_raw=answer_log.user_answer_raw,
+            user_answer_normalized=answer_log.user_answer_normalized,
+            judgement=Judgement(ai_result["updated_judgement"]),
+            score_awarded=ai_result["updated_score_awarded"],
+            max_score=answer_log.max_score,
+            grading_confidence=0.9,
+            grading_rationale=ai_result.get("reasoning", ""),
+            error_type=ErrorType(ai_result["updated_error_type"])
+            if ai_result.get("updated_error_type")
+            else None,
+            is_active_result=True,
+            regraded_from_answer_log_id=answer_log.id,
+            graded_at=datetime.now(timezone.utc),
+        )
+        db.add(new_log)
+        await db.flush()
+
+        session_result = await db.execute(
+            select(QuizSession).where(QuizSession.id == objection.quiz_session_id)
+        )
+        session = session_result.scalar_one_or_none()
+        if session:
+            session.total_score, session.max_score = await _recalculate_session_totals(
+                db, objection.quiz_session_id, objection.user_id
+            )
+            objection.status = ObjectionStatus.applied
+            session.status = QuizSessionStatus.regraded
+    else:
+        objection.status = (
+            ObjectionStatus.rejected
+            if decision == "rejected"
+            else ObjectionStatus(decision)
+        )
+        await _restore_session_if_no_pending_objections(db, objection)
+
+
+async def _restore_session_if_no_pending_objections(
+    db: AsyncSession,
+    objection: "Objection",
+) -> None:
+    """If no other pending objections for this session, restore session to 'graded'."""
+    session_result = await db.execute(
+        select(QuizSession).where(QuizSession.id == objection.quiz_session_id)
+    )
+    session = session_result.scalar_one_or_none()
+    if session and session.status == QuizSessionStatus.objection_pending:
+        remaining_result = await db.execute(
+            select(Objection).where(
+                Objection.quiz_session_id == objection.quiz_session_id,
+                Objection.id != objection.id,
+                Objection.status.in_(
+                    [ObjectionStatus.submitted, ObjectionStatus.under_review]
+                ),
+            )
+        )
+        if not remaining_result.scalar_one_or_none():
+            session.status = QuizSessionStatus.graded
+
+
 async def review_objection(job_id: str):
     async with async_session() as db:
-        job_result = await db.execute(select(Job).where(Job.id == job_id))
-        job = job_result.scalar_one_or_none()
+        job = (
+            await db.execute(select(Job).where(Job.id == job_id))
+        ).scalar_one_or_none()
         if not job:
             return
-
-        objection_result = await db.execute(
-            select(Objection).where(Objection.id == job.target_id)
-        )
-        objection = objection_result.scalar_one_or_none()
+        objection = (
+            await db.execute(select(Objection).where(Objection.id == job.target_id))
+        ).scalar_one_or_none()
         if not objection:
             job.status = "failed"
             await db.commit()
             return
-
         job.status = "processing"
         await db.commit()
-
         try:
-            answer_result = await db.execute(
-                select(AnswerLog).where(AnswerLog.id == objection.answer_log_id)
-            )
-            answer_log = answer_result.scalar_one_or_none()
-            item_result = await db.execute(
-                select(QuizItem).where(QuizItem.id == objection.quiz_item_id)
-            )
-            quiz_item = item_result.scalar_one_or_none()
-
+            answer_log = (
+                await db.execute(
+                    select(AnswerLog).where(AnswerLog.id == objection.answer_log_id)
+                )
+            ).scalar_one_or_none()
+            quiz_item = (
+                await db.execute(
+                    select(QuizItem).where(QuizItem.id == objection.quiz_item_id)
+                )
+            ).scalar_one_or_none()
             if not answer_log or not quiz_item:
                 objection.status = ObjectionStatus.rejected
                 job.status = "completed"
                 await db.commit()
                 return
-
-            from app.utils.ai_client import (
-                call_ai_with_fallback,
-                OBJECTION_REVIEW_SCHEMA,
-            )
-            from app.config import settings as cfg
-            import json as json_mod
-
             prompt = f"""이의제기를 검토하세요.
 
 원문 문제: {quiz_item.question_text}
@@ -862,7 +1056,6 @@ async def review_objection(job_id: str):
 
 다음 필드를 포함한 JSON으로 응답하세요:
 decision, reasoning, updated_judgement, updated_score_awarded, updated_error_type, should_apply"""
-
             ai_result = await call_ai_with_fallback(
                 prompt,
                 OBJECTION_REVIEW_SCHEMA,
@@ -870,96 +1063,15 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
                 fallback_model=cfg.eco_generation_model,
                 system_message=SYSTEM_PROMPT_OBJECTION_REVIEW,
             )
-
             objection.review_result_json = ai_result
             objection.decided_at = datetime.now(timezone.utc)
             objection.decided_by = "ai"
-
-            decision = ai_result.get("decision", "rejected")
-            if ai_result.get("should_apply") and decision in (
-                "upheld",
-                "partially_upheld",
-            ):
-                answer_log.is_active_result = False
-                new_log = AnswerLog(
-                    quiz_item_id=objection.quiz_item_id,
-                    quiz_session_id=objection.quiz_session_id,
-                    user_id=objection.user_id,
-                    user_answer_raw=answer_log.user_answer_raw,
-                    user_answer_normalized=answer_log.user_answer_normalized,
-                    judgement=Judgement(ai_result["updated_judgement"]),
-                    score_awarded=ai_result["updated_score_awarded"],
-                    max_score=answer_log.max_score,
-                    grading_confidence=0.9,
-                    grading_rationale=ai_result.get("reasoning", ""),
-                    error_type=ErrorType(ai_result["updated_error_type"])
-                    if ai_result.get("updated_error_type")
-                    else None,
-                    is_active_result=True,
-                    regraded_from_answer_log_id=answer_log.id,
-                    graded_at=datetime.now(timezone.utc),
-                )
-                db.add(new_log)
-                await db.flush()
-
-                # Recalculate session totals after applying the objection
-                session_result = await db.execute(
-                    select(QuizSession).where(
-                        QuizSession.id == objection.quiz_session_id
-                    )
-                )
-                session = session_result.scalar_one_or_none()
-                if session:
-                    score_agg = await db.execute(
-                        select(
-                            func.sum(AnswerLog.score_awarded),
-                            func.sum(AnswerLog.max_score),
-                        ).where(
-                            AnswerLog.quiz_session_id == objection.quiz_session_id,
-                            AnswerLog.user_id == objection.user_id,
-                            AnswerLog.is_active_result.is_(True),
-                        )
-                    )
-                    agg_row = score_agg.one()
-                    session.total_score = float(agg_row[0] or 0.0)
-                    session.max_score = float(agg_row[1] or 0.0)
-
-                objection.status = ObjectionStatus.applied
-                if session:
-                    session.status = QuizSessionStatus.regraded
-            else:
-                objection.status = (
-                    ObjectionStatus.rejected
-                    if decision == "rejected"
-                    else ObjectionStatus(decision)
-                )
-
-                session_result = await db.execute(
-                    select(QuizSession).where(
-                        QuizSession.id == objection.quiz_session_id
-                    )
-                )
-                session = session_result.scalar_one_or_none()
-                if session and session.status == QuizSessionStatus.objection_pending:
-                    remaining_result = await db.execute(
-                        select(Objection).where(
-                            Objection.quiz_session_id == objection.quiz_session_id,
-                            Objection.id != objection.id,
-                            Objection.status.in_(
-                                [
-                                    ObjectionStatus.submitted,
-                                    ObjectionStatus.under_review,
-                                ]
-                            ),
-                        )
-                    )
-                    if not remaining_result.scalar_one_or_none():
-                        session.status = QuizSessionStatus.graded
-
+            await _apply_objection_decision(
+                db, objection, answer_log, quiz_item, ai_result
+            )
             job.status = "completed"
             job.finished_at = datetime.now(timezone.utc)
             await db.commit()
-
         except Exception as e:
             job.status = "failed"
             job.error_message = str(e)
@@ -1004,3 +1116,91 @@ async def _update_weak_point(
         weak.streak_wrong_count = 0
 
     await db.flush()
+
+
+async def admin_regrade(job_id: str) -> None:
+    """Regrade all active answer logs for a quiz item across all users.
+
+    Uses _grade_single_answer for grading and _recalculate_session_totals
+    to update session scores after regrading.
+    """
+    from app.models.search import Job
+
+    async with async_session() as db:
+        result = await db.execute(select(Job).where(Job.id == job_id))
+        job = result.scalar_one_or_none()
+        if not job:
+            logger.error("admin_regrade: job %s not found", job_id)
+            return
+
+        item_result = await db.execute(
+            select(QuizItem).where(QuizItem.id == job.target_id)
+        )
+        item = item_result.scalar_one_or_none()
+        if not item:
+            logger.error("admin_regrade: quiz item %s not found", job.target_id)
+            job.status = "failed"
+            await db.commit()
+            return
+
+        logs_result = await db.execute(
+            select(AnswerLog, QuizSession)
+            .join(QuizSession, QuizSession.id == AnswerLog.quiz_session_id)
+            .where(
+                AnswerLog.quiz_item_id == item.id,
+                AnswerLog.is_active_result.is_(True),
+            )
+        )
+        rows = logs_result.all()
+
+        for answer_log, session in rows:
+            try:
+                user_answer = answer_log.user_answer_raw or ""
+                grading = (
+                    await _grade_single_answer(
+                        item=item,
+                        user_answer=user_answer,
+                        model_name=session.generation_model_name,
+                        include_essay=False,
+                    )
+                    if user_answer
+                    else GradingResult(
+                        judgement=Judgement.skipped,
+                        score_awarded=0.0,
+                        error_type=ErrorType.no_response,
+                    )
+                )
+                answer_log.judgement = grading.judgement
+                answer_log.score_awarded = grading.score_awarded
+                answer_log.graded_at = datetime.now(timezone.utc)
+            except Exception as exc:
+                logger.warning(
+                    "admin_regrade: failed to regrade log %s: %s",
+                    answer_log.id,
+                    exc,
+                )
+
+        await db.flush()
+
+        affected_session_ids = {row[1].id for row in rows}
+        for sid in affected_session_ids:
+            sess_upd = await db.execute(
+                select(QuizSession).where(QuizSession.id == sid)
+            )
+            sess_obj = sess_upd.scalar_one_or_none()
+            if sess_obj:
+                # Get the user_id for session total recalculation
+                # Use the first answer_log for this session to get user_id
+                user_id_for_session = next(
+                    (row[0].user_id for row in rows if row[1].id == sid),
+                    None,
+                )
+                if user_id_for_session:
+                    (
+                        sess_obj.total_score,
+                        sess_obj.max_score,
+                    ) = await _recalculate_session_totals(db, sid, user_id_for_session)
+
+        job.status = "completed"
+        job.finished_at = datetime.now(timezone.utc)
+        await db.commit()

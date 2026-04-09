@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import Settings
 from app.database import get_db
 from app.models.quiz import (
     QuizSession,
@@ -41,7 +42,12 @@ from app.schemas.objection import ObjectionCreate, ObjectionResponse
 from app.middleware.auth import get_current_user
 from app.middleware.rate_limit_pro import pro_rate_limit
 from app.workers.celery_app import dispatch_task
-from app.services.quiz_service import _update_weak_point
+from app.services.quiz_service import (
+    _update_weak_point,
+    _grade_single_answer,
+    GradingResult,
+    _recalculate_session_totals,
+)
 
 router = APIRouter()
 
@@ -135,6 +141,55 @@ async def list_quiz_sessions(
     ]
 
 
+async def _validate_file_access(
+    db: AsyncSession,
+    user_id: str,
+    file_ids: list[str],
+) -> None:
+    """Validate user owns all files and they are quiz-eligible.
+
+    Raises HTTPException(403) if file not found or not owned.
+    Raises HTTPException(400) if file is not quiz-eligible.
+    """
+    for fid in file_ids:
+        result = await db.execute(select(File).where(File.id == fid))
+        f = result.scalar_one_or_none()
+        if not f or f.user_id != user_id:
+            raise HTTPException(status_code=403, detail=f"File {fid} not accessible")
+        if (
+            f.status not in (FileStatus.ready, FileStatus.failed_partial)
+            or not f.is_quiz_eligible
+        ):
+            raise HTTPException(
+                status_code=400, detail=f"File {fid} is not quiz eligible"
+            )
+
+
+def _resolve_model_and_cost(
+    req: "QuizSessionCreate",
+    cfg: "Settings",
+) -> tuple[str, int]:
+    """Resolve the generation model name and its credit cost from the request.
+
+    Returns (model_name, credit_cost).
+    Falls back to balanced_generation_model if preferred_model not set.
+    """
+    from app.tier_config import MODEL_ECO, MODEL_BALANCED, MODEL_PERFORMANCE
+
+    preferred = req.preferred_model or cfg.balanced_generation_model
+    model_tier_label = None
+    if preferred == cfg.eco_generation_model:
+        model_tier_label = MODEL_ECO
+    elif preferred == cfg.balanced_generation_model:
+        model_tier_label = MODEL_BALANCED
+    elif preferred == cfg.performance_generation_model:
+        model_tier_label = MODEL_PERFORMANCE
+
+    _TIER_COSTS = {MODEL_ECO: 1, MODEL_BALANCED: 3, MODEL_PERFORMANCE: 5}
+    cost = _TIER_COSTS.get(model_tier_label, 1) if model_tier_label else 1
+    return preferred, cost
+
+
 @router.post("", response_model=QuizSessionResponse)
 async def create_quiz_session(
     req: QuizSessionCreate,
@@ -158,46 +213,16 @@ async def create_quiz_session(
             )
 
     if req.source_mode == SourceMode.document_based.value:
-        for fid in req.selected_file_ids:
-            result = await db.execute(select(File).where(File.id == fid))
-            f = result.scalar_one_or_none()
-            if not f or f.user_id != user.id:
-                raise HTTPException(
-                    status_code=403, detail=f"File {fid} not accessible"
-                )
-            if (
-                f.status not in (FileStatus.ready, FileStatus.failed_partial)
-                or not f.is_quiz_eligible
-            ):
-                raise HTTPException(
-                    status_code=400, detail=f"File {fid} is not quiz eligible"
-                )
+        await _validate_file_access(db, user.id, req.selected_file_ids)
 
     from app.config import settings as cfg
     from app.services.usage_service import UsageService
-    from app.tier_config import (
-        TIER_LIMITS,
-        UserTier,
-        MODEL_ECO,
-        MODEL_BALANCED,
-        MODEL_PERFORMANCE,
-    )
+    from app.tier_config import TIER_LIMITS, UserTier
     from app.schemas.billing import LimitExceededError
 
+    model_name, generation_cost = _resolve_model_and_cost(req, cfg)
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-
-    preferred = req.preferred_model or cfg.balanced_generation_model
-    model_tier_label = None
-    if preferred == cfg.eco_generation_model:
-        model_tier_label = MODEL_ECO
-    elif preferred == cfg.balanced_generation_model:
-        model_tier_label = MODEL_BALANCED
-    elif preferred == cfg.performance_generation_model:
-        model_tier_label = MODEL_PERFORMANCE
-
-    _TIER_COSTS = {MODEL_ECO: 1, MODEL_BALANCED: 3, MODEL_PERFORMANCE: 5}
-    generation_cost = _TIER_COSTS.get(model_tier_label, 1) if model_tier_label else 1
 
     allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", generation_cost)
     if not allowed:
@@ -212,18 +237,15 @@ async def create_quiz_session(
             ).model_dump(),
         )
 
-    session_status = QuizSessionStatus.draft
-    job_id = None
-
     session = QuizSession(
         user_id=user.id,
         mode=QuizMode(req.mode),
         source_mode=SourceMode(req.source_mode),
-        status=session_status,
+        status=QuizSessionStatus.draft,
         difficulty=req.difficulty,
         question_count=req.question_count,
         generation_priority=req.generation_priority,
-        generation_model_name=req.preferred_model or cfg.balanced_generation_model,
+        generation_model_name=model_name,
         idempotency_key=req.idempotency_key,
     )
     db.add(session)
@@ -262,17 +284,16 @@ async def create_quiz_session(
     )
     db.add(job)
     session.status = QuizSessionStatus.generating
-    job_id = job.id
 
     await db.commit()
     await db.refresh(session)
 
-    dispatch_task("generate_quiz", [job_id])
+    dispatch_task("generate_quiz", [job.id])
 
     return QuizSessionResponse(
         quiz_session_id=session.id,
         status=session.status.value,
-        job_id=job_id,
+        job_id=job.id,
     )
 
 
@@ -350,6 +371,38 @@ async def get_quiz_items(
     ]
 
 
+async def _find_next_unanswered_item(
+    db: AsyncSession,
+    session_id: str,
+    current_item_id: str,
+    user_id: str,
+) -> str | None:
+    """Find the next unanswered quiz item in the session order.
+
+    Returns the item ID of the first item after current_item_id that
+    has no active AnswerLog, or None if all items are answered.
+    """
+    all_items = await db.execute(
+        select(QuizItem)
+        .where(QuizItem.quiz_session_id == session_id)
+        .order_by(QuizItem.item_order)
+    )
+    items_list = all_items.scalars().all()
+    for it in items_list:
+        if it.id == current_item_id:
+            continue
+        check = await db.execute(
+            select(AnswerLog).where(
+                AnswerLog.quiz_item_id == it.id,
+                AnswerLog.user_id == user_id,
+                AnswerLog.is_active_result.is_(True),
+            )
+        )
+        if not check.scalar_one_or_none():
+            return it.id
+    return None
+
+
 @router.post("/{session_id}/items/{item_id}/answer", response_model=AnswerResponse)
 async def submit_answer(
     session_id: str,
@@ -386,119 +439,22 @@ async def submit_answer(
         session.started_at = datetime.now(timezone.utc)
 
     from app.utils.normalize import normalize_answer
-    from app.utils.ai_client import call_ai_with_fallback, GRADING_SCHEMA
-    from app.config import settings as cfg
-    from app.prompts.grading_short import SYSTEM_PROMPT_GRADING_SHORT
-    from app.prompts.grading_essay import SYSTEM_PROMPT_GRADING_ESSAY
-    import json
-
-    raw_correct_answer = item.correct_answer_json
-    if isinstance(raw_correct_answer, dict):
-        correct_answer = raw_correct_answer
-    elif isinstance(raw_correct_answer, str):
-        correct_answer = {"answer": raw_correct_answer}
-    else:
-        correct_answer = {}
 
     normalized = normalize_answer(req.user_answer)
-    judgement = Judgement.incorrect
-    score_awarded = 0.0
-    max_score = 1.0
-    grading_confidence = 1.0
-    grading_rationale = ""
-    error_type = None
-    missing_points = None
-    suggested_feedback = ""
+    grading = await _grade_single_answer(
+        item=item,
+        user_answer=req.user_answer,
+        model_name=session.generation_model_name,
+        include_essay=True,
+    )
 
-    if item.question_type in (QuestionType.multiple_choice, QuestionType.ox):
-        correct_value = normalize_answer(str(correct_answer.get("answer", "")))
-        user_value = normalized
-        if user_value == correct_value:
-            judgement = Judgement.correct
-            score_awarded = 1.0
-        else:
-            judgement = Judgement.incorrect
-            error_type = ErrorType.careless_mistake
-
-    elif item.question_type in (QuestionType.short_answer, QuestionType.fill_blank):
-        accepted = correct_answer.get(
-            "accepted_answers", [correct_answer.get("answer", "")]
-        )
-
-        matched = False
-        for ans in accepted:
-            if normalize_answer(str(ans)) == normalized:
-                matched = True
-                break
-
-        if matched:
-            judgement = Judgement.correct
-            score_awarded = 1.0
-        else:
-            try:
-                prompt = f"""채점할 답안:
-문제: {item.question_text}
-정답: {json.dumps(correct_answer, ensure_ascii=False)}
-사용자 답: {req.user_answer}
-정규화된 답: {normalized}
-
-다음 필드를 포함한 JSON으로 응답하세요:
-judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, grading_confidence, grading_rationale, missing_points, error_type, suggested_feedback"""
-
-                ai_result = await call_ai_with_fallback(
-                    prompt,
-                    GRADING_SCHEMA,
-                    primary_model=session.generation_model_name
-                    or cfg.balanced_generation_model,
-                    fallback_model=cfg.eco_generation_model,
-                    system_message=SYSTEM_PROMPT_GRADING_SHORT,
-                )
-                judgement = Judgement(ai_result["judgement"])
-                score_awarded = ai_result["score_awarded"]
-                grading_confidence = ai_result.get("grading_confidence", 0.7)
-                grading_rationale = ai_result.get("grading_rationale", "")
-                error_type = (
-                    ErrorType(ai_result["error_type"])
-                    if ai_result.get("error_type")
-                    else None
-                )
-                missing_points = ai_result.get("missing_points")
-                suggested_feedback = ai_result.get("suggested_feedback", "")
-            except Exception:
-                judgement = Judgement.incorrect
-
-    elif item.question_type == QuestionType.essay:
-        try:
-            prompt = f"""채점할 서술형 답안:
-문제: {item.question_text}
-모범 답안: {json.dumps(correct_answer, ensure_ascii=False)}
-사용자 답: {req.user_answer}
-출처 참조: {json.dumps(item.source_refs_json or {}, ensure_ascii=False)}
-
-다음 필드를 포함한 JSON으로 응답하세요:
-judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, grading_confidence, grading_rationale, missing_points, error_type, suggested_feedback"""
-
-            ai_result = await call_ai_with_fallback(
-                prompt,
-                GRADING_SCHEMA,
-                primary_model=session.generation_model_name
-                or cfg.balanced_generation_model,
-                fallback_model=cfg.eco_generation_model,
-                system_message=SYSTEM_PROMPT_GRADING_ESSAY,
-            )
-            judgement = Judgement(ai_result["judgement"])
-            score_awarded = ai_result["score_awarded"]
-            grading_confidence = ai_result.get("grading_confidence", 0.7)
-            grading_rationale = ai_result.get("grading_rationale", "")
-            error_type = (
-                ErrorType(ai_result["error_type"])
-                if ai_result.get("error_type")
-                else None
-            )
-            missing_points = ai_result.get("missing_points")
-            suggested_feedback = ai_result.get("suggested_feedback", "")
-        except Exception:
-            judgement = Judgement.incorrect
+    raw_correct = item.correct_answer_json
+    if isinstance(raw_correct, dict):
+        correct_answer = raw_correct
+    elif isinstance(raw_correct, str):
+        correct_answer = {"answer": raw_correct}
+    else:
+        correct_answer = {}
 
     existing_active = await db.execute(
         select(AnswerLog)
@@ -519,59 +475,42 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
         user_id=user.id,
         user_answer_raw=req.user_answer,
         user_answer_normalized=normalized,
-        judgement=judgement,
-        score_awarded=score_awarded,
-        max_score=max_score,
-        grading_confidence=grading_confidence,
-        grading_rationale=grading_rationale,
-        missing_points_json=missing_points,
-        error_type=error_type,
+        judgement=grading.judgement,
+        score_awarded=grading.score_awarded,
+        max_score=grading.max_score,
+        grading_confidence=grading.grading_confidence,
+        grading_rationale=grading.grading_rationale,
+        missing_points_json=grading.missing_points,
+        error_type=grading.error_type,
         is_active_result=True,
         graded_at=datetime.now(timezone.utc),
     )
     db.add(answer_log)
 
-    await _update_weak_point(db, user.id, item, judgement)
+    await _update_weak_point(db, user.id, item, grading.judgement)
 
-    all_items = await db.execute(
-        select(QuizItem)
-        .where(QuizItem.quiz_session_id == session_id)
-        .order_by(QuizItem.item_order)
-    )
-    items_list = all_items.scalars().all()
-    next_item_id = None
-    for it in items_list:
-        if it.id == item_id:
-            continue
-        check = await db.execute(
-            select(AnswerLog).where(
-                AnswerLog.quiz_item_id == it.id,
-                AnswerLog.user_id == user.id,
-                AnswerLog.is_active_result.is_(True),
-            )
-        )
-        if not check.scalar_one_or_none():
-            if next_item_id is None:
-                next_item_id = it.id
+    next_item_id = await _find_next_unanswered_item(db, session_id, item_id, user.id)
 
     await db.commit()
     await db.refresh(answer_log)
 
     return AnswerResponse(
         answer_log_id=answer_log.id,
-        judgement=judgement.value,
-        score_awarded=score_awarded,
-        max_score=max_score,
-        grading_confidence=grading_confidence,
-        grading_rationale=grading_rationale,
+        judgement=grading.judgement.value,
+        score_awarded=grading.score_awarded,
+        max_score=grading.max_score,
+        grading_confidence=grading.grading_confidence,
+        grading_rationale=grading.grading_rationale,
         explanation=item.explanation_text,
         tips=item.tips_text,
-        missing_points=missing_points,
-        error_type=error_type.value if error_type else None,
+        missing_points=grading.missing_points,
+        error_type=grading.error_type.value if grading.error_type else None,
         normalized_user_answer=normalized,
-        suggested_feedback=suggested_feedback,
+        suggested_feedback=grading.suggested_feedback,
         next_item_id=next_item_id,
-        correct_answer=correct_answer if judgement != Judgement.correct else None,
+        correct_answer=correct_answer
+        if grading.judgement != Judgement.correct
+        else None,
     )
 
 
@@ -620,16 +559,9 @@ async def complete_quiz_session(
             detail=f"{len(unanswered)} item(s) not yet answered",
         )
 
-    total_result = await db.execute(
-        select(func.sum(AnswerLog.score_awarded), func.sum(AnswerLog.max_score)).where(
-            AnswerLog.quiz_session_id == session_id,
-            AnswerLog.user_id == user.id,
-            AnswerLog.is_active_result.is_(True),
-        )
+    session.total_score, session.max_score = await _recalculate_session_totals(
+        db, session_id, user.id
     )
-    row = total_result.one()
-    session.total_score = row[0] or 0.0
-    session.max_score = row[1] or 0.0
     session.submitted_at = datetime.now(timezone.utc)
     session.graded_at = datetime.now(timezone.utc)
     session.status = QuizSessionStatus.graded

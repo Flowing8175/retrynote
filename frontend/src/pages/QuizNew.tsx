@@ -5,6 +5,8 @@ import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide
 import { filesApi, quizApi } from '@/api';
 import { LoadingSpinner, Modal, StatusBadge } from '@/components';
 import { isFileProcessingStatus } from '@/types/file';
+import { getDetailMessage } from '@/utils/errorMessages';
+import { formatFileSize, formatFileSource } from '@/utils/formatters';
 
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: '객관식' },
@@ -34,68 +36,6 @@ const DIFFICULTY_OPTIONS = [
   { value: 'medium', label: '보통' },
   { value: 'hard', label: '어려움' },
 ];
-
-function formatFileSource(sourceType: string) {
-  switch (sourceType) {
-    case 'upload':
-      return '업로드 자료';
-    case 'manual_text':
-      return '직접 입력';
-    case 'url':
-      return '외부 링크';
-    default:
-      return '기타 자료';
-  }
-}
-
-function formatFileSize(bytes: number) {
-  if (!Number.isFinite(bytes) || bytes <= 0) {
-    return '0KB';
-  }
-  if (bytes < 1024 * 1024) {
-    return `${Math.round(bytes / 1024)}KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-}
-
-function getDetailMessage(detail: unknown, fallbackMessage: string) {
-  if (typeof detail === 'string' && detail.trim()) {
-    return detail;
-  }
-
-  if (Array.isArray(detail) && detail.length > 0) {
-    const firstDetail = detail[0];
-
-    if (typeof firstDetail === 'string' && firstDetail.trim()) {
-      return firstDetail;
-    }
-
-    if (typeof firstDetail === 'object' && firstDetail !== null) {
-      const maybeMessage = firstDetail as { msg?: unknown; loc?: unknown };
-      const msg = typeof maybeMessage.msg === 'string' ? maybeMessage.msg : null;
-      const loc = Array.isArray(maybeMessage.loc)
-        ? maybeMessage.loc.filter((part): part is string | number => typeof part === 'string' || typeof part === 'number').join(' > ')
-        : null;
-
-      if (msg && loc) {
-        return `${loc}: ${msg}`;
-      }
-
-      if (msg) {
-        return msg;
-      }
-    }
-  }
-
-  if (typeof detail === 'object' && detail !== null) {
-    const maybeDetail = detail as { msg?: unknown };
-    if (typeof maybeDetail.msg === 'string' && maybeDetail.msg.trim()) {
-      return maybeDetail.msg;
-    }
-  }
-
-  return fallbackMessage;
-}
 
 export default function QuizNew() {
   const navigate = useNavigate();

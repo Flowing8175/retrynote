@@ -6,12 +6,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.quiz import AnswerLog, QuizItem, QuizSession, Judgement
 from app.models.objection import WeakPoint
-from app.models.file import File
 from app.models.user import User
 from app.schemas.dashboard import DashboardResponse
 from app.middleware.auth import get_current_user
 from app.utils.ai_client import stream_ai_text
 from app.config import settings as cfg
+from app.services.dashboard_service import (
+    compute_accuracy_by_type,
+    compute_accuracy_by_subject,
+    compute_accuracy_by_file,
+    compute_weak_concepts_data,
+)
 import json
 
 router = APIRouter()
@@ -242,84 +247,9 @@ async def get_dashboard(
         for w in weak_result.scalars().all()
     ]
 
-    type_accuracy: dict[str, dict] = {}
-    for a in answers:
-        item = quiz_items_by_id.get(a.quiz_item_id)
-        if item:
-            qt = item.question_type.value
-            if qt not in type_accuracy:
-                type_accuracy[qt] = {"correct": 0, "total": 0}
-            type_accuracy[qt]["total"] += 1
-            if a.judgement == Judgement.correct:
-                type_accuracy[qt]["correct"] += 1
-
-    accuracy_by_type = [
-        {
-            "question_type": qt,
-            "accuracy": data["correct"] / data["total"] if data["total"] > 0 else 0.0,
-            "count": data["total"],
-        }
-        for qt, data in type_accuracy.items()
-    ]
-
-    subject_accuracy: dict[str, dict] = {}
-    for a in answers:
-        item = quiz_items_by_id.get(a.quiz_item_id)
-        if item and item.category_tag:
-            cat = item.category_tag
-            if cat not in subject_accuracy:
-                subject_accuracy[cat] = {"correct": 0, "total": 0}
-            subject_accuracy[cat]["total"] += 1
-            if a.judgement == Judgement.correct:
-                subject_accuracy[cat]["correct"] += 1
-
-    accuracy_by_subject = [
-        {
-            "category_tag": cat,
-            "accuracy": data["correct"] / data["total"] if data["total"] > 0 else 0.0,
-            "count": data["total"],
-        }
-        for cat, data in subject_accuracy.items()
-    ]
-
-    from app.models.quiz import QuizSessionFile
-
-    file_accuracy: dict[str, dict] = {}
-    if answers:
-        answer_session_ids = {a.quiz_session_id for a in answers}
-        sf_batch = await db.execute(
-            select(QuizSessionFile, File)
-            .join(File, File.id == QuizSessionFile.file_id)
-            .where(QuizSessionFile.quiz_session_id.in_(answer_session_ids))
-        )
-        session_to_files: dict[str, list[tuple[str, str | None]]] = {}
-        for sf, f in sf_batch.all():
-            session_to_files.setdefault(sf.quiz_session_id, []).append(
-                (sf.file_id, f.original_filename if f else None)
-            )
-
-        for a in answers:
-            for fid, fname in session_to_files.get(a.quiz_session_id, []):
-                if fid not in file_accuracy:
-                    file_accuracy[fid] = {
-                        "file_id": fid,
-                        "filename": fname or fid,
-                        "correct": 0,
-                        "total": 0,
-                    }
-                file_accuracy[fid]["total"] += 1
-                if a.judgement == Judgement.correct:
-                    file_accuracy[fid]["correct"] += 1
-
-    accuracy_by_file = [
-        {
-            "file_id": v["file_id"],
-            "filename": v["filename"],
-            "accuracy": v["correct"] / v["total"] if v["total"] > 0 else 0.0,
-            "count": v["total"],
-        }
-        for v in file_accuracy.values()
-    ]
+    accuracy_by_type = compute_accuracy_by_type(answers, quiz_items_by_id)
+    accuracy_by_subject = compute_accuracy_by_subject(answers, quiz_items_by_id)
+    accuracy_by_file = await compute_accuracy_by_file(db, answers, user.id)
 
     retry_recommendations = weak_concepts[:5]
 
@@ -346,41 +276,19 @@ async def get_dashboard(
 
     coaching_summary: str | None = None
     if total_count > 0:
-        weak_concepts_data = []
-        for w in weak_concepts[:5]:
-            total_for_concept = 0
-            correct_for_concept = 0
-            for a in answers:
-                item = quiz_items_by_id.get(a.quiz_item_id)
-                if item and item.concept_key == w["concept_key"]:
-                    total_for_concept += 1
-                    if a.judgement == Judgement.correct:
-                        correct_for_concept += 1
-            accuracy = (
-                correct_for_concept / total_for_concept
-                if total_for_concept > 0
-                else 0.0
-            )
-            weak_concepts_data.append(
-                {
-                    "concept_key": w["concept_key"],
-                    "concept_label": w["concept_label"],
-                    "wrong_count": w["wrong_count"],
-                    "accuracy": accuracy,
-                }
-            )
+        weak_concepts_data = compute_weak_concepts_data(
+            weak_concepts, answers, quiz_items_by_id
+        )
 
         weak_types = sorted(
             [
                 {
-                    "question_type": format_question_type_label(qt),
-                    "accuracy": data["correct"] / data["total"]
-                    if data["total"] > 0
-                    else 0.0,
+                    "question_type": format_question_type_label(entry["question_type"]),
+                    "accuracy": entry["accuracy"],
                 }
-                for qt, data in type_accuracy.items()
+                for entry in accuracy_by_type
             ],
-            key=lambda item: item["question_type"],
+            key=lambda x: x["question_type"],
         )
 
         coaching_prompt = build_coaching_prompt(

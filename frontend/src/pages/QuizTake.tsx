@@ -7,6 +7,7 @@ import { LoadingSpinner, PillShimmer } from '@/components';
 import type { AnswerLogEntry, AnswerResponse } from '@/types';
 import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import DiagramModal from '@/components/DiagramModal';
+import { getErrorMessage } from '@/utils/errorMessages';
 
 const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded', 'closed']);
 const AUTO_SUBMIT_QUESTION_TYPES = new Set(['multiple_choice', 'ox']);
@@ -28,21 +29,6 @@ const QUESTION_TYPE_LABELS: Record<string, string> = {
 
 function normalizeOxValue(value: unknown) {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
-}
-
-function getErrorMessage(error: unknown, fallbackMessage: string) {
-  if (typeof error === 'object' && error !== null) {
-    const maybeResponse = error as { response?: { data?: { detail?: string } } };
-    if (typeof maybeResponse.response?.data?.detail === 'string') {
-      return maybeResponse.response.data.detail;
-    }
-  }
-
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-
-  return fallbackMessage;
 }
 
 function ParticleEffect() {
