@@ -23,6 +23,12 @@ const MODEL_TIER_LABELS: Record<string, string> = {
   PERFORMANCE: 'PERFORMANCE',
 };
 
+const MODEL_TIER_COSTS: Record<string, number> = {
+  ECO: 1,
+  BALANCED: 3,
+  PERFORMANCE: 5,
+};
+
 const DIFFICULTY_OPTIONS = [
   { value: '', label: '난이도 무관' },
   { value: 'easy', label: '쉬움' },
@@ -557,8 +563,17 @@ export default function QuizNew() {
                             : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
                         }`}
                       >
-                        <div className="text-xs font-semibold">
-                          {MODEL_TIER_LABELS[option.tier] ?? option.tier}
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="text-xs font-semibold">
+                            {MODEL_TIER_LABELS[option.tier] ?? option.tier}
+                          </span>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${
+                            activeTier === option.tier
+                              ? 'bg-brand-500/20 text-brand-300'
+                              : 'bg-white/[0.06] text-content-muted'
+                          }`}>
+                            ×{MODEL_TIER_COSTS[option.tier] ?? 1}
+                          </span>
                         </div>
                         <div className="mt-1 text-[11px] text-content-muted">{option.value}</div>
                       </button>

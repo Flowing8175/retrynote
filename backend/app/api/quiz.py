@@ -221,6 +221,9 @@ async def create_quiz_session(
     elif preferred == cfg.performance_generation_model:
         model_tier_label = MODEL_PERFORMANCE
 
+    _TIER_COSTS = {MODEL_ECO: 1, MODEL_BALANCED: 3, MODEL_PERFORMANCE: 5}
+    generation_cost = _TIER_COSTS.get(model_tier_label, 1) if model_tier_label else 1
+
     if model_tier_label and model_tier_label not in allowed_models:
         # Lock the user row to prevent concurrent free trial consumption
         _user_result = await db.execute(
@@ -252,7 +255,9 @@ async def create_quiz_session(
                 ).model_dump(),
             )
 
-    allowed, remaining, source = await usage_svc.check_and_consume(db, user, "quiz", 1)
+    allowed, remaining, source = await usage_svc.check_and_consume(
+        db, user, "quiz", generation_cost
+    )
     if not allowed:
         raise HTTPException(
             status_code=402,
