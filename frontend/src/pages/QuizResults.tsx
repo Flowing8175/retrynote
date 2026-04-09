@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { quizApi } from '@/api';
@@ -102,6 +102,33 @@ export default function QuizResults() {
 
   const scoreRate = session && session.max_score ? session.total_score! / session.max_score : 0;
   const scorePercentage = scoreRate * 100;
+
+  const [displayScore, setDisplayScore] = useState(0);
+
+  const particles = useMemo(() =>
+    Array.from({ length: 12 }).map((_, i) => {
+      const angle = (i / 12) * 360;
+      const distance = 60 + Math.random() * 40;
+      return {
+        tx: Math.cos((angle * Math.PI) / 180) * distance,
+        ty: Math.sin((angle * Math.PI) / 180) * distance,
+      };
+    }),
+  []);
+
+  useEffect(() => {
+    if (session?.status !== 'completed' && session?.status !== 'graded') return;
+    const target = Math.round(scorePercentage);
+    if (target === 0) return;
+    let current = 0;
+    const step = Math.max(1, Math.ceil(target / 40));
+    const interval = setInterval(() => {
+      current = Math.min(current + step, target);
+      setDisplayScore(current);
+      if (current >= target) clearInterval(interval);
+    }, 25);
+    return () => clearInterval(interval);
+  }, [scorePercentage, session?.status]);
   const hasWrongAnswers = answerLogs?.some((log) => log.judgement !== 'correct') ?? false;
   const canReviewWrongNotes = session?.source_mode !== 'no_source' && hasWrongAnswers;
   const tier = getPerformanceTier(scorePercentage, canReviewWrongNotes);
@@ -153,32 +180,49 @@ export default function QuizResults() {
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="4"
+                strokeLinecap="round"
                 strokeDasharray={`${Math.max(0, scorePercentage * 2.827)} 282.7`}
-                className={`${tier.colorClass} transition-all duration-1000 ease-out`}
+                className={`${tier.colorClass} animate-progress-ring`}
               />
             </svg>
+            {scorePercentage >= 90 && (
+              <div className="particle-container">
+                {particles.map(({ tx, ty }, i) => (
+                  <span
+                    key={i}
+                    className="particle"
+                    style={{
+                      '--tx': `${tx}px`,
+                      '--ty': `${ty}px`,
+                      animationDelay: `${0.8 + i * 0.05}s`,
+                      background: i % 3 === 0 ? 'oklch(0.72 0.17 160)' : i % 3 === 1 ? 'oklch(0.65 0.15 175)' : 'oklch(0.78 0.15 85)',
+                    } as React.CSSProperties}
+                  />
+                ))}
+              </div>
+            )}
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-5xl sm:text-6xl font-semibold tabular-nums text-white tracking-tight">{Math.round(scorePercentage)}</span>
+              <span className="text-5xl sm:text-6xl font-semibold tabular-nums text-white tracking-tight">{displayScore}</span>
               <span className="text-sm font-medium text-content-muted mt-1">점</span>
             </div>
           </div>
 
           <div className="space-y-4 max-w-xl">
             <div className="flex justify-center">
-              <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-md border ${tier.borderClass} ${tier.bgClass} ${tier.colorClass}`}>
+              <span className={`inline-flex px-3 py-1 text-xs font-medium rounded-md border ${tier.borderClass} ${tier.bgClass} ${tier.colorClass} animate-scale-in stagger-1`}>
                 {tier.badge}
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-semibold text-white leading-snug">
+            <h1 className="text-2xl sm:text-3xl font-semibold text-white leading-snug animate-fade-in-up stagger-2">
               {tier.headline}
             </h1>
-            <p className="text-base text-content-secondary leading-relaxed">
+            <p className="text-base text-content-secondary leading-relaxed animate-fade-in stagger-3">
               {tier.message}
             </p>
           </div>
 
           {/* Effort badge — always shown regardless of score */}
-          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm">
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-brand-500/10 border border-brand-500/20 text-brand-300 text-sm animate-fade-in-up stagger-4">
             <Flame size={16} className="shrink-0" />
             <span>오늘도 공부했어요! 꾸준함이 실력이 됩니다.</span>
           </div>
