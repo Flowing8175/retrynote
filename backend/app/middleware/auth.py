@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 import jwt as _jwt
 from jwt import InvalidTokenError as JWTError
 import bcrypt as _bcrypt_lib
@@ -178,7 +177,7 @@ async def get_impersonation_context(
         select(ImpersonationSession).where(
             ImpersonationSession.id == imp_header,
             ImpersonationSession.admin_user_id == user.id,
-            ImpersonationSession.is_active == True,
+            ImpersonationSession.is_active.is_(True),
             ImpersonationSession.expires_at > datetime.now(timezone.utc),
         )
     )

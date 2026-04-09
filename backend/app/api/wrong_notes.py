@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.quiz import AnswerLog, QuizItem, QuizSession, Judgement, ErrorType
 from app.models.file import File
-from app.models.objection import WeakPoint
 from app.models.user import User
 from app.schemas.wrong_note import (
     WrongNoteItem,
@@ -35,7 +34,7 @@ async def list_wrong_notes(
         .join(QuizSession, AnswerLog.quiz_session_id == QuizSession.id)
         .where(
             AnswerLog.user_id == user.id,
-            AnswerLog.is_active_result == True,
+            AnswerLog.is_active_result.is_(True),
             AnswerLog.deleted_at.is_(None),
             QuizSession.deleted_at.is_(None),
             QuizSession.source_mode != "no_source",
@@ -142,7 +141,7 @@ async def update_error_type(
         select(AnswerLog).where(
             AnswerLog.id == answer_log_id,
             AnswerLog.user_id == user.id,
-            AnswerLog.is_active_result == True,
+            AnswerLog.is_active_result.is_(True),
         )
     )
     answer_log = result.scalar_one_or_none()

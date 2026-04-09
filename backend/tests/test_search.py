@@ -1,5 +1,4 @@
 import uuid
-import pytest
 from httpx import AsyncClient
 
 from app.models.file import File, FileSourceType, FileStatus, Folder
@@ -225,7 +224,6 @@ class TestSearch:
             params={"q": "notes", "scope": "wrong_notes", "file_id": file1.id},
         )
         assert resp.status_code == 200
-        data = resp.json()
 
     async def test_search_with_folder_id_filter(
         self, auth_client: AsyncClient, db_session, test_user

@@ -2,7 +2,7 @@ import logging
 import secrets
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request
 import jwt
 from jwt import InvalidTokenError as JWTError
 from sqlalchemy import select, delete

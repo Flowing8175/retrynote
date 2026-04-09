@@ -1,5 +1,4 @@
 import uuid
-import pytest
 from httpx import AsyncClient
 from datetime import datetime, timezone
 
@@ -16,7 +15,6 @@ from app.models.quiz import (
 )
 from app.models.objection import Objection, ObjectionStatus
 from app.middleware.auth import hash_password, create_access_token
-from .conftest import make_quiz_items
 
 
 class TestCreateObjection:

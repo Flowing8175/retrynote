@@ -1,4 +1,3 @@
-import pytest
 from app.utils.normalize import (
     normalize_answer,
     normalize_concept_key,

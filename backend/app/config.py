@@ -1,6 +1,4 @@
 import logging
-import os
-import socket
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from pydantic_settings import BaseSettings, SettingsConfigDict

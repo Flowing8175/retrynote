@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 import logging
 import os
@@ -486,7 +485,6 @@ async def delete_file(
     db.add(job)
     await db.commit()
 
-    import logging
 
     background_tasks.add_task(dispatch_task, "file_cleanup", [job.id])
 

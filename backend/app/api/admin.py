@@ -4,7 +4,7 @@ import io
 import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,7 @@ from app.rate_limit import limiter
 from app.models.user import User, UserRole, AdminSettings
 from app.models.admin import SystemLog, AdminAuditLog, Announcement
 from app.models.file import File, FileStatus
-from app.models.quiz import QuizItem, AnswerLog, QuizSession
+from app.models.quiz import QuizItem, QuizSession
 from app.models.search import ImpersonationSession, Job
 from app.schemas.admin import (
     MasterPasswordVerify,
@@ -57,7 +57,6 @@ from app.middleware.auth import (
     require_admin,
     require_admin_verified,
     require_super_admin,
-    get_current_user,
     hash_password,
     verify_password,
     create_admin_token,
@@ -310,16 +309,16 @@ async def list_logs(
     return AdminLogResponse(
         logs=[
             AdminLogItem(
-                id=l.id,
-                level=l.level,
-                service_name=l.service_name,
-                event_type=l.event_type,
-                message=l.message,
-                meta_json=l.meta_json,
-                trace_id=l.trace_id,
-                created_at=l.created_at,
+                id=log.id,
+                level=log.level,
+                service_name=log.service_name,
+                event_type=log.event_type,
+                message=log.message,
+                meta_json=log.meta_json,
+                trace_id=log.trace_id,
+                created_at=log.created_at,
             )
-            for l in logs
+            for log in logs
         ],
         total=total,
     )
@@ -600,18 +599,18 @@ async def list_audit_logs(
     return {
         "logs": [
             AdminAuditLogItem(
-                id=l.id,
-                admin_user_id=l.admin_user_id,
-                target_user_id=l.target_user_id,
-                action_type=l.action_type,
-                target_type=l.target_type,
-                target_id=l.target_id,
-                reason=l.reason,
-                payload_json=l.payload_json,
-                ip_address=l.ip_address,
-                created_at=l.created_at,
+                id=entry.id,
+                admin_user_id=entry.admin_user_id,
+                target_user_id=entry.target_user_id,
+                action_type=entry.action_type,
+                target_type=entry.target_type,
+                target_id=entry.target_id,
+                reason=entry.reason,
+                payload_json=entry.payload_json,
+                ip_address=entry.ip_address,
+                created_at=entry.created_at,
             ).model_dump()
-            for l in logs
+            for entry in logs
         ],
         "total": total,
     }

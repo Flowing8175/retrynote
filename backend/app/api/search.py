@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, or_, func, exists
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.quiz import AnswerLog, QuizItem, QuizSession
-from app.models.file import File, ParsedDocument, DocumentChunk
+from app.models.file import File
 from app.models.user import User
-from app.schemas.search import SearchQuery, SearchResponse, SearchResultItem
+from app.schemas.search import SearchResponse, SearchResultItem
 from app.middleware.auth import get_current_user
 
 router = APIRouter()
@@ -68,7 +68,7 @@ async def search(
             .join(QuizItem, AnswerLog.quiz_item_id == QuizItem.id)
             .where(
                 AnswerLog.user_id == user.id,
-                AnswerLog.is_active_result == True,
+                AnswerLog.is_active_result.is_(True),
                 AnswerLog.deleted_at.is_(None),
                 or_(
                     QuizItem.question_text.ilike(f"%{q}%"),

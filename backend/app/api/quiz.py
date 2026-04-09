@@ -27,7 +27,6 @@ from app.schemas.quiz import (
     QuizSessionDetail,
     QuizSessionHistoryItem,
     QuizItemResponse,
-    QuizItemDetail,
     AnswerSubmit,
     AnswerResponse,
     AnswerLogEntry,
@@ -67,9 +66,6 @@ async def get_quiz_config(
     from app.tier_config import (
         TIER_LIMITS,
         UserTier,
-        MODEL_ECO,
-        MODEL_BALANCED,
-        MODEL_PERFORMANCE,
     )
     from app.services.usage_service import UsageService
 
@@ -466,7 +462,6 @@ async def submit_answer(
     error_type = None
     missing_points = None
     suggested_feedback = ""
-    accepted_answers = []
 
     if item.question_type in (QuestionType.multiple_choice, QuestionType.ox):
         correct_value = normalize_answer(str(correct_answer.get("answer", "")))
@@ -478,13 +473,10 @@ async def submit_answer(
             judgement = Judgement.incorrect
             error_type = ErrorType.careless_mistake
 
-        accepted_answers = [correct_value]
-
     elif item.question_type in (QuestionType.short_answer, QuestionType.fill_blank):
         accepted = correct_answer.get(
             "accepted_answers", [correct_answer.get("answer", "")]
         )
-        accepted_answers = accepted
 
         matched = False
         for ans in accepted:
@@ -567,7 +559,7 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
             AnswerLog.quiz_item_id == item_id,
             AnswerLog.quiz_session_id == session_id,
             AnswerLog.user_id == user.id,
-            AnswerLog.is_active_result == True,
+            AnswerLog.is_active_result.is_(True),
         )
         .with_for_update()
     )
@@ -608,7 +600,7 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
             select(AnswerLog).where(
                 AnswerLog.quiz_item_id == it.id,
                 AnswerLog.user_id == user.id,
-                AnswerLog.is_active_result == True,
+                AnswerLog.is_active_result.is_(True),
             )
         )
         if not check.scalar_one_or_none():
@@ -670,7 +662,7 @@ async def complete_quiz_session(
         select(AnswerLog.quiz_item_id).where(
             AnswerLog.quiz_session_id == session_id,
             AnswerLog.user_id == user.id,
-            AnswerLog.is_active_result == True,
+            AnswerLog.is_active_result.is_(True),
         )
     )
     answered_ids = set(answered_result.scalars().all())
@@ -685,7 +677,7 @@ async def complete_quiz_session(
         select(func.sum(AnswerLog.score_awarded), func.sum(AnswerLog.max_score)).where(
             AnswerLog.quiz_session_id == session_id,
             AnswerLog.user_id == user.id,
-            AnswerLog.is_active_result == True,
+            AnswerLog.is_active_result.is_(True),
         )
     )
     row = total_result.one()
@@ -858,7 +850,7 @@ async def get_answer_logs(
         select(AnswerLog).where(
             AnswerLog.quiz_session_id == session_id,
             AnswerLog.user_id == user.id,
-            AnswerLog.is_active_result == True,
+            AnswerLog.is_active_result.is_(True),
         )
     )
     logs = logs_result.scalars().all()
@@ -914,7 +906,7 @@ async def create_objection(
             AnswerLog.id == req.answer_log_id,
             AnswerLog.quiz_item_id == item_id,
             AnswerLog.user_id == user.id,
-            AnswerLog.is_active_result == True,
+            AnswerLog.is_active_result.is_(True),
         )
     )
     answer_log = answer_result.scalar_one_or_none()

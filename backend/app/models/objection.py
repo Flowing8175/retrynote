@@ -4,15 +4,13 @@ from sqlalchemy import (
     String,
     Text,
     Integer,
-    Float,
-    Boolean,
     DateTime,
     Enum,
     ForeignKey,
     JSON,
     Index,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base, CommonMixin
 
 

@@ -1,5 +1,4 @@
 import uuid
-import pytest
 from datetime import datetime, timezone
 
 from app.models.user import User, UserRole
@@ -227,12 +226,6 @@ class TestQuizModels:
 
     async def test_judgement_enum(self):
         """correct, partial, incorrect, skipped"""
-        values = [
-            Judgement.correct,
-            Judgement.partial,
-            Judgement.incorrect,
-            Judgement.skipped,
-        ]
         # Just verify enum values exist
         assert Judgement.correct.value == "correct"
         assert Judgement.partial.value == "partial"
@@ -241,16 +234,6 @@ class TestQuizModels:
 
     async def test_error_type_enum(self):
         """all 8 values"""
-        values = [
-            ErrorType.concept_confusion,
-            ErrorType.missing_keyword,
-            ErrorType.expression_mismatch,
-            ErrorType.careless_mistake,
-            ErrorType.ambiguous_question,
-            ErrorType.insufficient_source,
-            ErrorType.reasoning_error,
-            ErrorType.no_response,
-        ]
         # Just verify enum values exist
         assert ErrorType.concept_confusion.value == "concept_confusion"
         assert ErrorType.no_response.value == "no_response"

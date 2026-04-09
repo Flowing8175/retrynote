@@ -3,11 +3,9 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
-import pytest_asyncio
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 import jwt
-from sqlalchemy import select
 
 from app.config import settings
 from app.middleware.auth import (
@@ -18,7 +16,6 @@ from app.middleware.auth import (
     require_admin_verified,
     require_super_admin,
 )
-from app.models.user import User, UserRole
 
 
 def _make_credentials(token: str) -> HTTPAuthorizationCredentials:

@@ -1,15 +1,12 @@
 import uuid
-import pytest
 from httpx import AsyncClient
 
 from app.models.quiz import (
     QuizSession,
     QuizSessionStatus,
     QuizMode,
-    SourceMode,
 )
 from app.models.objection import WeakPoint
-from app.models.search import Job
 
 
 class TestCreateRetrySet:

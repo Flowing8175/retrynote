@@ -3,7 +3,6 @@ from functools import partial
 from unittest.mock import patch, MagicMock, AsyncMock
 import logging
 
-import pytest
 
 import app.workers.celery_app as celery_module
 

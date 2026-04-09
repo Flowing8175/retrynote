@@ -5,15 +5,10 @@ from sqlalchemy import (
     String,
     Text,
     Integer,
-    Float,
     Boolean,
     DateTime,
     Enum,
-    ForeignKey,
-    JSON,
-    Index,
     BigInteger,
-    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base, CommonMixin

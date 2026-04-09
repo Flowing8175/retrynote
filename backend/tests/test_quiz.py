@@ -1,5 +1,4 @@
 import uuid
-import pytest
 from httpx import AsyncClient
 from datetime import datetime, timezone
 
@@ -8,16 +7,9 @@ from app.models.quiz import (
     QuizSessionStatus,
     QuizMode,
     SourceMode,
-    QuizSessionFile,
     QuizItem,
     QuestionType,
-    AnswerLog,
-    Judgement,
-    ErrorType,
 )
-from app.models.file import File, FileSourceType, FileStatus
-from app.models.search import Job
-from .conftest import make_quiz_items
 
 
 class TestQuizSessionCreate:

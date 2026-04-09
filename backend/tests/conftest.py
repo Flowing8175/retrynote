@@ -1,8 +1,6 @@
-import asyncio
 import sys
 import types
 import uuid
-from datetime import datetime
 from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
@@ -16,8 +14,6 @@ from app.main import app
 from app.models import (
     User,
     UserRole,
-    AdminSettings,
-    Folder,
     File,
     FileSourceType,
     FileStatus,
@@ -30,22 +26,6 @@ from app.models import (
     QuizSessionFile,
     QuizItem,
     QuestionType,
-    AnswerLog,
-    Judgement,
-    ErrorType,
-    Objection,
-    ObjectionStatus,
-    WeakPoint,
-    DashboardSnapshot,
-    SystemLog,
-    AdminAuditLog,
-    Announcement,
-    EmbeddingStore,
-    PasswordResetToken,
-    EmailVerificationToken,
-    ImpersonationSession,
-    DraftAnswer,
-    Job,
 )
 from app.middleware.auth import hash_password, create_access_token, create_admin_token
 

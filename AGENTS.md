@@ -81,6 +81,23 @@ Master password verification: `POST /admin/login/verify-master`
 - If no hash and no env var → only `super_admin` role can set it on first use
 - On success → returns `admin_token` (JWT, 30 min), stored as `X-Admin-Token` header
 
+## LSP Diagnostics
+
+**Always run `mcp_lsp_diagnostics` on specific changed files, never on the full directory.**
+
+Full directory scan hits a 50-file cap and takes ~25s. Per-file checks are <1s once the LSP is warm.
+
+```python
+# ✅ Correct — check only the files you touched
+mcp_lsp_diagnostics("/home/oh/dev/retrynote/backend/app/api/auth.py")
+mcp_lsp_diagnostics("/home/oh/dev/retrynote/backend/app/services/quiz.py")
+
+# ❌ Wrong — slow, hits 50-file cap, misses files beyond the cap
+mcp_lsp_diagnostics("/home/oh/dev/retrynote/backend")
+```
+
+If you edited multiple files, call `mcp_lsp_diagnostics` on each one individually (in parallel if independent).
+
 ## Dev DB (local SQLite)
 
 ```bash

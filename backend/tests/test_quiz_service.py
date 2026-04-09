@@ -1,6 +1,5 @@
 import uuid
 import pytest
-from datetime import datetime
 
 from app.services.quiz_service import (
     _normalize_text,
@@ -9,7 +8,6 @@ from app.services.quiz_service import (
 )
 from app.models.quiz import QuizItem, QuestionType, Judgement
 from app.models.objection import WeakPoint
-from app.models.user import User
 
 
 class TestNormalizeText:

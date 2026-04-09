@@ -1,18 +1,11 @@
 import uuid
-import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from httpx import AsyncClient
 
 from app.models import (
     User,
     UserRole,
     AdminSettings,
-    QuizSession,
-    QuizSessionStatus,
-    QuizMode,
-    SourceMode,
-    QuizItem,
-    QuestionType,
     ImpersonationSession,
 )
 from app.middleware.auth import hash_password, create_access_token
@@ -137,7 +130,7 @@ class TestListLogs:
         resp = await admin_client.get("/admin/logs", params={"level": "error"})
         assert resp.status_code == 200
         data = resp.json()
-        assert all(l["level"] == "error" for l in data["logs"])
+        assert all(log["level"] == "error" for log in data["logs"])
 
     async def test_list_logs_filter_by_service(
         self, db_session, admin_client: AsyncClient
@@ -167,7 +160,7 @@ class TestListLogs:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert all(l["service_name"] == "quiz_service" for l in data["logs"])
+        assert all(log["service_name"] == "quiz_service" for log in data["logs"])
 
     async def test_list_logs_filter_by_event_type(
         self, db_session, admin_client: AsyncClient
@@ -197,7 +190,7 @@ class TestListLogs:
         )
         assert resp.status_code == 200
         data = resp.json()
-        assert all(l["event_type"] == "generation" for l in data["logs"])
+        assert all(log["event_type"] == "generation" for log in data["logs"])
 
     async def test_user_cannot_list_logs(self, auth_client: AsyncClient):
         """Regular user → 403"""
@@ -1329,7 +1322,7 @@ class TestCSVExport:
         resp = await admin_client.get("/admin/export/logs", params={"level": "ERROR"})
         assert resp.status_code == 200
         content = resp.content.decode("utf-8-sig")
-        lines = [l for l in content.strip().split("\n") if l]
+        lines = [line for line in content.strip().split("\n") if line]
         data_lines = lines[1:]
         assert len(data_lines) == 1
         assert "ERROR" in data_lines[0]

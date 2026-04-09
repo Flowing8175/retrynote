@@ -1,5 +1,3 @@
-import uuid
-import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
@@ -12,7 +10,6 @@ from app.middleware.auth import (
     get_client_ip,
 )
 import jwt
-from jwt import InvalidTokenError as JWTError
 from app.config import settings
 
 

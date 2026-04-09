@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
-from app.middleware.auth import hash_password, create_access_token
+from app.middleware.auth import hash_password
 from app.models.quiz import (
     QuizSession,
     QuizSessionStatus,

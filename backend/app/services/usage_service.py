@@ -9,7 +9,7 @@ from app.schemas.billing import (
     UsageWindowSchema,
     CreditBalanceSchema,
 )
-from app.tier_config import TIER_LIMITS, WINDOW_DAYS, UserTier, FREE_STORAGE_BYTES
+from app.tier_config import TIER_LIMITS, WINDOW_DAYS, UserTier
 
 
 class UsageService:

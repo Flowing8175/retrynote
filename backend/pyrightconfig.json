@@ -2,10 +2,12 @@
   "venvPath": ".",
   "venv": ".venv",
   "pythonVersion": "3.12",
+  "useLibraryCodeForTypes": false,
   "include": ["app"],
   "exclude": [
     ".venv",
     "alembic",
+    "migrations",
     "storage",
     "tests",
     "**/__pycache__"

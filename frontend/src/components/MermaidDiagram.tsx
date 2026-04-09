@@ -28,6 +28,7 @@ export default function MermaidDiagram({ code, className }: MermaidDiagramProps)
     if (!code.trim()) return;
 
     let cancelled = false;
+    const container = containerRef.current;
 
     const renderDiagram = async () => {
       setState('loading');
@@ -70,8 +71,8 @@ export default function MermaidDiagram({ code, className }: MermaidDiagramProps)
     return () => {
       cancelled = true;
       // Clear SVG on cleanup to avoid stale renders when code prop changes
-      if (containerRef.current) {
-        containerRef.current.innerHTML = '';
+      if (container) {
+        container.innerHTML = '';
       }
     };
   }, [code]);

@@ -4,7 +4,6 @@ import uuid
 import zipfile
 import zlib
 
-import pytest
 from httpx import AsyncClient
 from app.models.file import File, FileSourceType, FileStatus
 from app.models.search import Job

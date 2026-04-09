@@ -117,7 +117,7 @@ def admin_regrade_task(self, job_id: str):
     from sqlalchemy import select
     from app.database import async_session
     from app.models.search import Job
-    from app.models.quiz import QuizItem, AnswerLog, QuizSession, QuizSessionStatus
+    from app.models.quiz import QuizItem, AnswerLog, QuizSession
 
     logger = logging.getLogger(__name__)
 
@@ -145,7 +145,7 @@ def admin_regrade_task(self, job_id: str):
                 .join(QuizSession, QuizSession.id == AnswerLog.quiz_session_id)
                 .where(
                     AnswerLog.quiz_item_id == item.id,
-                    AnswerLog.is_active_result == True,
+                    AnswerLog.is_active_result.is_(True),
                 )
             )
             rows = logs_result.all()
@@ -210,7 +210,7 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
                         func.sum(AnswerLog.score_awarded), func.sum(AnswerLog.max_score)
                     ).where(
                         AnswerLog.quiz_session_id == sid,
-                        AnswerLog.is_active_result == True,
+                        AnswerLog.is_active_result.is_(True),
                     )
                 )
                 agg = total_q.one()

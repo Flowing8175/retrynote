@@ -1,5 +1,4 @@
 import uuid
-import pytest
 from httpx import AsyncClient
 from datetime import datetime, timezone
 
@@ -8,7 +7,6 @@ from app.models.quiz import (
     QuizSessionStatus,
     QuizMode,
     SourceMode,
-    QuizSessionFile,
     QuizItem,
     QuestionType,
     AnswerLog,
@@ -16,11 +14,7 @@ from app.models.quiz import (
     ErrorType,
 )
 from app.models.file import File, FileSourceType, FileStatus
-from app.models.objection import Objection, ObjectionStatus, WeakPoint
 from app.models.admin import AdminAuditLog
-from app.models.search import ImpersonationSession, Job
-from app.models.user import User, UserRole
-from app.middleware.auth import hash_password, create_access_token
 
 
 class TestRegressionSessionStateTransitions:
@@ -590,7 +584,7 @@ class TestRegressionActiveResultRegrading:
             .select_from(AnswerLog)
             .where(
                 AnswerLog.quiz_item_id == item.id,
-                AnswerLog.is_active_result == True,
+                AnswerLog.is_active_result.is_(True),
             )
         )
         assert active_count.scalar() == 1
@@ -863,7 +857,7 @@ class TestRegressionAdminImpersonationAuditLogging:
         assert resp.status_code == 200
         logs = resp.json()["logs"]
 
-        actions = [l["action_type"] for l in logs]
+        actions = [entry["action_type"] for entry in logs]
         assert "impersonation_start" in actions
         assert "list_users" in actions
         assert "impersonation_end" in actions

@@ -16,10 +16,8 @@ from app.models.quiz import (
     Judgement,
     ErrorType,
 )
-from app.models.file import File, FileSourceType, FileStatus
+from app.models.file import File, FileStatus
 from app.models.objection import Objection, ObjectionStatus, WeakPoint
-from app.models.admin import AdminAuditLog
-from app.models.search import ImpersonationSession, Job
 from app.models.user import UserRole
 from app.middleware.auth import hash_password, create_access_token, create_admin_token
 from .conftest import make_quiz_items
@@ -784,7 +782,7 @@ class TestE2EScenario5AdminImpersonation:
         logs_data = logs_resp.json()
         assert logs_data["total"] >= 3
 
-        log_actions = [l["action_type"] for l in logs_data["logs"]]
+        log_actions = [entry["action_type"] for entry in logs_data["logs"]]
         assert "impersonation_start" in log_actions
         assert "regrade_request" in log_actions
         assert "impersonation_end" in log_actions

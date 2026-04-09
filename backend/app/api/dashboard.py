@@ -1,14 +1,14 @@
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from sqlalchemy import select, func, and_, false
+from fastapi import APIRouter, Depends, Query, Request
+from sqlalchemy import select, false
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.quiz import AnswerLog, QuizItem, QuizSession, Judgement, QuestionType
+from app.models.quiz import AnswerLog, QuizItem, QuizSession, Judgement
 from app.models.objection import WeakPoint
 from app.models.file import File
 from app.models.user import User
-from app.schemas.dashboard import DashboardResponse, DashboardQuery
+from app.schemas.dashboard import DashboardResponse
 from app.middleware.auth import get_current_user
 from app.utils.ai_client import stream_ai_text
 from app.config import settings as cfg
@@ -175,7 +175,7 @@ async def get_dashboard(
         .join(QuizSession, AnswerLog.quiz_session_id == QuizSession.id)
         .where(
             AnswerLog.user_id == user.id,
-            AnswerLog.is_active_result == True,
+            AnswerLog.is_active_result.is_(True),
             AnswerLog.deleted_at.is_(None),
             AnswerLog.graded_at >= since,
         )

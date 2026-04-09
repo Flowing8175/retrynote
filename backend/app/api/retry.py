@@ -1,6 +1,6 @@
 import uuid
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -12,7 +12,6 @@ from app.models.quiz import (
     QuizItem,
     AnswerLog,
     Judgement,
-    QuizSessionFile,
 )
 from app.models.objection import WeakPoint
 from app.models.user import User
@@ -50,7 +49,7 @@ async def create_retry_set(
                 .join(AnswerLog, AnswerLog.quiz_item_id == QuizItem.id)
                 .where(
                     AnswerLog.user_id == user.id,
-                    AnswerLog.is_active_result == True,
+                    AnswerLog.is_active_result.is_(True),
                     AnswerLog.deleted_at.is_(None),
                     AnswerLog.judgement.in_(
                         [Judgement.incorrect, Judgement.partial, Judgement.skipped]
@@ -82,7 +81,7 @@ async def create_retry_set(
             .where(
                 AnswerLog.quiz_session_id == req.quiz_session_id,
                 AnswerLog.user_id == user.id,
-                AnswerLog.is_active_result == True,
+                AnswerLog.is_active_result.is_(True),
                 AnswerLog.deleted_at.is_(None),
                 AnswerLog.judgement.in_(
                     [Judgement.incorrect, Judgement.partial, Judgement.skipped]

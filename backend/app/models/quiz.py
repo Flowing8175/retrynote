@@ -11,7 +11,6 @@ from sqlalchemy import (
     ForeignKey,
     JSON,
     Index,
-    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base, CommonMixin

@@ -1,14 +1,10 @@
 import logging
-import os
-import json
-import uuid
 from datetime import datetime, timezone
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
-from app.config import settings
 from app.database import async_session
 from app.models.file import File, FileStatus, ParsedDocument, DocumentChunk
 from app.models.quiz import (
@@ -770,7 +766,7 @@ judgement, score_awarded, max_score, normalized_user_answer, accepted_answers, g
                     select(AnswerLog).where(
                         AnswerLog.quiz_item_id == item.id,
                         AnswerLog.user_id == session.user_id,
-                        AnswerLog.is_active_result == True,
+                        AnswerLog.is_active_result.is_(True),
                     )
                 )
                 for old_log in existing.scalars().all():
@@ -921,7 +917,7 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
                         ).where(
                             AnswerLog.quiz_session_id == objection.quiz_session_id,
                             AnswerLog.user_id == objection.user_id,
-                            AnswerLog.is_active_result == True,
+                            AnswerLog.is_active_result.is_(True),
                         )
                     )
                     agg_row = score_agg.one()
