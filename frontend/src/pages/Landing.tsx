@@ -144,14 +144,14 @@ function FeaturesSection() {
             PDF, Word, 이미지, 텍스트를 모두 지원합니다.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center">
+          <div className="flex flex-col sm:flex-row sm:items-center">
             {[
               { step: '01', title: '자료 업로드', desc: 'PDF, 이미지, 텍스트' },
               { step: '02', title: 'AI 분석', desc: '핵심 개념 추출' },
               { step: '03', title: '문제 생성', desc: '4지선다 + 해설' },
-            ].map((item, i) => (
-              <div key={item.step} className="flex items-center">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 py-4 sm:py-0 sm:px-6 first:pl-0">
+            ].flatMap((item, i) => {
+              const els = [
+                <div key={item.step} className="flex items-center gap-3 py-3 sm:py-0 sm:px-6 first:pl-0">
                   <div className="w-10 h-10 rounded-xl bg-brand-500/15 border border-brand-500/30 flex items-center justify-center flex-shrink-0">
                     <span className="text-brand-400 text-xs font-bold">{item.step}</span>
                   </div>
@@ -159,15 +159,18 @@ function FeaturesSection() {
                     <p className="text-content-primary font-semibold text-sm">{item.title}</p>
                     <p className="text-content-muted text-xs mt-0.5">{item.desc}</p>
                   </div>
-                </div>
-                {i < 2 && (
-                  <div className="flex-shrink-0">
+                </div>,
+              ];
+              if (i < 2) {
+                els.push(
+                  <div key={`arrow-${i}`} className="flex-shrink-0 pl-[52px] py-2 sm:pl-0 sm:py-0 sm:self-center">
                     <span className="hidden sm:block text-content-muted/40 text-lg px-1">→</span>
-                    <span className="sm:hidden text-content-muted/40 text-sm pl-4 pb-1 block">↓</span>
+                    <span className="sm:hidden text-content-muted/40 text-sm">↓</span>
                   </div>
-                )}
-              </div>
-            ))}
+                );
+              }
+              return els;
+            })}
           </div>
         </div>
 
