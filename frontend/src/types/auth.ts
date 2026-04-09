@@ -33,6 +33,7 @@ export interface UserProfile {
   storage_used_bytes: number;
   storage_quota_bytes: number;
   last_login_at: string | null;
+  created_at?: string;
 }
 
 export interface PasswordResetRequest {

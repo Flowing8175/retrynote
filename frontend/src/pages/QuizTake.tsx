@@ -4,7 +4,7 @@ import { isAxiosError } from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
-import { LoadingSpinner, PillShimmer } from '@/components';
+import { PillShimmer } from '@/components';
 import type { AnswerLogEntry, AnswerResponse } from '@/types';
 import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import DiagramModal from '@/components/DiagramModal';
@@ -57,6 +57,50 @@ function ParticleEffect() {
           } as React.CSSProperties}
         />
       ))}
+    </div>
+  );
+}
+
+function QuizTakeSkeleton() {
+  return (
+    <div className="max-w-4xl mx-auto py-8 space-y-12 animate-pulse" aria-hidden="true">
+      <header className="space-y-4">
+        <div className="flex items-end justify-between">
+          <div className="space-y-1">
+            <div className="skeleton h-3 w-16 rounded-md" />
+            <div className="skeleton h-9 w-20 rounded-md" />
+          </div>
+          <div className="skeleton h-8 w-20 rounded-lg" />
+        </div>
+        <div className="skeleton h-2 w-full rounded-full" />
+      </header>
+
+      <section className="space-y-10">
+        <div className="space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="skeleton h-6 w-14 rounded-md" />
+            <div className="skeleton h-4 w-20 rounded-md" />
+          </div>
+          <div className="space-y-2">
+            <div className="skeleton h-8 w-full rounded-md" />
+            <div className="skeleton h-8 w-3/4 rounded-md" />
+          </div>
+        </div>
+
+        <div className="grid gap-3">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="skeleton h-16 rounded-2xl" />
+          ))}
+        </div>
+      </section>
+
+      <footer className="pt-8 flex items-center justify-between">
+        <div className="flex gap-3">
+          <div className="skeleton h-12 w-16 rounded-xl" />
+          <div className="skeleton h-12 w-16 rounded-xl" />
+        </div>
+        <div className="skeleton h-12 w-28 rounded-xl" />
+      </footer>
     </div>
   );
 }
@@ -267,7 +311,7 @@ export default function QuizTake() {
   };
 
   if (sessionLoading || (!sessionData && !sessionIsError)) {
-    return <LoadingSpinner message="퀴즈 데이터를 준비하고 있습니다" />;
+    return <QuizTakeSkeleton />;
   }
 
   if (sessionIsError) {
@@ -347,7 +391,7 @@ export default function QuizTake() {
   }
 
   if (itemsLoading || (!itemsData && !itemsIsError) || (sessionData.status === 'ready' && !itemsData?.length && !itemsIsError)) {
-    return <LoadingSpinner message="퀴즈 문항을 불러오고 있습니다" />;
+    return <QuizTakeSkeleton />;
   }
 
   if (itemsIsError) {

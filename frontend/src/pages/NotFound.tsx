@@ -54,14 +54,12 @@ export default function NotFound() {
           404
         </p>
 
-        <div className="animate-fade-in-up stagger-2 mt-2 rounded-3xl bg-surface-raised border border-surface-border p-6 shadow-xl shadow-black/40">
-          <img
-            src="/404.svg"
-            alt="당황한 마스코트"
-            className="w-40 h-40 object-contain"
-            draggable={false}
-          />
-        </div>
+        <img
+          src="/404.png"
+          alt="당황한 마스코트"
+          className="animate-fade-in-up stagger-2 mt-2 w-[32rem] h-72 object-contain"
+          draggable={false}
+        />
 
         <h1 className="animate-fade-in-up stagger-3 mt-7 text-xl font-semibold text-content-primary">
           요청하신 페이지를 찾을 수 없습니다.

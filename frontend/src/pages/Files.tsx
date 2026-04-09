@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Upload, Trash2, Download, Edit3, RotateCw, Plus, X } from 'lucide-react';
 import type { AxiosError } from 'axios';
 import { filesApi } from '@/api';
-import { LoadingSpinner, Modal, Pagination, StatusBadge } from '@/components';
+import { Modal, Pagination, StatusBadge, SkeletonTransition } from '@/components';
 import { isFileProcessingStatus } from '@/types';
 import type { FileDetail } from '@/types';
 
@@ -31,6 +31,66 @@ function formatDateTime(value: string | null) {
 function formatFileType(file: FileDetail) {
   if (file.file_type) return file.file_type.toUpperCase();
   return file.source_type === 'upload' ? 'UPLOAD' : 'DATA';
+}
+
+function FilesSkeleton() {
+  return (
+    <div className="max-w-6xl mx-auto space-y-12 py-10 animate-pulse" aria-hidden="true">
+      <section className="space-y-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
+          <div className="space-y-2">
+            <div className="skeleton h-9 w-36 rounded-md" />
+            <div className="skeleton h-4 w-80 rounded-md" />
+          </div>
+          <div className="flex gap-3">
+            <div className="skeleton h-20 w-28 rounded-2xl" />
+            <div className="skeleton h-20 w-28 rounded-2xl" />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-8 lg:grid-cols-[240px_1fr] items-start">
+        <aside className="space-y-2">
+          <div className="bg-surface border border-white/[0.05] rounded-3xl p-5 space-y-3">
+            <div className="skeleton h-3 w-16 rounded-md mb-4" />
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="skeleton h-10 w-full rounded-xl" />
+            ))}
+          </div>
+        </aside>
+
+        <div className="space-y-8">
+          <div className="border-2 border-dashed border-white/[0.1] rounded-3xl p-12 flex flex-col items-center gap-4">
+            <div className="skeleton h-16 w-16 rounded-full" />
+            <div className="skeleton h-5 w-36 rounded-md" />
+            <div className="skeleton h-4 w-56 rounded-md" />
+            <div className="skeleton h-10 w-28 rounded-xl" />
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between border-b border-white/[0.05] pb-4">
+              <div className="skeleton h-7 w-28 rounded-md" />
+              <div className="skeleton h-9 w-32 rounded-xl" />
+            </div>
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-surface border border-white/[0.05] rounded-3xl p-5">
+                <div className="flex items-start gap-4">
+                  <div className="skeleton h-5 w-5 rounded mt-1 shrink-0" />
+                  <div className="flex-1 space-y-3">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <div className="skeleton h-6 w-14 rounded-md" />
+                      <div className="skeleton h-4 w-40 rounded-md" />
+                    </div>
+                    <div className="skeleton h-6 w-64 rounded-md" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
 }
 
 export default function Files() {
@@ -174,14 +234,14 @@ export default function Files() {
     }
   };
 
-  if (isLoading) return <LoadingSpinner message="자료 목록을 불러오는 중..." />;
-
   const files = data?.files ?? [];
   const folders = folderData ?? [];
   const selectedCount = selectedFileIds.length;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-12 py-10">
+    <SkeletonTransition loading={isLoading} skeleton={<FilesSkeleton />}>
+    {isLoading ? null : (
+    <div className="max-w-6xl mx-auto space-y-12 py-10 animate-fade-in">
       {/* Header Section */}
       <section className="animate-fade-in-up space-y-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
@@ -557,5 +617,7 @@ export default function Files() {
         </div>
       </Modal>
     </div>
+    )}
+    </SkeletonTransition>
   );
 }

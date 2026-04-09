@@ -1,11 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700&display=swap');
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;900&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: 'SUIT Variable', 'Pretendard Variable', 'Noto Sans KR', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Pretendard Variable', 'Pretendard', 'SUIT Variable', 'Noto Sans KR', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -155,12 +156,34 @@ textarea:focus-visible,
   animation: pill-wave 2.2s ease-in-out infinite;
 }
 
+/* ── Quiz mockup float ── */
+
+@keyframes gentle-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+.animate-gentle-float {
+  animation: gentle-float 4s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
 /* ── Entrance & feedback animations ── */
 
 @keyframes fade-in-up {
   from {
     opacity: 0;
-    transform: translateY(0.75rem);
+    transform: translateY(1.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in-down {
+  from {
+    opacity: 0;
+    transform: translateY(-1rem);
   }
   to {
     opacity: 1;
@@ -176,7 +199,7 @@ textarea:focus-visible,
 @keyframes scale-in {
   from {
     opacity: 0;
-    transform: scale(0.92);
+    transform: scale(0.94);
   }
   to {
     opacity: 1;
@@ -184,89 +207,52 @@ textarea:focus-visible,
   }
 }
 
-@keyframes slide-in-right {
+@keyframes reveal-right {
   from {
-    opacity: 0;
-    transform: translateX(1rem);
+    clip-path: inset(0 100% 0 0);
   }
   to {
-    opacity: 1;
-    transform: translateX(0);
+    clip-path: inset(0 0 0 0);
   }
-}
-
-@keyframes progress-fill {
-  from { width: 0; }
-}
-
-@keyframes ring-reveal {
-  from {
-    opacity: 0;
-    transform: scale(0.8) rotate(-90deg);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) rotate(0deg);
-  }
-}
-
-@keyframes answer-correct {
-  0%   { transform: scale(1); }
-  40%  { transform: scale(1.02); }
-  100% { transform: scale(1); }
-}
-
-@keyframes answer-wrong {
-  0%, 100% { transform: translateX(0); }
-  20%      { transform: translateX(-4px); }
-  40%      { transform: translateX(4px); }
-  60%      { transform: translateX(-2px); }
-  80%      { transform: translateX(2px); }
 }
 
 .animate-fade-in-up {
-  animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-fade-in-down {
+  animation: fade-in-down 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .animate-fade-in {
-  animation: fade-in 0.5s ease both;
+  animation: fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-reveal-right {
+  animation: reveal-right 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .ease-out-expo {
   transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* Custom Selection */
-::selection {
-  background: oklch(0.70 0.18 165 / 0.3);
-  color: white;
-}
-
-/* Industrial Scrollbar */
-::-webkit-scrollbar {
-  width: 12px;
-  height: 12px;
-}
-
-::-webkit-scrollbar-track {
-  background: oklch(0.10 0.02 250);
-}
-
-::-webkit-scrollbar-thumb {
-  background: oklch(0.20 0.02 250);
-  border: 3px solid oklch(0.10 0.02 250);
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.70 0.18 165);
+.ease-out-quart {
+  transition-timing-function: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* Staggered entrance delays */
-.stagger-1 { animation-delay: 0.05s; }
-.stagger-2 { animation-delay: 0.1s; }
-.stagger-3 { animation-delay: 0.15s; }
-.stagger-4 { animation-delay: 0.2s; }
-.stagger-5 { animation-delay: 0.25s; }
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }
+.stagger-7 { animation-delay: 0.7s; }
+.stagger-8 { animation-delay: 0.8s; }
 
 /* ── Coaching word-level fade-in (Gemini-style) ── */
 
@@ -300,7 +286,8 @@ textarea:focus-visible,
   .animate-answer-wrong,
   .animate-progress-ring,
   .pill-shimmer-wave,
-  .coaching-word-fade {
+  .coaching-word-fade,
+  .animate-gentle-float {
     animation: none;
     opacity: 1;
   }

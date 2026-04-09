@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu, X, CreditCard, HelpCircle } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu, X, CreditCard } from 'lucide-react';
 import AnnouncementBanner from './AnnouncementBanner';
 import Navbar from './Navbar';
 import UsageBar from './UsageBar';
@@ -34,7 +34,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
   const activeNavItem = navItems.find((item) => location.pathname === item.path);
 
   return (
-    <div className="min-h-screen bg-background text-foreground font-sans">
+    <div className="min-h-screen bg-background text-foreground font-sans pt-16">
       <Navbar />
       <AnnouncementBanner />
       <div className="mx-auto flex w-full max-w-[1600px] items-start">
@@ -107,25 +107,6 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
                     );
                   })}
                 </nav>
-                <div className="px-3 py-3 border-t border-white/[0.05]">
-                  <div className={`flex items-center gap-4 px-4 py-3 text-sm font-medium rounded-xl text-content-muted hover:text-white hover:bg-surface-hover transition-all cursor-default ${!sidebarExpanded ? 'justify-center' : ''}`}>
-                    <HelpCircle size={18} className="shrink-0" />
-                    {sidebarExpanded && (
-                      <div className="space-y-2">
-                        <span className="text-content-secondary text-xs font-medium">학습 흐름</span>
-                        <div className="flex items-center gap-1.5 text-[0.65rem] text-content-muted">
-                          <span>자료</span>
-                          <span className="text-content-muted/50">→</span>
-                          <span>퀴즈</span>
-                          <span className="text-content-muted/50">→</span>
-                          <span>오답</span>
-                          <span className="text-content-muted/50">→</span>
-                          <span className="text-brand-300">재도전</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
                 <UsageBar expanded={sidebarExpanded} />
               </div>
             </aside>

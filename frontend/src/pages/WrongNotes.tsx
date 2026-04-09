@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { wrongNotesApi } from '@/api';
-import { EmptyState, LoadingSpinner, Pagination, StatusBadge } from '@/components';
+import { EmptyState, Pagination, StatusBadge, SkeletonTransition } from '@/components';
 import type { WrongNoteItem } from '@/types';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -56,6 +56,44 @@ function resolveAnswer(
   const optionText = options[answer];
   if (typeof optionText === 'string') return `${answer.toUpperCase()}. ${optionText}`;
   return answer;
+}
+
+function WrongNotesSkeleton() {
+  return (
+    <div className="max-w-4xl mx-auto space-y-12 py-10 animate-pulse" aria-hidden="true">
+      <section className="space-y-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
+          <div className="space-y-2">
+            <div className="skeleton h-10 w-32 rounded-md" />
+            <div className="skeleton h-4 w-80 rounded-md" />
+          </div>
+          <div className="flex gap-3">
+            <div className="skeleton h-11 w-36 rounded-xl" />
+            <div className="skeleton h-11 w-36 rounded-xl" />
+          </div>
+        </div>
+      </section>
+
+      <div className="space-y-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-3xl border border-white/[0.05] bg-surface px-5 sm:px-8 py-6">
+            <div className="flex items-start gap-4 sm:gap-6">
+              <div className="skeleton h-5 w-5 rounded mt-1 shrink-0" />
+              <div className="flex-1 space-y-4">
+                <div className="flex flex-wrap gap-2">
+                  <div className="skeleton h-6 w-14 rounded-md" />
+                  <div className="skeleton h-5 w-24 rounded-md" />
+                  <div className="skeleton h-5 w-14 rounded-full" />
+                </div>
+                <div className="skeleton h-6 w-full rounded-md" />
+                <div className="skeleton h-5 w-3/4 rounded-md" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function WrongNotes() {
@@ -120,12 +158,10 @@ export default function WrongNotes() {
 
   const selectedCount = selectedNotes.size;
 
-  if (isLoading) {
-    return <LoadingSpinner message="오답 기록 불러오는 중" />;
-  }
-
   return (
-    <div className="max-w-4xl mx-auto space-y-12 py-10">
+    <SkeletonTransition loading={isLoading} skeleton={<WrongNotesSkeleton />}>
+    {isLoading ? null : (
+    <div className="max-w-4xl mx-auto space-y-12 py-10 animate-fade-in">
       <section className="animate-fade-in-up space-y-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
           <div className="space-y-2">
@@ -303,5 +339,7 @@ export default function WrongNotes() {
         </div>
       )}
     </div>
+    )}
+    </SkeletonTransition>
   );
 }

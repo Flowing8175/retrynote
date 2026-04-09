@@ -9,7 +9,6 @@ import UpgradeModal from '@/components/UpgradeModal';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
 const Landing = React.lazy(() => import('@/pages/Landing'));
-const GuestTry = React.lazy(() => import('@/pages/GuestTry'));
 const Login = React.lazy(() => import('@/pages/Login'));
 const Signup = React.lazy(() => import('@/pages/Signup'));
 const PasswordReset = React.lazy(() => import('@/pages/PasswordReset'));
@@ -32,7 +31,6 @@ const Terms = React.lazy(() => import('@/pages/Terms'));
 const Privacy = React.lazy(() => import('@/pages/Privacy'));
 const Refund = React.lazy(() => import('@/pages/Refund'));
 const DiagramPage = React.lazy(() => import('@/pages/DiagramPage'));
-const Landing = React.lazy(() => import('@/pages/Landing'));
 const TryQuiz = React.lazy(() => import('@/pages/TryQuiz'));
 const TryQuizTake = React.lazy(() => import('@/pages/TryQuizTake'));
 const TryQuizResults = React.lazy(() => import('@/pages/TryQuizResults'));
@@ -78,7 +76,7 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 }
 
 function LazyRoute({ children }: { children: React.ReactNode }) {
-  return <Suspense fallback={<LoadingSpinner />}>{children}</Suspense>;
+  return <Suspense fallback={null}>{children}</Suspense>;
 }
 
 function App() {
@@ -103,14 +101,9 @@ function App() {
               </LazyRoute>
             }
           />
-          <Route
-            path="/try"
-            element={
-              <LazyRoute>
-                <GuestTry />
-              </LazyRoute>
-            }
-          />
+          <Route path="/try" element={<GuestErrorBoundary><LazyRoute><TryQuiz /></LazyRoute></GuestErrorBoundary>} />
+          <Route path="/try/quiz/:sessionId" element={<GuestErrorBoundary><LazyRoute><TryQuizTake /></LazyRoute></GuestErrorBoundary>} />
+          <Route path="/try/quiz/:sessionId/results" element={<GuestErrorBoundary><LazyRoute><TryQuizResults /></LazyRoute></GuestErrorBoundary>} />
           <Route
             path="/login"
             element={
@@ -156,14 +149,7 @@ function App() {
             <Route path="/privacy" element={<LazyRoute><Privacy /></LazyRoute>} />
             <Route path="/refund" element={<LazyRoute><Refund /></LazyRoute>} />
 
-<<<<<<< HEAD
           {/* Protected Routes */}
-=======
-          <Route path="/try" element={<GuestErrorBoundary><LazyRoute><TryQuiz /></LazyRoute></GuestErrorBoundary>} />
-          <Route path="/try/quiz/:sessionId" element={<GuestErrorBoundary><LazyRoute><TryQuizTake /></LazyRoute></GuestErrorBoundary>} />
-          <Route path="/try/quiz/:sessionId/results" element={<GuestErrorBoundary><LazyRoute><TryQuizResults /></LazyRoute></GuestErrorBoundary>} />
-
->>>>>>> 1fd0aa8d2982ee2d6c5a36bc527d4191e42a2bfe
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <Layout>
@@ -293,3 +279,4 @@ function App() {
 }
 
 export default App;
+

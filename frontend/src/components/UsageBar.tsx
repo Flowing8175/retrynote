@@ -96,7 +96,7 @@ export default function UsageBar({ expanded = true }: UsageBarProps) {
   // Loading skeleton
   if (isLoading || !data) {
     return (
-      <div data-testid="usage-bar" className="px-3 py-4 border-t border-white/[0.05] space-y-3">
+      <div data-testid="usage-bar" className="px-4 py-4 border-t border-white/[0.05] space-y-3">
         <div className="flex items-center justify-between">
           <div className="h-5 w-14 bg-surface-hover rounded-md animate-pulse" />
           <div className="h-4 w-12 bg-surface-hover rounded animate-pulse" />
@@ -118,7 +118,7 @@ export default function UsageBar({ expanded = true }: UsageBarProps) {
   const tierDisplay = TIER_DISPLAY[tier];
 
   return (
-    <div data-testid="usage-bar" className="px-3 py-4 border-t border-white/[0.05] space-y-3">
+    <div data-testid="usage-bar" className="px-4 py-4 border-t border-white/[0.05] space-y-3">
       {/* CSS keyframes injected once */}
       <style>{CELEBRATION_STYLES}</style>
 

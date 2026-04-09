@@ -3,7 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide-react';
 import { filesApi, quizApi } from '@/api';
-import { LoadingSpinner, Modal, StatusBadge } from '@/components';
+import { Modal, StatusBadge, SkeletonTransition } from '@/components';
 import { isFileProcessingStatus } from '@/types/file';
 import { getDetailMessage } from '@/utils/errorMessages';
 import { formatFileSize, formatFileSource } from '@/utils/formatters';
@@ -36,6 +36,56 @@ const DIFFICULTY_OPTIONS = [
   { value: 'medium', label: '보통' },
   { value: 'hard', label: '어려움' },
 ];
+
+function QuizNewSkeleton() {
+  return (
+    <div className="max-w-4xl mx-auto space-y-16 py-8 animate-pulse" aria-hidden="true">
+      <section className="space-y-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
+          <div className="space-y-2">
+            <div className="skeleton h-9 w-36 rounded-md" />
+            <div className="skeleton h-4 w-72 rounded-md" />
+          </div>
+          <div className="skeleton h-10 w-36 rounded-xl" />
+        </div>
+      </section>
+
+      <section className="space-y-8">
+        <div className="flex items-center gap-3">
+          <div className="skeleton h-8 w-8 rounded-full" />
+          <div className="skeleton h-7 w-20 rounded-md" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="skeleton h-32 rounded-3xl" />
+          <div className="skeleton h-32 rounded-3xl" />
+        </div>
+        <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-4">
+          <div className="flex gap-2">
+            <div className="skeleton h-8 w-14 rounded-xl" />
+            <div className="skeleton h-8 w-24 rounded-xl" />
+            <div className="skeleton h-8 w-20 rounded-xl" />
+          </div>
+          <div className="space-y-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="skeleton h-16 rounded-2xl" />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="space-y-8">
+        <div className="flex items-center gap-3">
+          <div className="skeleton h-8 w-8 rounded-full" />
+          <div className="skeleton h-7 w-20 rounded-md" />
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="skeleton h-52 rounded-3xl" />
+          <div className="skeleton h-52 rounded-3xl" />
+        </div>
+      </section>
+    </div>
+  );
+}
 
 export default function QuizNew() {
   const navigate = useNavigate();
@@ -218,12 +268,10 @@ export default function QuizNew() {
     void createQuiz();
   };
 
-  if (filesLoading) {
-    return <LoadingSpinner message="퀴즈 환경을 준비하고 있습니다" />;
-  }
-
   return (
-    <div className="max-w-4xl mx-auto space-y-16 py-8">
+    <SkeletonTransition loading={filesLoading} skeleton={<QuizNewSkeleton />}>
+    {filesLoading ? null : (
+    <div className="max-w-4xl mx-auto space-y-16 py-8 animate-fade-in">
       {/* Header Section */}
       <section className="animate-fade-in-up space-y-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
@@ -657,5 +705,7 @@ export default function QuizNew() {
         </div>
       </Modal>
     </div>
+    )}
+    </SkeletonTransition>
   );
 }

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { quizApi } from '@/api';
-import { LoadingSpinner, Modal, StatusBadge } from '@/components';
+import { Modal, StatusBadge, SkeletonTransition } from '@/components';
 
 function formatHistoryDate(value: string) {
   return new Intl.DateTimeFormat('ko-KR', {
@@ -49,6 +49,42 @@ function getSessionSubtitle(session: { question_count: number | null; mode: stri
   return parts.join(' · ');
 }
 
+function QuizHistorySkeleton() {
+  return (
+    <div className="space-y-8 animate-pulse" aria-hidden="true">
+      <section className="px-1 py-2 space-y-2">
+        <div className="skeleton h-10 w-36 rounded-md" />
+        <div className="skeleton h-4 w-72 rounded-md" />
+      </section>
+
+      <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-7 md:px-8 space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="skeleton h-7 w-24 rounded-md" />
+          <div className="skeleton h-10 w-36 rounded-2xl" />
+        </div>
+        <div className="space-y-3 mt-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="flex flex-col gap-4 rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex-1 space-y-3">
+                <div className="flex gap-2">
+                  <div className="skeleton h-6 w-20 rounded-full" />
+                  <div className="skeleton h-6 w-16 rounded-full" />
+                </div>
+                <div className="skeleton h-6 w-64 rounded-md" />
+                <div className="skeleton h-4 w-48 rounded-md" />
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <div className="skeleton h-10 w-20 rounded-xl" />
+                <div className="skeleton h-10 w-16 rounded-xl" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export default function QuizHistory() {
   const queryClient = useQueryClient();
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -67,13 +103,11 @@ export default function QuizHistory() {
     },
   });
 
-  if (isLoading) {
-    return <LoadingSpinner message="퀴즈 기록을 불러오는 중" />;
-  }
-
   return (
+    <SkeletonTransition loading={isLoading} skeleton={<QuizHistorySkeleton />}>
+    {isLoading ? null : (
     <>
-      <div className="space-y-8">
+      <div className="space-y-8 animate-fade-in">
         <section className="animate-fade-in-up px-1 py-2">
           <h1 className="text-3xl font-semibold tracking-tight text-content-primary md:text-4xl">
             퀴즈 기록
@@ -188,5 +222,7 @@ export default function QuizHistory() {
         </div>
       </Modal>
     </>
+    )}
+    </SkeletonTransition>
   );
 }

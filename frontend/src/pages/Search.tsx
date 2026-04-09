@@ -3,8 +3,28 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Search as SearchIcon } from 'lucide-react';
 import { searchApi } from '@/api';
-import { EmptyState, LoadingSpinner } from '@/components';
+import { EmptyState } from '@/components';
 import type { SearchResultItem } from '@/types/search';
+
+function SearchResultsSkeleton() {
+  return (
+    <section className="space-y-4 animate-pulse" aria-hidden="true">
+      <div className="skeleton h-4 w-32 rounded-md px-1" />
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="rounded-2xl border border-white/[0.07] bg-surface px-6 py-5 space-y-4">
+            <div className="skeleton h-6 w-16 rounded-full" />
+            <div className="skeleton h-7 w-3/4 rounded-md" />
+            <div className="space-y-1.5">
+              <div className="skeleton h-4 w-full rounded-md" />
+              <div className="skeleton h-4 w-5/6 rounded-md" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export default function Search() {
   const [query, setQuery] = useState('');
@@ -81,7 +101,7 @@ export default function Search() {
       </section>
 
       {isLoading ? (
-        <LoadingSpinner message="검색 결과 정리 중" />
+        <SearchResultsSkeleton />
       ) : !hasQuery ? (
         <EmptyState
           icon={<SearchIcon size={28} />}

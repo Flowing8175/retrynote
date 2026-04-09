@@ -3,10 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { dashboardApi } from '@/api';
 import CoachingDisplay from '@/components/CoachingDisplay';
+import { SkeletonTransition } from '@/components';
 import DiagramModal from '@/components/DiagramModal';
 import type { DashboardResponse, RetryLocationState } from '@/types';
 import { formatPercent, formatQuestionType, formatDateTime } from '@/utils/formatters';
-import { useAuthStore } from '@/stores/authStore';
+import { useUsageStatus } from '@/lib/useUsageStatus';
 
 function DashboardSkeleton() {
   return (
@@ -72,9 +73,9 @@ function DashboardSkeleton() {
 
 
 function CreditUsageBar() {
-  const usageStatus = useAuthStore((s) => s.usageStatus);
+  const { data: usageStatus, isLoading } = useUsageStatus();
 
-  if (usageStatus === null) {
+  if (isLoading || !usageStatus) {
     return (
       <div className="animate-pulse space-y-2 rounded-2xl border border-white/[0.08] bg-surface p-4">
         <div className="h-4 w-64 rounded bg-surface-deep" />
@@ -178,11 +179,7 @@ export default function Dashboard() {
 
 
 
-  if (isLoading) {
-    return <DashboardSkeleton />;
-  }
-
-  if (isError || !dashboardData) {
+  if (!isLoading && (isError || !dashboardData)) {
     return (
       <div className="max-w-4xl mx-auto py-32 text-center space-y-4">
         <h1 className="text-2xl font-semibold text-white">대시보드를 불러오지 못했습니다</h1>
@@ -194,6 +191,14 @@ export default function Dashboard() {
           새로고침
         </button>
       </div>
+    );
+  }
+
+  if (!dashboardData) {
+    return (
+      <SkeletonTransition loading={true} skeleton={<DashboardSkeleton />}>
+        {null}
+      </SkeletonTransition>
     );
   }
 
@@ -211,9 +216,10 @@ export default function Dashboard() {
     conceptLabels: Object.fromEntries(dashboardData.retry_recommendations.map((r) => [r.concept_key, r.concept_label])),
   };
 
-  if (!hasData) {
-    return (
-      <div className="max-w-4xl mx-auto space-y-16 py-20">
+  return (
+    <SkeletonTransition loading={isLoading} skeleton={<DashboardSkeleton />}>
+      {!hasData ? (
+        <div className="max-w-4xl mx-auto space-y-16 py-20">
         <CreditUsageBar />
         <div className="animate-fade-in-up">
           <h1 className="text-3xl font-semibold tracking-tight text-content-primary md:text-4xl leading-tight">
@@ -248,10 +254,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-    );
-  }
-
-  return (
+      ) : (
     <>
     <div className="space-y-20 py-8">
       <CreditUsageBar />
@@ -488,5 +491,7 @@ export default function Dashboard() {
       conceptLabel={diagramModal?.conceptLabel ?? ''}
     />
     </>
+      )}
+    </SkeletonTransition>
   );
 }

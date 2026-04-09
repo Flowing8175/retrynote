@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { quizApi } from '@/api';
-import { StatusBadge, LoadingSpinner } from '@/components';
+import { StatusBadge, SkeletonTransition } from '@/components';
 import { ChevronRight, AlertCircle, Flame } from 'lucide-react';
 
 function formatMode(mode: string) {
@@ -45,6 +45,63 @@ function getPerformanceTier(scorePercentage: number, canReviewWrongNotes: boolea
       ? { label: '오답노트 확인하기', to: '/wrong-notes' }
       : { label: '새 퀴즈 시작하기', to: '/quiz/new' }
   };
+}
+
+function QuizResultsSkeleton({ message }: { message?: string }) {
+  return (
+    <div className="max-w-4xl mx-auto py-10 space-y-16 animate-pulse" aria-hidden="true">
+      <section>
+        <div className="bg-surface border border-white/[0.05] rounded-3xl p-10 sm:p-16 flex flex-col items-center space-y-8">
+          <div className="skeleton h-48 w-48 sm:h-56 sm:w-56 rounded-full" />
+          <div className="space-y-4 w-full max-w-xl flex flex-col items-center">
+            <div className="skeleton h-6 w-28 rounded-md" />
+            <div className="skeleton h-8 w-72 rounded-md" />
+            <div className="skeleton h-4 w-80 max-w-full rounded-md" />
+          </div>
+          <div className="flex gap-4">
+            <div className="skeleton h-12 w-44 rounded-xl" />
+            <div className="skeleton h-12 w-44 rounded-xl" />
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-4 sm:grid-cols-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-surface border border-white/[0.05] rounded-2xl p-6 space-y-2">
+            <div className="skeleton h-3 w-16 rounded-md" />
+            <div className="skeleton h-9 w-20 rounded-md" />
+          </div>
+        ))}
+      </section>
+
+      <section className="space-y-6">
+        <div className="skeleton h-8 w-48 rounded-md border-b border-white/[0.05] pb-4" />
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-surface border border-white/[0.05] rounded-3xl p-6 sm:p-8">
+              <div className="flex items-start gap-4 sm:gap-6">
+                <div className="skeleton h-8 w-8 rounded-full shrink-0" />
+                <div className="flex-1 space-y-4">
+                  <div className="flex gap-2">
+                    <div className="skeleton h-5 w-14 rounded-full" />
+                    <div className="skeleton h-4 w-20 rounded-md" />
+                  </div>
+                  <div className="skeleton h-6 w-full rounded-md" />
+                  <div className="skeleton h-14 w-full rounded-xl" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {message && (
+        <p className="text-center text-sm font-medium text-content-muted animate-fade-in" aria-live="polite">
+          {message}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function QuizResults() {
@@ -153,20 +210,20 @@ export default function QuizResults() {
     );
   }
 
-  if (sessionLoading || itemsLoading || !session) {
-    return <LoadingSpinner message="결과를 분석하고 있습니다" />;
-  }
-
-  if (completeQuizMutation.isPending || shouldFinalizeNormalSession) {
-    return <LoadingSpinner message="결과를 정리하고 있습니다" />;
-  }
-
-  if (session.status === 'submitted' || session.status === 'grading') {
-    return <LoadingSpinner message="채점 결과를 정리하고 있습니다" />;
-  }
+  const isShowingSkeleton =
+    sessionLoading || itemsLoading || !session ||
+    completeQuizMutation.isPending || shouldFinalizeNormalSession ||
+    session?.status === 'submitted' || session?.status === 'grading';
+  const skeletonMessage = completeQuizMutation.isPending || shouldFinalizeNormalSession
+    ? '결과를 정리하고 있습니다'
+    : session?.status === 'submitted' || session?.status === 'grading'
+      ? '채점 결과를 정리하고 있습니다'
+      : undefined;
 
   return (
-    <div className="max-w-4xl mx-auto py-10 space-y-16">
+    <SkeletonTransition loading={isShowingSkeleton} skeleton={<QuizResultsSkeleton message={skeletonMessage} />}>
+    {isShowingSkeleton ? null : (
+    <div className="max-w-4xl mx-auto py-10 space-y-16 animate-fade-in">
       {/* Score Hero */}
       <section className="animate-fade-in-up">
         <div className="bg-surface border border-white/[0.05] rounded-3xl p-10 sm:p-16 flex flex-col items-center text-center space-y-8">
@@ -335,5 +392,7 @@ export default function QuizResults() {
         </Link>
       </footer>
     </div>
+    )}
+    </SkeletonTransition>
   );
 }

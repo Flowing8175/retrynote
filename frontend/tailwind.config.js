@@ -84,7 +84,7 @@ export default {
       },
       fontFamily: {
         display: ['Archivo', 'system-ui', '-apple-system', 'sans-serif'],
-        body: ['SUIT Variable', 'Pretendard Variable', 'Noto Sans KR', 'system-ui', '-apple-system', 'sans-serif'],
+        body: ['Pretendard Variable', 'Pretendard', 'SUIT Variable', 'Noto Sans KR', 'system-ui', '-apple-system', 'sans-serif'],
       },
       borderRadius: {
         lg: 'var(--radius)',
