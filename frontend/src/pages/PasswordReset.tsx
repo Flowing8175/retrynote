@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authApi } from '@/api';
+import { getDetailMessage } from '@/utils/errorMessages';
 
 export default function PasswordReset() {
   const navigate = useNavigate();
@@ -20,8 +21,8 @@ export default function PasswordReset() {
       await authApi.passwordResetRequest({ email });
       setSuccess('재설정 안내를 이메일로 보냈습니다. 메일을 확인해 다음 단계로 진행하세요.');
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      setError(axiosError.response?.data?.detail || '요청에 실패했습니다.');
+      const axiosError = err as { response?: { data?: { detail?: unknown } } };
+      setError(getDetailMessage(axiosError.response?.data?.detail, '요청에 실패했습니다.'));
     } finally {
       setLoading(false);
     }
@@ -36,8 +37,8 @@ export default function PasswordReset() {
       setSuccess('비밀번호가 성공적으로 변경되었습니다.');
       setTimeout(() => navigate('/login'), 2000);
     } catch (err: unknown) {
-      const axiosError = err as { response?: { data?: { detail?: string } } };
-      setError(axiosError.response?.data?.detail || '비밀번호 변경에 실패했습니다.');
+      const axiosError = err as { response?: { data?: { detail?: unknown } } };
+      setError(getDetailMessage(axiosError.response?.data?.detail, '비밀번호 변경에 실패했습니다.'));
     } finally {
       setLoading(false);
     }

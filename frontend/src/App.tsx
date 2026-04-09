@@ -7,6 +7,8 @@ import { Layout } from '@/components';
 import UpgradeModal from '@/components/UpgradeModal';
 import LoadingSpinner from '@/components/LoadingSpinner';
 
+const Landing = React.lazy(() => import('@/pages/Landing'));
+const GuestTry = React.lazy(() => import('@/pages/GuestTry'));
 const Login = React.lazy(() => import('@/pages/Login'));
 const Signup = React.lazy(() => import('@/pages/Signup'));
 const PasswordReset = React.lazy(() => import('@/pages/PasswordReset'));
@@ -44,15 +46,25 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
+function LandingOrDashboard() {
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  return (
+    <Suspense fallback={<LoadingSpinner />}>
+      <Landing />
+    </Suspense>
+  );
+}
+
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  return !isAuthenticated ? <>{children}</> : <Navigate to="/" replace />;
+  return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
-  return isAdmin ? <>{children}</> : <Navigate to="/" replace />;
+  return isAdmin ? <>{children}</> : <Navigate to="/dashboard" replace />;
 }
 
 function LazyRoute({ children }: { children: React.ReactNode }) {
@@ -66,6 +78,22 @@ function App() {
         <BrowserRouter>
         <Routes>
           {/* Public Routes */}
+          <Route
+            path="/"
+            element={
+              <LazyRoute>
+                <LandingOrDashboard />
+              </LazyRoute>
+            }
+          />
+          <Route
+            path="/try"
+            element={
+              <LazyRoute>
+                <GuestTry />
+              </LazyRoute>
+            }
+          />
           <Route
             path="/login"
             element={
@@ -114,7 +142,7 @@ function App() {
             <Route path="/refund" element={<LazyRoute><Refund /></LazyRoute>} />
 
           {/* Protected Routes */}
-          <Route path="/" element={
+          <Route path="/dashboard" element={
             <ProtectedRoute>
               <Layout>
                 <LazyRoute>

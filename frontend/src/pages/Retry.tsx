@@ -4,6 +4,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { retryApi, wrongNotesApi } from '@/api';
 import type { RetryLocationState } from '@/types';
+import { getDetailMessage } from '@/utils/errorMessages';
 
 const QUESTION_COUNT_PRESETS = [5, 10, 15];
 
@@ -96,8 +97,8 @@ export default function Retry() {
         setCreditError(true);
         return;
       }
-      const axiosError = mutationError as { response?: { data?: { detail?: string } } };
-      setError(axiosError.response?.data?.detail || '재도전 세트를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.');
+      const axiosError = mutationError as { response?: { data?: { detail?: unknown } } };
+      setError(getDetailMessage(axiosError.response?.data?.detail, '재도전 세트를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.'));
     },
   });
 

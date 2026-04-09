@@ -1,4 +1,6 @@
 export { authApi } from './auth';
+export { guestApi } from './guest';
+export type { GuestQuizResponse, MigrateGuestResponse } from './guest';
 export { filesApi } from './files';
 export { quizApi } from './quiz';
 export { wrongNotesApi } from './wrongNotes';

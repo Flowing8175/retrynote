@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { authApi } from '@/api';
+import { getDetailMessage } from '@/utils/errorMessages';
 
 const INPUT_CLASS = "w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-secondary transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none";
 
@@ -24,18 +25,19 @@ export default function Signup() {
       await authApi.signup({ username, email, password, turnstile_token: turnstileToken });
       setSignupSuccess(true);
     } catch (err: unknown) {
-      const axiosError = err as { response?: { status?: number; data?: { detail?: string } } };
+      const axiosError = err as { response?: { status?: number; data?: { detail?: unknown } } };
       const status = axiosError.response?.status;
       const detail = axiosError.response?.data?.detail;
+      const message = getDetailMessage(detail, '회원가입에 실패했습니다.');
 
-      if (status === 400 && detail?.includes('이메일 도메인')) {
+      if (status === 400 && typeof detail === 'string' && detail.includes('이메일 도메인')) {
         setError('해당 이메일 도메인은 사용할 수 없습니다.');
-      } else if (status === 400 && detail?.includes('보안 인증')) {
+      } else if (status === 400 && typeof detail === 'string' && detail.includes('보안 인증')) {
         setError('보안 인증에 실패했습니다. 페이지를 새로고침하세요.');
       } else if (status === 429) {
         setError('너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.');
       } else {
-        setError(detail || '회원가입에 실패했습니다.');
+        setError(message);
       }
     } finally {
       setLoading(false);

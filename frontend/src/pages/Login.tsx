@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { useAuthStore } from '@/stores';
+import { useAuthStore, useGuestStore } from '@/stores';
 import { authApi } from '@/api';
+import { guestApi } from '@/api/guest';
 
 const INPUT_CLASS = "w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-secondary transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none";
 
@@ -37,6 +38,16 @@ export default function Login() {
       const response = await authApi.login({ username_or_email: usernameOrEmail, password });
       setUser(response.user);
       setTokens(response.access_token, response.refresh_token);
+
+      const guestState = useGuestStore.getState();
+      if (guestState.topic && guestState.questions.length > 0) {
+        try {
+          await guestApi.migrateSession({ topic: guestState.topic, questions: guestState.questions });
+        } catch {
+        }
+        guestState.clearGuestQuiz();
+      }
+
       navigate('/');
     } catch (err: unknown) {
       const axiosError = err as { response?: { status?: number; data?: { detail?: unknown } } };

@@ -8,11 +8,20 @@ from jwt import InvalidTokenError as JWTError
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta, timezone
+from pydantic import BaseModel, Field
 
 from app.config import settings
 from app.database import get_db
 from app.models.user import User
 from app.models.search import PasswordResetToken, RefreshToken, EmailVerificationToken
+from app.models.quiz import (
+    QuizSession,
+    QuizSessionStatus,
+    QuizMode,
+    SourceMode,
+    QuizItem,
+    QuestionType,
+)
 from app.rate_limit import limiter, _get_real_client_ip
 from app.schemas.auth import (
     SignupRequest,
@@ -497,3 +506,67 @@ async def delete_account(
 
     await db.commit()
     return {"status": "ok"}
+
+
+class GuestQuestionPayload(BaseModel):
+    question_type: str = Field(max_length=50)
+    question_text: str = Field(max_length=2000)
+    options: dict | None = None
+    correct_answer: dict
+    explanation: str = Field(max_length=2000)
+    concept_label: str = Field(default="", max_length=255)
+    difficulty: str = Field(default="medium", max_length=20)
+
+
+class MigrateGuestSessionRequest(BaseModel):
+    topic: str = Field(max_length=200)
+    questions: list[GuestQuestionPayload] = Field(max_length=10)
+
+
+class MigrateGuestSessionResponse(BaseModel):
+    quiz_session_id: str
+
+
+@router.post("/migrate-guest", response_model=MigrateGuestSessionResponse)
+async def migrate_guest_session(
+    req: MigrateGuestSessionRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if not req.questions:
+        raise HTTPException(status_code=400, detail="questions is empty")
+
+    session = QuizSession(
+        id=str(uuid.uuid4()),
+        user_id=user.id,
+        mode=QuizMode.normal,
+        source_mode=SourceMode.no_source,
+        status=QuizSessionStatus.graded,
+        difficulty="medium",
+        question_count=len(req.questions),
+    )
+    db.add(session)
+    await db.flush()
+
+    for i, q in enumerate(req.questions):
+        try:
+            qtype = QuestionType(q.question_type)
+        except ValueError:
+            qtype = QuestionType.short_answer
+
+        item = QuizItem(
+            id=str(uuid.uuid4()),
+            quiz_session_id=session.id,
+            item_order=i,
+            question_type=qtype,
+            question_text=q.question_text,
+            options_json=q.options,
+            correct_answer_json=q.correct_answer,
+            explanation_text=q.explanation,
+            concept_label=q.concept_label,
+            difficulty=q.difficulty,
+        )
+        db.add(item)
+
+    await db.commit()
+    return MigrateGuestSessionResponse(quiz_session_id=session.id)
