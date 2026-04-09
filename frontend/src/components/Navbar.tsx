@@ -16,7 +16,7 @@ export default function Navbar() {
               <GraduationCap size={24} strokeWidth={2} />
             </div>
             <div className="text-xl font-bold tracking-tight text-white">
-              retrynote
+              RetryNote
             </div>
           </Link>
 
