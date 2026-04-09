@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import MermaidDiagram from '@/components/MermaidDiagram';
 import { diagramApi, type DiagramResponse } from '@/api/diagram';
