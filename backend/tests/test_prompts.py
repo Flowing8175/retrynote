@@ -2,12 +2,8 @@ from app.prompts import (
     SYSTEM_PROMPT_QUIZ_GENERATION,
     SYSTEM_PROMPT_GRADING_SHORT,
     SYSTEM_PROMPT_GRADING_ESSAY,
-    SYSTEM_PROMPT_EXAM_BATCH,
     SYSTEM_PROMPT_OBJECTION_REVIEW,
-    SYSTEM_PROMPT_ERROR_CLASSIFY,
-    SYSTEM_PROMPT_WRONG_NOTE_FEEDBACK,
     SYSTEM_PROMPT_RETRY_GENERATION,
-    SYSTEM_PROMPT_DASHBOARD_COACHING,
 )
 from app.prompts.generation import build_generation_prompt
 
@@ -16,26 +12,22 @@ ALL_PROMPTS = [
     SYSTEM_PROMPT_QUIZ_GENERATION,
     SYSTEM_PROMPT_GRADING_SHORT,
     SYSTEM_PROMPT_GRADING_ESSAY,
-    SYSTEM_PROMPT_EXAM_BATCH,
     SYSTEM_PROMPT_OBJECTION_REVIEW,
-    SYSTEM_PROMPT_ERROR_CLASSIFY,
-    SYSTEM_PROMPT_WRONG_NOTE_FEEDBACK,
     SYSTEM_PROMPT_RETRY_GENERATION,
-    SYSTEM_PROMPT_DASHBOARD_COACHING,
 ]
 
 
 class TestPromptConstants:
-    async def test_all_nine_prompts_are_strings(self):
+    async def test_all_five_prompts_are_strings(self):
         for prompt in ALL_PROMPTS:
             assert isinstance(prompt, str)
 
-    async def test_all_nine_prompts_are_non_empty(self):
+    async def test_all_five_prompts_are_non_empty(self):
         for prompt in ALL_PROMPTS:
             assert len(prompt.strip()) > 0
 
-    async def test_exactly_nine_prompts_exported(self):
-        assert len(ALL_PROMPTS) == 9
+    async def test_exactly_five_prompts_exported(self):
+        assert len(ALL_PROMPTS) == 5
 
 
 class TestBuildGenerationPrompt:

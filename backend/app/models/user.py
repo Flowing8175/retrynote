@@ -44,9 +44,6 @@ class User(CommonMixin, Base):
     tier: Mapped[str] = mapped_column(String(20), default="free", nullable=False)
     stripe_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     paddle_customer_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    free_trial_used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
     email_verified: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=sa.false()
     )

@@ -1,13 +1,6 @@
 export type UserTier = 'free' | 'lite' | 'standard' | 'pro';
 export type BillingCycle = 'monthly' | 'quarterly';
 export type ResourceType = 'quiz' | 'ocr' | 'storage';
-export type CreditType = 'storage';
-
-export interface TierLimits {
-  storageBytes: number;
-  quizPerWindow: number;
-  ocrPagesPerWindow: number;
-}
 
 export interface UsageWindow {
   resourceType: ResourceType;

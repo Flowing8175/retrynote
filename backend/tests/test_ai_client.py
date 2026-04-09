@@ -8,7 +8,6 @@ from app.utils.ai_client import (
     RETRY_GENERATION_SCHEMA,
     GRADING_SCHEMA,
     OBJECTION_REVIEW_SCHEMA,
-    COACHING_SCHEMA,
     call_ai_structured,
     call_ai_with_fallback,
 )
@@ -84,20 +83,6 @@ class TestObjectionReviewSchema:
             "updated_score_awarded",
             "updated_error_type",
             "should_apply",
-        ]:
-            assert field in required
-
-
-class TestCoachingSchema:
-    def test_has_all_5_required_fields(self):
-        required = COACHING_SCHEMA["required"]
-        assert len(required) == 5
-        for field in [
-            "summary",
-            "weak_concepts_top",
-            "weak_question_types",
-            "recommended_next_actions",
-            "coaching_message",
         ]:
             assert field in required
 

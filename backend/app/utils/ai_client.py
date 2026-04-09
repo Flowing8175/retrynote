@@ -14,7 +14,6 @@ __all__ = [
     "BATCH_RETRY_GENERATION_SCHEMA",
     "GRADING_SCHEMA",
     "OBJECTION_REVIEW_SCHEMA",
-    "COACHING_SCHEMA",
     "call_ai_structured",
     "call_ai_with_fallback",
     "stream_ai_text",
@@ -257,51 +256,6 @@ OBJECTION_REVIEW_SCHEMA = {
         "updated_score_awarded": {"type": "number"},
         "updated_error_type": {"type": ["string", "null"]},
         "should_apply": {"type": "boolean"},
-    },
-    "additionalProperties": False,
-}
-
-
-COACHING_SCHEMA = {
-    "type": "object",
-    "required": [
-        "summary",
-        "weak_concepts_top",
-        "weak_question_types",
-        "recommended_next_actions",
-        "coaching_message",
-    ],
-    "properties": {
-        "summary": {"type": "string"},
-        "weak_concepts_top": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["concept_key", "concept_label", "wrong_count", "accuracy"],
-                "properties": {
-                    "concept_key": {"type": "string"},
-                    "concept_label": {"type": "string"},
-                    "wrong_count": {"type": "integer"},
-                    "accuracy": {"type": "number"},
-                },
-            },
-        },
-        "weak_question_types": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "required": ["question_type", "accuracy"],
-                "properties": {
-                    "question_type": {"type": "string"},
-                    "accuracy": {"type": "number"},
-                },
-            },
-        },
-        "recommended_next_actions": {
-            "type": "array",
-            "items": {"type": "string"},
-        },
-        "coaching_message": {"type": "string"},
     },
     "additionalProperties": False,
 }

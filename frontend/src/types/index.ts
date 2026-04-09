@@ -1,7 +1,6 @@
 export * from './auth';
 export * from './file';
 export * from './quiz';
-export * from './objection';
 export * from './wrongNote';
 export * from './retry';
 export * from './dashboard';

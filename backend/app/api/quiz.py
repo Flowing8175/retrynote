@@ -59,8 +59,7 @@ def _describe_generation_model(
 
 @router.get("/config", response_model=QuizConfigResponse)
 async def get_quiz_config(
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
 ):
     from app.config import settings as cfg
 
@@ -200,9 +199,7 @@ async def create_quiz_session(
     _TIER_COSTS = {MODEL_ECO: 1, MODEL_BALANCED: 3, MODEL_PERFORMANCE: 5}
     generation_cost = _TIER_COSTS.get(model_tier_label, 1) if model_tier_label else 1
 
-    allowed, remaining, source = await usage_svc.check_and_consume(
-        db, user, "quiz", generation_cost
-    )
+    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", generation_cost)
     if not allowed:
         raise HTTPException(
             status_code=402,
