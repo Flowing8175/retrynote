@@ -5,7 +5,7 @@ import Modal from '@/components/Modal';
 import type { UpgradePromptPayload } from '@/types/billing';
 
 const LIMIT_MESSAGES: Record<string, string> = {
-  quiz: '퀴즈 생성 횟수를 모두 사용했습니다.',
+  quiz: '크레딧을 모두 사용했습니다.',
   storage: '저장 공간이 가득 찼습니다.',
   ocr: 'OCR 처리 한도를 초과했습니다.',
   model_access: '이 AI 모델은 현재 요금제에서 사용할 수 없습니다.',

@@ -50,7 +50,7 @@ interface FeatureRow {
 
 const FEATURES: FeatureRow[] = [
   { label: '저장 공간', free: '150 MB', lite: '3 GB', standard: '15 GB', pro: '50 GB' },
-  { label: '퀴즈 생성 (30일)', free: '20회', lite: '200회', standard: '1,000회', pro: '3,000회' },
+  { label: '크레딧 (30일)', free: '20회', lite: '200회', standard: '1,000회', pro: '3,000회' },
   { label: 'OCR 페이지 (30일)', free: '5페이지', lite: '100페이지', standard: '500페이지', pro: '2,000페이지' },
   { label: '파일 크기 제한', free: '5 MB', lite: '50 MB', standard: '100 MB', pro: '200 MB' },
 ];

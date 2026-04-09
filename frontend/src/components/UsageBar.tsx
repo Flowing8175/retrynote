@@ -9,7 +9,7 @@ interface UsageBarProps {
 }
 
 const RESOURCE_LABELS: Record<string, string> = {
-  quiz: '퀴즈 생성',
+  quiz: '크레딧',
   ocr: 'OCR 페이지',
   storage: '저장 공간',
 };
