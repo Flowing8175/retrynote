@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 
 // Module-level flag: mermaid is initialized at most once per app lifecycle
 let mermaidInitialized = false;
@@ -12,23 +12,12 @@ interface MermaidDiagramProps {
 
 export default function MermaidDiagram({ code, className }: MermaidDiagramProps) {
   const [state, setState] = useState<RenderState>('loading');
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Unique, stable ID per component instance — prevents "ID already exists" in React Strict Mode
-  const renderIdRef = useRef<string>(`mermaid-${crypto.randomUUID()}`);
-  const mountedRef = useRef(true);
-
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
+  const [svg, setSvg] = useState<string>('');
 
   useEffect(() => {
     if (!code.trim()) return;
 
     let cancelled = false;
-    const container = containerRef.current;
 
     const renderDiagram = async () => {
       setState('loading');
@@ -40,7 +29,7 @@ export default function MermaidDiagram({ code, className }: MermaidDiagramProps)
         if (!mermaidInitialized) {
           mermaid.initialize({
             startOnLoad: false,
-            securityLevel: 'sandbox',
+            securityLevel: 'loose',
             theme: 'dark',
             darkMode: true,
           });
@@ -49,19 +38,15 @@ export default function MermaidDiagram({ code, className }: MermaidDiagramProps)
 
         // Generate a fresh render ID each time code changes to avoid stale-ID conflicts
         const renderId = `mermaid-${crypto.randomUUID()}`;
-        renderIdRef.current = renderId;
 
-        const { svg } = await mermaid.render(renderId, code);
+        const { svg: renderedSvg } = await mermaid.render(renderId, code);
 
-        // Guard: component may have unmounted or effect may have re-fired while awaiting
-        if (cancelled || !mountedRef.current) return;
+        if (cancelled) return;
 
-        if (containerRef.current) {
-          containerRef.current.innerHTML = svg;
-        }
+        setSvg(renderedSvg);
         setState('success');
       } catch {
-        if (cancelled || !mountedRef.current) return;
+        if (cancelled) return;
         setState('error');
       }
     };
@@ -70,10 +55,6 @@ export default function MermaidDiagram({ code, className }: MermaidDiagramProps)
 
     return () => {
       cancelled = true;
-      // Clear SVG on cleanup to avoid stale renders when code prop changes
-      if (container) {
-        container.innerHTML = '';
-      }
     };
   }, [code]);
 
@@ -92,8 +73,8 @@ export default function MermaidDiagram({ code, className }: MermaidDiagramProps)
 
   return (
     <div
-      ref={containerRef}
       className={`mermaid-diagram overflow-x-auto ${className ?? ''}`}
+      dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
 }

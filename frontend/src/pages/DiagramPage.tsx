@@ -27,17 +27,21 @@ export default function DiagramPage() {
       if (force) {
         data = await diagramApi.generateDiagram(decodedKey, true, controller.signal);
       } else {
-        data = await diagramApi.getCachedDiagram(decodedKey, controller.signal);
+        try {
+          data = await diagramApi.getCachedDiagram(decodedKey, controller.signal);
+        } catch (err) {
+          if (isAxiosError(err) && err.response?.status === 404) {
+            data = await diagramApi.generateDiagram(decodedKey, false, controller.signal);
+          } else {
+            throw err;
+          }
+        }
       }
       setDiagram(data);
       setPageState('success');
     } catch (err) {
       if ((err as Error).name === 'CanceledError' || (err as Error).name === 'AbortError') return;
-      if (isAxiosError(err) && err.response?.status === 404) {
-        setPageState('not-found');
-      } else {
-        setPageState('error');
-      }
+      setPageState('error');
     }
   };
 
