@@ -32,6 +32,8 @@ export default function MermaidDiagram({ code, className }: MermaidDiagramProps)
             securityLevel: 'loose',
             theme: 'dark',
             darkMode: true,
+            fontFamily: "'SUIT Variable', 'Pretendard Variable', 'Noto Sans KR', system-ui, sans-serif",
+            fontSize: 14,
           });
           mermaidInitialized = true;
         }
