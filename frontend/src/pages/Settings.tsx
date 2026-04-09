@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { authApi } from '@/api';
@@ -7,6 +8,7 @@ import { useAuthStore } from '@/stores';
 
 export default function Settings() {
   const { user, logout } = useAuthStore();
+  const usageStatus = useAuthStore((s) => s.usageStatus);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -38,7 +40,48 @@ export default function Settings() {
     <div className="mx-auto max-w-2xl space-y-8 px-4 py-8 sm:px-6">
       <div>
         <h1 className="text-2xl font-bold text-content-primary">계정 설정</h1>
-        <p className="mt-1 text-sm text-content-secondary">{user?.email}</p>
+      </div>
+
+      {/* Account Info */}
+      <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 space-y-4">
+        <h2 className="text-base font-semibold text-content-primary">계정 정보</h2>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between py-2">
+            <span className="text-sm text-content-muted">이메일</span>
+            <span className="text-sm text-content-primary">{user?.email}</span>
+          </div>
+          <div className="border-t border-white/[0.05]" />
+          <div className="flex items-center justify-between py-2">
+            <span className="text-sm text-content-muted">사용자 이름</span>
+            <span className="text-sm text-content-primary">{user?.username || '—'}</span>
+          </div>
+          <div className="border-t border-white/[0.05]" />
+          <div className="flex items-center justify-between py-2">
+            <span className="text-sm text-content-muted">현재 요금제</span>
+            <span className="text-sm font-medium text-brand-300">{(usageStatus?.tier ?? 'free').charAt(0).toUpperCase() + (usageStatus?.tier ?? 'free').slice(1)}</span>
+          </div>
+          {user?.created_at && (
+            <>
+              <div className="border-t border-white/[0.05]" />
+              <div className="flex items-center justify-between py-2">
+                <span className="text-sm text-content-muted">가입일</span>
+                <span className="text-sm text-content-primary">{new Date(user.created_at).toLocaleDateString('ko-KR')}</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Password */}
+      <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 space-y-4">
+        <h2 className="text-base font-semibold text-content-primary">비밀번호</h2>
+        <p className="text-sm text-content-secondary">비밀번호를 변경하려면 재설정 링크를 이용하세요.</p>
+        <Link
+          to="/password-reset"
+          className="inline-flex items-center rounded-xl border border-white/[0.07] px-4 py-2.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover"
+        >
+          비밀번호 변경
+        </Link>
       </div>
 
       <div className="rounded-2xl border border-semantic-error/60 bg-semantic-error-bg p-6">
