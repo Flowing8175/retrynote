@@ -10,3 +10,5 @@ export { announcementsApi } from './announcements';
 export type { PublicAnnouncement } from './announcements';
 export { diagramApi } from './diagram';
 export type { DiagramResponse } from './diagram';
+export { guestApi } from './guestClient';
+export { default as guestClient } from './guestClient';

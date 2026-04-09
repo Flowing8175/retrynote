@@ -1,3 +1,4 @@
+from app.models.guest import GuestSession
 from app.models.user import User, UserRole, AdminSettings
 from app.models.file import (
     Folder,
@@ -39,6 +40,7 @@ from app.models.billing import (
 )
 
 __all__ = [
+    "GuestSession",
     "User",
     "UserRole",
     "AdminSettings",

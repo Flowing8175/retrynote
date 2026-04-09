@@ -6,6 +6,7 @@ import CoachingDisplay from '@/components/CoachingDisplay';
 import DiagramModal from '@/components/DiagramModal';
 import type { DashboardResponse, RetryLocationState } from '@/types';
 import { formatPercent, formatQuestionType, formatDateTime } from '@/utils/formatters';
+import { useAuthStore } from '@/stores/authStore';
 
 function DashboardSkeleton() {
   return (
@@ -69,6 +70,55 @@ function DashboardSkeleton() {
 }
 
 
+
+function CreditUsageBar() {
+  const usageStatus = useAuthStore((s) => s.usageStatus);
+
+  if (usageStatus === null) {
+    return (
+      <div className="animate-pulse space-y-2 rounded-2xl border border-white/[0.08] bg-surface p-4">
+        <div className="h-4 w-64 rounded bg-surface-deep" />
+        <div className="h-2 w-full rounded-full bg-surface-deep" />
+      </div>
+    );
+  }
+
+  const quizWindow = usageStatus.windows.find((w) => w.resourceType === 'quiz');
+  if (!quizWindow) return null;
+
+  const { consumed, limit } = quizWindow;
+  const remaining = limit - consumed;
+  const pct = limit > 0 ? Math.max(0, Math.min((remaining / limit) * 100, 100)) : 0;
+
+  const barColor =
+    pct > 50 ? 'bg-brand-500' : pct > 20 ? 'bg-yellow-500' : 'bg-red-500';
+
+  return (
+    <div className="rounded-2xl border border-white/[0.08] bg-surface px-5 py-4 space-y-2">
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-sm text-content-primary">
+          이번 달 크레딧:{' '}
+          <span className="font-semibold tabular-nums">
+            {remaining}/{limit}회
+          </span>{' '}
+          남았습니다
+        </span>
+        <Link
+          to="/pricing"
+          className="shrink-0 text-xs font-medium text-brand-300 hover:text-brand-400 transition-colors"
+        >
+          더 많은 크레딧이 필요하세요? →
+        </Link>
+      </div>
+      <div className="h-1.5 w-full rounded-full bg-surface-deep overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${barColor}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+}
 
 function getFallbackCoachingMessage(dashboardData: DashboardResponse) {
   if (dashboardData.retry_recommendations.length > 0) {
@@ -162,6 +212,7 @@ export default function Dashboard() {
   if (!hasData) {
     return (
       <div className="max-w-4xl mx-auto space-y-16 py-20">
+        <CreditUsageBar />
         <div className="animate-fade-in-up">
           <h1 className="text-3xl font-semibold tracking-tight text-content-primary md:text-4xl leading-tight">
             성장의 첫 걸음,<br />자료를 올려보세요.
@@ -201,6 +252,8 @@ export default function Dashboard() {
   return (
     <>
     <div className="space-y-20 py-8">
+      <CreditUsageBar />
+
       {/* Hero Section */}
       <section className="grid gap-12 lg:grid-cols-[1fr_300px] items-start">
         <div className="animate-fade-in-up space-y-10">

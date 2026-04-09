@@ -64,4 +64,18 @@ export const authApi = {
     const response = await apiClient.post<{ status: string }>('/auth/resend-verification', { email });
     return response.data;
   },
+
+  convertGuest: async (data: {
+    username: string;
+    email: string;
+    password: string;
+    guest_session_id: string;
+    turnstile_token: string;
+  }): Promise<{ user: UserProfile; access_token: string; refresh_token: string }> => {
+    const response = await apiClient.post<{ user: UserProfile; access_token: string; refresh_token: string }>(
+      '/auth/convert-guest',
+      data
+    );
+    return response.data;
+  },
 };

@@ -116,3 +116,31 @@ def admin_regrade_task(self, job_id: str):
     from app.services.quiz_service import admin_regrade
 
     _run_async_task(admin_regrade(job_id))
+
+
+logger = logging.getLogger(__name__)
+
+
+@celery_app.task(name="cleanup_guest_data")
+def cleanup_guest_data_task():
+    async def _run():
+        from app.database import async_session
+        from app.services.guest_session_service import GuestSessionService
+        from app.config import settings
+        async with async_session() as db:
+            count = await GuestSessionService.cleanup_expired(db, ttl_hours=settings.GUEST_SESSION_TTL_HOURS)
+            await db.commit()
+            logger.info(f"Cleaned up {count} expired guest sessions")
+
+    _run_async_task(_run())
+
+
+from celery.schedules import crontab
+
+celery_app.conf.beat_schedule = {
+    **getattr(celery_app.conf, 'beat_schedule', {}),
+    'guest-cleanup': {
+        'task': 'cleanup_guest_data',
+        'schedule': crontab(minute=0),  # every hour
+    },
+}

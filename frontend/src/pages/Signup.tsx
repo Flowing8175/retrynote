@@ -1,11 +1,17 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { authApi } from '@/api';
+import { useAuthStore } from '@/stores/authStore';
+import { useGuestStore } from '@/stores/guestStore';
 
 const INPUT_CLASS = "w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-secondary transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none";
 
 export default function Signup() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const guestSessionId = searchParams.get('guest_session_id');
+
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,14 +27,33 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      await authApi.signup({ username, email, password, turnstile_token: turnstileToken });
-      setSignupSuccess(true);
+      if (guestSessionId) {
+        // Guest conversion flow
+        const result = await authApi.convertGuest({
+          username,
+          email,
+          password,
+          guest_session_id: guestSessionId,
+          turnstile_token: turnstileToken,
+        });
+        const { setUser, setTokens } = useAuthStore.getState();
+        setUser(result.user);
+        setTokens(result.access_token, result.refresh_token);
+        useGuestStore.getState().clearGuestData();
+        navigate('/dashboard');
+      } else {
+        // Normal signup flow
+        await authApi.signup({ username, email, password, turnstile_token: turnstileToken });
+        setSignupSuccess(true);
+      }
     } catch (err: unknown) {
       const axiosError = err as { response?: { status?: number; data?: { detail?: string } } };
       const status = axiosError.response?.status;
       const detail = axiosError.response?.data?.detail;
 
-      if (status === 400 && detail?.includes('이메일 도메인')) {
+      if (status === 409) {
+        setError('이미 사용 중인 이메일입니다.');
+      } else if (status === 400 && detail?.includes('이메일 도메인')) {
         setError('해당 이메일 도메인은 사용할 수 없습니다.');
       } else if (status === 400 && detail?.includes('보안 인증')) {
         setError('보안 인증에 실패했습니다. 페이지를 새로고침하세요.');
@@ -48,12 +73,25 @@ export default function Signup() {
 
         <section className="hidden lg:flex flex-col justify-center border-r border-white/[0.06] bg-gradient-to-b from-surface to-surface-deep/90 p-[3.25rem]">
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">회원가입</p>
-          <h1 className="mt-3 text-[clamp(2rem,4vw,3.1rem)] font-semibold leading-[1.08] tracking-[-0.03em] text-content-primary">
-            개인 학습 공간을 시작하세요.
-          </h1>
-          <p className="mt-5 text-base leading-[1.8] text-content-secondary">
-            AI가 문제를 만들고 오답을 분석해 약점을 짚어드립니다.
-          </p>
+          {guestSessionId ? (
+            <>
+              <h1 className="mt-3 text-[clamp(2rem,4vw,3.1rem)] font-semibold leading-[1.08] tracking-[-0.03em] text-content-primary">
+                가입하면 방금 풀었던 퀴즈 결과가 자동 저장됩니다!
+              </h1>
+              <p className="mt-5 text-base leading-[1.8] text-content-secondary">
+                오답을 추적하고 약점을 집중적으로 복습하세요.
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="mt-3 text-[clamp(2rem,4vw,3.1rem)] font-semibold leading-[1.08] tracking-[-0.03em] text-content-primary">
+                개인 학습 공간을 시작하세요.
+              </h1>
+              <p className="mt-5 text-base leading-[1.8] text-content-secondary">
+                AI가 문제를 만들고 오답을 분석해 약점을 짚어드립니다.
+              </p>
+            </>
+          )}
         </section>
 
         <section className="flex flex-col justify-center p-8 lg:p-[3.25rem]">

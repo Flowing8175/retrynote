@@ -1,9 +1,9 @@
 import { chromium } from './frontend/node_modules/playwright/index.mjs';
 import path from 'path';
 
-const SCREENSHOTS_DIR = '/home/oh/dev/retrynote/screenshots';
-const BASE_URL = 'https://retrynote.cloud';
-const API_URL = 'https://retrynote.cloud/api';
+const SCREENSHOTS_DIR = process.env.SCREENSHOTS_DIR || '/home/oh/dev/retrynote-onboard-withplan/screenshots';
+const BASE_URL = process.env.BASE_URL || 'http://localhost:5173';
+const API_URL = process.env.API_URL || 'http://localhost:8000';
 
 const EMAIL = process.env.SS_EMAIL;
 const PASSWORD = process.env.SS_PASSWORD;
@@ -14,19 +14,25 @@ if (!EMAIL || !PASSWORD) {
 }
 
 const publicRoutes = [
-  { path: '/login', filename: '01-login.png' },
-  { path: '/signup', filename: '02-signup.png' },
-  { path: '/password-reset', filename: '03-password-reset.png' },
+  { path: '/', filename: '01-landing.png' },
+  { path: '/login', filename: '02-login.png' },
+  { path: '/signup', filename: '03-signup.png' },
+  { path: '/password-reset', filename: '04-password-reset.png' },
+  { path: '/try', filename: '05-try-quiz.png' },
 ];
 
 const protectedRoutes = [
-  { path: '/', filename: '04-dashboard.png' },
-  { path: '/files', filename: '05-files.png' },
-  { path: '/quiz/new', filename: '06-quiz-new.png' },
-  { path: '/wrong-notes', filename: '07-wrong-notes.png' },
-  { path: '/retry', filename: '08-retry.png' },
-  { path: '/search', filename: '09-search.png' },
-  { path: '/admin', filename: '10-admin.png' },
+  { path: '/dashboard', filename: '06-dashboard.png' },
+  { path: '/files', filename: '07-files.png' },
+  { path: '/quiz/new', filename: '08-quiz-new.png' },
+  { path: '/quiz/history', filename: '09-quiz-history.png' },
+  { path: '/wrong-notes', filename: '10-wrong-notes.png' },
+  { path: '/retry', filename: '11-retry.png' },
+  { path: '/search', filename: '12-search.png' },
+  { path: '/settings', filename: '13-settings.png' },
+  { path: '/settings/billing', filename: '14-billing.png' },
+  { path: '/admin', filename: '15-admin.png' },
+  { path: '/pricing', filename: '16-pricing.png' },
 ];
 
 async function screenshot(page, route) {
@@ -54,6 +60,7 @@ async function main() {
   await page.setViewportSize({ width: 1280, height: 900 });
 
   // 1. Public pages (no auth needed)
+  console.log('Taking screenshots of public pages...');
   for (const route of publicRoutes) {
     await screenshot(page, route);
   }
@@ -66,24 +73,25 @@ async function main() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username_or_email: email, password }),
     });
-    return res.json();
+    const data = await res.json();
+    return { status: res.status, data };
   }, { apiUrl: API_URL, email: EMAIL, password: PASSWORD });
 
-  if (!loginRes.access_token) {
-    console.error('Login failed:', loginRes);
+  if (loginRes.status !== 200) {
+    console.error(`Login failed with status ${loginRes.status}:`, JSON.stringify(loginRes.data, null, 2));
     await browser.close();
     process.exit(1);
   }
 
-  // Fetch user profile
-  const meRes = await page.evaluate(async ({ apiUrl, token }) => {
-    const res = await fetch(`${apiUrl}/auth/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.json();
-  }, { apiUrl: API_URL, token: loginRes.access_token });
+  const loginResData = loginRes.data;
+  if (!loginResData.access_token) {
+    console.error('Login failed - no access token:', loginResData);
+    await browser.close();
+    process.exit(1);
+  }
 
   // Inject Zustand auth-storage into sessionStorage
+  // User profile is already in loginResData.user
   await page.evaluate(({ token, refreshToken, user }) => {
     const authState = {
       state: {
@@ -100,11 +108,12 @@ async function main() {
       version: 0,
     };
     sessionStorage.setItem('auth-storage', JSON.stringify(authState));
-  }, { token: loginRes.access_token, refreshToken: loginRes.refresh_token, user: meRes });
+  }, { token: loginResData.access_token, refreshToken: loginResData.refresh_token, user: loginResData.user });
 
-  console.log(`Logged in as ${meRes.email} (${meRes.role})`);
+  console.log(`Logged in as ${loginResData.user.email} (${loginResData.user.role})`);
 
   // 3. Protected pages
+  console.log('\nTaking screenshots of protected pages...');
   for (const route of protectedRoutes) {
     await screenshot(page, route);
   }

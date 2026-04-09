@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     # Development test key: 1x0000000000000000000000000000000AA (always passes)
     cloudflare_turnstile_secret_key: str = ""
 
+    GUEST_SESSION_TTL_HOURS: int = 24
+
 
 @lru_cache()
 def get_settings() -> Settings:

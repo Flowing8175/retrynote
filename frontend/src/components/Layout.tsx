@@ -17,7 +17,7 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { path: '/', label: '대시보드', icon: <LayoutDashboard size={18} /> },
+  { path: '/dashboard', label: '대시보드', icon: <LayoutDashboard size={18} /> },
   { path: '/files', label: '자료 관리', icon: <FolderOpen size={18} /> },
   { path: '/quiz/new', label: '퀴즈 생성', icon: <CircleHelp size={18} /> },
   { path: '/quiz/history', label: '퀴즈 기록', icon: <History size={18} /> },

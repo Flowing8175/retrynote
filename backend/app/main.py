@@ -122,9 +122,11 @@ from app.api import (
     search,
     admin,
     diagram,
+    public,
 )
 from app.api.billing import router as billing_router
 
+app.include_router(public.router, prefix="/public", tags=["public"])
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(files.router, prefix="/files", tags=["files"])
 app.include_router(quiz.router, prefix="/quiz-sessions", tags=["quiz-sessions"])
