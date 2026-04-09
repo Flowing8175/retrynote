@@ -29,8 +29,6 @@ class UsageStatusResponse(_CamelModel):
     tier: str
     windows: list[UsageWindowSchema]
     credits: CreditBalanceSchema
-    free_trial_used_at: datetime | None
-    free_trial_available: bool
 
 
 class SubscriptionResponse(_CamelModel):

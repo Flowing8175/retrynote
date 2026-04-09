@@ -14,7 +14,6 @@ class TierLimits:
     storage_bytes: int
     quiz_per_window: int
     ocr_pages_per_window: int
-    allowed_models: list[str]
 
 
 WINDOW_DAYS = 30  # 30-day rolling window
@@ -31,26 +30,22 @@ MODEL_PERFORMANCE = "PERFORMANCE"
 TIER_LIMITS: dict[UserTier, TierLimits] = {
     UserTier.free: TierLimits(
         storage_bytes=FREE_STORAGE_BYTES,
-        quiz_per_window=10,
+        quiz_per_window=20,
         ocr_pages_per_window=5,
-        allowed_models=[MODEL_ECO],
     ),
     UserTier.lite: TierLimits(
         storage_bytes=LITE_STORAGE_BYTES,
         quiz_per_window=200,
         ocr_pages_per_window=100,
-        allowed_models=[MODEL_ECO, MODEL_BALANCED],
     ),
     UserTier.standard: TierLimits(
         storage_bytes=STANDARD_STORAGE_BYTES,
         quiz_per_window=1000,
         ocr_pages_per_window=500,
-        allowed_models=[MODEL_ECO, MODEL_BALANCED, MODEL_PERFORMANCE],
     ),
     UserTier.pro: TierLimits(
         storage_bytes=PRO_STORAGE_BYTES,
         quiz_per_window=3000,
         ocr_pages_per_window=2000,
-        allowed_models=[MODEL_ECO, MODEL_BALANCED, MODEL_PERFORMANCE],
     ),
 }

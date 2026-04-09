@@ -5,7 +5,6 @@ import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide
 import { filesApi, quizApi } from '@/api';
 import { LoadingSpinner, Modal, StatusBadge } from '@/components';
 import { isFileProcessingStatus } from '@/types/file';
-import { useUsageStatus } from '../lib/useUsageStatus';
 
 const QUESTION_TYPES = [
   { value: 'multiple_choice', label: '객관식' },
@@ -100,10 +99,6 @@ function getDetailMessage(detail: unknown, fallbackMessage: string) {
 
 export default function QuizNew() {
   const navigate = useNavigate();
-  const { data: usageStatus } = useUsageStatus();
-  const isFree = usageStatus?.tier === 'free';
-  const freeTrialAvailable = usageStatus?.freeTrialAvailable ?? false;
-  const freeTrialUsedAt = usageStatus?.freeTrialUsedAt ?? null;
 
   const [sourceMode, setSourceMode] = useState<'document_based' | 'no_source'>('document_based');
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
@@ -205,17 +200,6 @@ export default function QuizNew() {
     resetNoSourceModal();
     setFormMessage(null);
   };
-
-  const trialCooldownLabel = useMemo(() => {
-    if (!freeTrialUsedAt) return '7일 후';
-    const msRemaining = Math.max(0, new Date(freeTrialUsedAt).getTime() + 7 * 24 * 60 * 60 * 1000 - Date.now());
-    const totalHours = Math.floor(msRemaining / (1000 * 60 * 60));
-    const days = Math.floor(totalHours / 24);
-    const hours = totalHours % 24;
-    if (days > 0 && hours > 0) return `${days}일 ${hours}시간 후`;
-    if (days > 0) return `${days}일 후`;
-    return `${hours}시간 후`;
-  }, [freeTrialUsedAt]);
 
   const fileGroups = useMemo(() => {
     const visibleFiles = allFiles.filter(
@@ -580,33 +564,6 @@ export default function QuizNew() {
                     ))}
                   </div>
 
-                  {isFree && (
-                    <div className="mt-1">
-                      {freeTrialAvailable ? (
-                        <button
-                          type="button"
-                          onClick={() => setPreferredTier('BALANCED')}
-                          className="w-full text-left px-4 py-3 rounded-xl bg-brand-500/5 border border-brand-500/20 hover:bg-brand-500/10 transition-colors"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm leading-none">💡</span>
-                            <span className="text-xs font-medium text-brand-300">
-                              고급 모델 무료 체험 가능 (주 1회)
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-content-muted mt-1.5 pl-5">
-                            클릭하면 BALANCED 모델로 한 번 무료 체험할 수 있습니다.
-                          </p>
-                        </button>
-                      ) : freeTrialUsedAt ? (
-                        <div className="px-4 py-3 rounded-xl bg-surface-deep border border-white/[0.05]">
-                          <span className="text-xs text-content-muted">
-                            다음 체험: {trialCooldownLabel}
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
                 </div>
 
                 <div className="space-y-4">

@@ -63,14 +63,6 @@ async def get_quiz_config(
     db: AsyncSession = Depends(get_db),
 ):
     from app.config import settings as cfg
-    from app.tier_config import (
-        TIER_LIMITS,
-        UserTier,
-    )
-    from app.services.usage_service import UsageService
-
-    tier = UserTier(user.tier)
-    allowed_models = TIER_LIMITS[tier].allowed_models
 
     default_model = cfg.eco_generation_model or cfg.balanced_generation_model
 
@@ -83,22 +75,8 @@ async def get_quiz_config(
     generation_model_options = [
         _describe_generation_model(tier_label, model_name, default_model)
         for tier_label, model_name in configured_tiers
-        if model_name and tier_label in allowed_models
+        if model_name
     ]
-
-    usage_svc = UsageService()
-    usage_status = await usage_svc.get_usage_status(db, user)
-    for opt in generation_model_options:
-        opt["free_trial_available"] = False
-    if tier == UserTier.free and usage_status.free_trial_available:
-        for tier_label, model_name in configured_tiers:
-            if model_name and tier_label not in allowed_models:
-                trial_opt = _describe_generation_model(
-                    tier_label, model_name, default_model
-                )
-                trial_opt["is_trial"] = True
-                trial_opt["free_trial_available"] = True
-                generation_model_options.append(trial_opt)
 
     if not generation_model_options:
         fallback = cfg.balanced_generation_model or cfg.eco_generation_model
@@ -206,11 +184,9 @@ async def create_quiz_session(
         MODEL_PERFORMANCE,
     )
     from app.schemas.billing import LimitExceededError
-    from datetime import datetime, timezone, timedelta
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed_models = TIER_LIMITS[tier].allowed_models
 
     preferred = req.preferred_model or cfg.balanced_generation_model
     model_tier_label = None
@@ -223,37 +199,6 @@ async def create_quiz_session(
 
     _TIER_COSTS = {MODEL_ECO: 1, MODEL_BALANCED: 3, MODEL_PERFORMANCE: 5}
     generation_cost = _TIER_COSTS.get(model_tier_label, 1) if model_tier_label else 1
-
-    if model_tier_label and model_tier_label not in allowed_models:
-        # Lock the user row to prevent concurrent free trial consumption
-        _user_result = await db.execute(
-            select(User).where(User.id == user.id).with_for_update()
-        )
-        user = _user_result.scalar_one()
-
-        now = datetime.now(timezone.utc)
-        trial_ok = False
-        if user.free_trial_used_at is None:
-            trial_ok = True
-        else:
-            trial_at = user.free_trial_used_at
-            if trial_at.tzinfo is None:
-                trial_at = trial_at.replace(tzinfo=timezone.utc)
-            trial_ok = (now - trial_at) > timedelta(days=7)
-
-        if trial_ok:
-            user.free_trial_used_at = now
-        else:
-            raise HTTPException(
-                status_code=402,
-                detail=LimitExceededError(
-                    detail="이 AI 모델은 현재 요금제에서 사용할 수 없습니다.",
-                    limit_type="model_access",
-                    current_usage=0,
-                    limit=0,
-                    upgrade_url="/pricing",
-                ).model_dump(),
-            )
 
     allowed, remaining, source = await usage_svc.check_and_consume(
         db, user, "quiz", generation_cost

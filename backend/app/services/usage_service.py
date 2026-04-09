@@ -178,22 +178,10 @@ class UsageService:
             )
         )
 
-        free_trial_available = False
-        if tier == UserTier.free:
-            if user.free_trial_used_at is None:
-                free_trial_available = True
-            else:
-                trial_at = user.free_trial_used_at
-                if trial_at.tzinfo is None:
-                    trial_at = trial_at.replace(tzinfo=timezone.utc)
-                free_trial_available = (now - trial_at) > timedelta(days=7)
-
         return UsageStatusResponse(
             tier=user.tier,
             windows=windows,
             credits=CreditBalanceSchema(
                 storage_credits_bytes=balance.storage_credits_bytes,
             ),
-            free_trial_used_at=user.free_trial_used_at,
-            free_trial_available=free_trial_available,
         )

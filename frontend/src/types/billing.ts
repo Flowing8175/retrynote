@@ -7,7 +7,6 @@ export interface TierLimits {
   storageBytes: number;
   quizPerWindow: number;
   ocrPagesPerWindow: number;
-  allowedModels: string[];
 }
 
 export interface UsageWindow {
@@ -27,8 +26,6 @@ export interface UsageStatus {
   tier: UserTier;
   windows: UsageWindow[];
   credits: CreditBalance;
-  freeTrialUsedAt: string | null;
-  freeTrialAvailable: boolean;
 }
 
 export interface Subscription {
