@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import Modal from './Modal';
 import MermaidDiagram from './MermaidDiagram';
-import { diagramApi, type DiagramResponse } from '@/api/diagram';
+import { diagramApi, type DiagramResponse, DIAGRAM_TYPES, type DiagramTypeValue } from '@/api/diagram';
 
 interface DiagramModalProps {
   isOpen: boolean;
@@ -23,9 +23,10 @@ export default function DiagramModal({
   const navigate = useNavigate();
   const [fetchState, setFetchState] = useState<FetchState>('loading');
   const [diagram, setDiagram] = useState<DiagramResponse | null>(null);
+  const [selectedType, setSelectedType] = useState<DiagramTypeValue>('flowchart');
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetchDiagram = async (force: boolean = false) => {
+  const fetchDiagram = async (force: boolean = false, type: DiagramTypeValue = selectedType) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -37,13 +38,13 @@ export default function DiagramModal({
     try {
       let data: DiagramResponse;
       if (force) {
-        data = await diagramApi.generateDiagram(conceptKey, true, signal);
+        data = await diagramApi.generateDiagram(conceptKey, true, signal, type);
       } else {
         try {
-          data = await diagramApi.getCachedDiagram(conceptKey, signal);
+          data = await diagramApi.getCachedDiagram(conceptKey, signal, type);
         } catch (err) {
           if (isAxiosError(err) && err.response?.status === 404) {
-            data = await diagramApi.generateDiagram(conceptKey, false, signal);
+            data = await diagramApi.generateDiagram(conceptKey, false, signal, type);
           } else {
             throw err;
           }
@@ -68,23 +69,28 @@ export default function DiagramModal({
       abortRef.current?.abort();
       return;
     }
-    fetchDiagram(false);
+    fetchDiagram(false, selectedType);
     return () => {
       abortRef.current?.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, conceptKey]);
 
+  const handleTypeChange = (type: DiagramTypeValue) => {
+    setSelectedType(type);
+    fetchDiagram(false, type);
+  };
+
   const handleRegenerate = () => {
-    fetchDiagram(true);
+    fetchDiagram(true, selectedType);
   };
 
   const handleExpand = () => {
-    navigate(`/diagram/${encodeURIComponent(conceptKey)}`);
+    navigate(`/diagram/${encodeURIComponent(conceptKey)}?type=${selectedType}`);
   };
 
   const handleRetry = () => {
-    fetchDiagram(false);
+    fetchDiagram(false, selectedType);
   };
 
   const handleClose = () => {
@@ -94,6 +100,23 @@ export default function DiagramModal({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title={conceptLabel} size="4xl">
+      <div className="mb-3 flex gap-1.5 flex-wrap">
+        {DIAGRAM_TYPES.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => handleTypeChange(value)}
+            disabled={fetchState === 'loading'}
+            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+              selectedType === value
+                ? 'bg-primary text-white'
+                : 'bg-surface-hover text-content-secondary hover:text-white'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {fetchState === 'loading' && (
         <div className="flex flex-col items-center justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -120,7 +143,9 @@ export default function DiagramModal({
               </button>
             </div>
           </div>
-          <MermaidDiagram code={diagram.mermaid_code} />
+          <div className="rounded-xl border border-white/[0.04] bg-[oklch(0.145_0.015_235)] p-4">
+            <MermaidDiagram code={diagram.mermaid_code} />
+          </div>
         </div>
       )}
 

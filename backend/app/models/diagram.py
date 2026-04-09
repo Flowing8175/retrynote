@@ -18,6 +18,10 @@ class ConceptDiagram(CommonMixin, Base):
 
     __table_args__ = (
         Index(
-            "ix_concept_diagrams_user_concept", "user_id", "concept_key", unique=True
+            "ix_concept_diagrams_user_concept_type",
+            "user_id",
+            "concept_key",
+            "diagram_type",
+            unique=True,
         ),
     )

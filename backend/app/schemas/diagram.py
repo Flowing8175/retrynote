@@ -5,6 +5,7 @@ from datetime import datetime
 class DiagramGenerateRequest(BaseModel):
     concept_key: str
     force: bool = False
+    diagram_type: str | None = None
 
 
 class DiagramResponse(BaseModel):

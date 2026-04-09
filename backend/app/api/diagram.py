@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,7 +36,9 @@ async def generate_concept_diagram(
         raise HTTPException(status_code=404, detail="개념을 찾을 수 없습니다")
 
     if not request.force:
-        cached = await get_cached_diagram(db, user.id, request.concept_key)
+        cached = await get_cached_diagram(
+            db, user.id, request.concept_key, request.diagram_type
+        )
         if cached is not None:
             return DiagramResponse(
                 concept_key=cached.concept_key,
@@ -70,6 +72,7 @@ async def generate_concept_diagram(
             request.concept_key,
             weak_point.concept_label or request.concept_key,
             weak_point.category_tag,
+            requested_diagram_type=request.diagram_type,
         )
     except DiagramGenerationError:
         raise HTTPException(status_code=500, detail="다이어그램 생성에 실패했습니다")
@@ -81,10 +84,11 @@ async def generate_concept_diagram(
 @router.get("/{concept_key}", response_model=DiagramResponse)
 async def get_diagram(
     concept_key: str,
+    diagram_type: str | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    cached = await get_cached_diagram(db, user.id, concept_key)
+    cached = await get_cached_diagram(db, user.id, concept_key, diagram_type)
     if cached is None:
         raise HTTPException(status_code=404, detail="다이어그램을 찾을 수 없습니다")
 

@@ -1,22 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import MermaidDiagram from '@/components/MermaidDiagram';
-import { diagramApi, type DiagramResponse } from '@/api/diagram';
+import { diagramApi, type DiagramResponse, DIAGRAM_TYPES, type DiagramTypeValue } from '@/api/diagram';
 
 type PageState = 'loading' | 'success' | 'error' | 'not-found' | 'quota_exceeded';
 
 export default function DiagramPage() {
   const { conceptKey } = useParams<{ conceptKey: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const decodedKey = decodeURIComponent(conceptKey ?? '');
 
+  const initialType = (searchParams.get('type') as DiagramTypeValue | null) ?? 'flowchart';
+  const [selectedType, setSelectedType] = useState<DiagramTypeValue>(initialType);
   const [pageState, setPageState] = useState<PageState>('loading');
   const [diagram, setDiagram] = useState<DiagramResponse | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  const fetchDiagram = async (force: boolean = false) => {
+  const fetchDiagram = async (force: boolean = false, type: DiagramTypeValue = selectedType) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -26,13 +29,13 @@ export default function DiagramPage() {
     try {
       let data: DiagramResponse;
       if (force) {
-        data = await diagramApi.generateDiagram(decodedKey, true, controller.signal);
+        data = await diagramApi.generateDiagram(decodedKey, true, controller.signal, type);
       } else {
         try {
-          data = await diagramApi.getCachedDiagram(decodedKey, controller.signal);
+          data = await diagramApi.getCachedDiagram(decodedKey, controller.signal, type);
         } catch (err) {
           if (isAxiosError(err) && err.response?.status === 404) {
-            data = await diagramApi.generateDiagram(decodedKey, false, controller.signal);
+            data = await diagramApi.generateDiagram(decodedKey, false, controller.signal, type);
           } else {
             throw err;
           }
@@ -52,7 +55,7 @@ export default function DiagramPage() {
 
   useEffect(() => {
     if (decodedKey) {
-      fetchDiagram(false);
+      fetchDiagram(false, selectedType);
     }
     return () => {
       abortRef.current?.abort();
@@ -60,7 +63,13 @@ export default function DiagramPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decodedKey]);
 
-  const handleRegenerate = () => fetchDiagram(true);
+  const handleTypeChange = (type: DiagramTypeValue) => {
+    setSelectedType(type);
+    setSearchParams({ type });
+    fetchDiagram(false, type);
+  };
+
+  const handleRegenerate = () => fetchDiagram(true, selectedType);
   const handleBack = () => navigate(-1);
 
   if (pageState === 'loading') {
@@ -142,7 +151,23 @@ export default function DiagramPage() {
         </button>
       </div>
 
-      <div className="min-h-[60vh]">
+      <div className="flex gap-1.5 flex-wrap">
+        {DIAGRAM_TYPES.map(({ value, label }) => (
+          <button
+            key={value}
+            onClick={() => handleTypeChange(value)}
+            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              selectedType === value
+                ? 'bg-primary text-white'
+                : 'bg-surface-hover text-content-secondary hover:text-white'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="min-h-[60vh] rounded-2xl border border-white/[0.05] bg-[oklch(0.155_0.015_235)] p-6 sm:p-8">
         {diagram && <MermaidDiagram code={diagram.mermaid_code} className="w-full" />}
       </div>
     </div>

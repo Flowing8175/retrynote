@@ -10,6 +10,14 @@ from app.utils.ai_client import call_ai_structured
 
 logger = logging.getLogger(__name__)
 
+DIAGRAM_TYPES = [
+    "flowchart",
+    "mindmap",
+    "sequenceDiagram",
+    "stateDiagram",
+    "classDiagram",
+]
+
 VALID_MERMAID_PREFIXES = (
     "flowchart",
     "mindmap",
@@ -25,13 +33,7 @@ DIAGRAM_SCHEMA = {
     "properties": {
         "diagram_type": {
             "type": "string",
-            "enum": [
-                "flowchart",
-                "mindmap",
-                "sequenceDiagram",
-                "stateDiagram",
-                "classDiagram",
-            ],
+            "enum": DIAGRAM_TYPES,
         },
         "mermaid_code": {"type": "string"},
         "title": {"type": "string"},
@@ -58,15 +60,41 @@ def _is_valid_mermaid(code: str) -> bool:
     return any(stripped.startswith(prefix) for prefix in VALID_MERMAID_PREFIXES)
 
 
+def _build_schema_for_type(requested_type: str | None) -> dict:
+    if requested_type is None:
+        return DIAGRAM_SCHEMA
+    return {
+        "type": "object",
+        "required": ["diagram_type", "mermaid_code", "title"],
+        "properties": {
+            "diagram_type": {
+                "type": "string",
+                "enum": [requested_type],
+            },
+            "mermaid_code": {"type": "string"},
+            "title": {"type": "string"},
+        },
+        "additionalProperties": False,
+    }
+
+
+def _build_system_prompt_for_type(requested_type: str | None) -> str:
+    if requested_type is None:
+        return DIAGRAM_SYSTEM_PROMPT
+    type_hint = f"\n반드시 '{requested_type}' 유형의 다이어그램만 생성하세요. 다른 유형은 사용하지 마세요."
+    return DIAGRAM_SYSTEM_PROMPT + type_hint
+
+
 async def get_cached_diagram(
-    db: AsyncSession, user_id: str, concept_key: str
+    db: AsyncSession, user_id: str, concept_key: str, diagram_type: str | None = None
 ) -> ConceptDiagram | None:
-    result = await db.execute(
-        select(ConceptDiagram).where(
-            ConceptDiagram.user_id == user_id,
-            ConceptDiagram.concept_key == concept_key,
-        )
+    query = select(ConceptDiagram).where(
+        ConceptDiagram.user_id == user_id,
+        ConceptDiagram.concept_key == concept_key,
     )
+    if diagram_type is not None:
+        query = query.where(ConceptDiagram.diagram_type == diagram_type)
+    result = await db.execute(query)
     return result.scalar_one_or_none()
 
 
@@ -102,6 +130,7 @@ async def generate_diagram(
     concept_key: str,
     concept_label: str,
     category_tag: str | None = None,
+    requested_diagram_type: str | None = None,
 ) -> DiagramResponse:
     wrong_answers = await get_wrong_answer_context(db, user_id, concept_key, limit=5)
 
@@ -129,10 +158,13 @@ async def generate_diagram(
         f"\n위 개념과 오답 패턴을 분석하여 학습에 도움이 되는 Mermaid 다이어그램을 생성하세요."
     )
 
+    schema = _build_schema_for_type(requested_diagram_type)
+    system_prompt = _build_system_prompt_for_type(requested_diagram_type)
+
     ai_result = await call_ai_structured(
         prompt,
-        DIAGRAM_SCHEMA,
-        system_message=DIAGRAM_SYSTEM_PROMPT,
+        schema,
+        system_message=system_prompt,
         max_tokens=2048,
     )
 
@@ -152,8 +184,8 @@ async def generate_diagram(
         )
         ai_result = await call_ai_structured(
             fix_prompt,
-            DIAGRAM_SCHEMA,
-            system_message=DIAGRAM_SYSTEM_PROMPT,
+            schema,
+            system_message=system_prompt,
             max_tokens=2048,
         )
         mermaid_code = ai_result.get("mermaid_code", "")
@@ -165,7 +197,7 @@ async def generate_diagram(
                 "Failed to generate valid Mermaid diagram after retry"
             )
 
-    existing = await get_cached_diagram(db, user_id, concept_key)
+    existing = await get_cached_diagram(db, user_id, concept_key, diagram_type)
     if existing is None:
         diagram = ConceptDiagram(
             user_id=user_id,
@@ -179,7 +211,6 @@ async def generate_diagram(
         await db.flush()
     else:
         existing.concept_label = concept_label
-        existing.diagram_type = diagram_type
         existing.mermaid_code = mermaid_code
         existing.title = title
         await db.flush()

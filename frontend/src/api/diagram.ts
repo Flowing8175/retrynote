@@ -10,15 +10,26 @@ export interface DiagramResponse {
   created_at: string | null;
 }
 
+export const DIAGRAM_TYPES = [
+  { value: 'flowchart', label: '흐름도' },
+  { value: 'mindmap', label: '마인드맵' },
+  { value: 'sequenceDiagram', label: '순서도' },
+  { value: 'stateDiagram', label: '상태도' },
+  { value: 'classDiagram', label: '클래스도' },
+] as const;
+
+export type DiagramTypeValue = typeof DIAGRAM_TYPES[number]['value'];
+
 export const diagramApi = {
   generateDiagram: async (
     conceptKey: string,
     force: boolean = false,
     signal?: AbortSignal,
+    diagramType?: DiagramTypeValue,
   ): Promise<DiagramResponse> => {
     const response = await apiClient.post<DiagramResponse>(
       '/diagrams/generate',
-      { concept_key: conceptKey, force },
+      { concept_key: conceptKey, force, diagram_type: diagramType ?? null },
       { signal, _skipUpgradeModal: true } as object,
     );
     return response.data;
@@ -27,10 +38,12 @@ export const diagramApi = {
   getCachedDiagram: async (
     conceptKey: string,
     signal?: AbortSignal,
+    diagramType?: DiagramTypeValue,
   ): Promise<DiagramResponse> => {
+    const params = diagramType ? { diagram_type: diagramType } : undefined;
     const response = await apiClient.get<DiagramResponse>(
       `/diagrams/${encodeURIComponent(conceptKey)}`,
-      { signal },
+      { signal, params },
     );
     return response.data;
   },
