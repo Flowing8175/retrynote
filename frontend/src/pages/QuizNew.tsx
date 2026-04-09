@@ -18,9 +18,9 @@ const QUESTION_TYPES = [
 const QUESTION_COUNT_PRESETS = [5, 10, 15];
 
 const MODEL_TIER_LABELS: Record<string, string> = {
-  ECO: 'ECO (빠름, 경제적)',
-  BALANCED: '균형형',
-  PERFORMANCE: '고성능',
+  ECO: 'ECO',
+  BALANCED: 'BALANCED',
+  PERFORMANCE: 'PERFORMANCE',
 };
 
 const DIFFICULTY_OPTIONS = [
@@ -580,7 +580,7 @@ export default function QuizNew() {
                             </span>
                           </div>
                           <p className="text-[11px] text-content-muted mt-1.5 pl-5">
-                            클릭하면 균형형 모델로 한 번 무료 체험할 수 있습니다.
+                            클릭하면 BALANCED 모델로 한 번 무료 체험할 수 있습니다.
                           </p>
                         </button>
                       ) : freeTrialUsedAt ? (
