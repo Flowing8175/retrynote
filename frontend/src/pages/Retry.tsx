@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { retryApi, wrongNotesApi } from '@/api';
 import type { RetryLocationState } from '@/types';
 
@@ -30,6 +31,7 @@ export default function Retry() {
   const [questionCount, setQuestionCount] = useState(5);
   const [autoCount, setAutoCount] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creditError, setCreditError] = useState(false);
   const [selectedManualConceptKey, setSelectedManualConceptKey] = useState('');
 
   const { data: wrongNotesData } = useQuery({
@@ -90,6 +92,10 @@ export default function Retry() {
       navigate(`/quiz/${response.quiz_session_id}`);
     },
     onError: (mutationError: unknown) => {
+      if (isAxiosError(mutationError) && mutationError.response?.status === 402) {
+        setCreditError(true);
+        return;
+      }
       const axiosError = mutationError as { response?: { data?: { detail?: string } } };
       setError(axiosError.response?.data?.detail || '재도전 세트를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.');
     },
@@ -245,6 +251,15 @@ export default function Retry() {
               </p>
             )}
           </div>
+
+          {creditError && (
+            <p className="text-sm text-content-secondary">
+              재도전을 위한 크레딧이 부족합니다.{' '}
+              <Link to="/pricing" className="underline underline-offset-2 hover:text-white transition-colors">
+                플랜 업그레이드
+              </Link>
+            </p>
+          )}
 
           {error && (
             <div className="rounded-2xl border border-semantic-error-border bg-semantic-error-bg px-4 py-3 text-sm leading-6 text-semantic-error">

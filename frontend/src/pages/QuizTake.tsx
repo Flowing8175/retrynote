@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
@@ -77,6 +78,7 @@ export default function QuizTake() {
   const [answerResult, setAnswerResult] = useState<AnswerResponse | null>(null);
   const [draftAnswers, setDraftAnswers] = useState<Record<string, string>>({});
   const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, string>>({});
+  const [creditError, setCreditError] = useState(false);
   const [answerResultsByItemId, setAnswerResultsByItemId] = useState<Record<string, AnswerResponse>>({});
   const [furthestAvailableIndex, setFurthestAvailableIndex] = useState(0);
   const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
@@ -153,6 +155,11 @@ export default function QuizTake() {
   const submitAnswerMutation = useMutation({
     mutationFn: (data: { itemId: string; answer: string }) =>
       quizApi.submitAnswer(sessionId || '', data.itemId, { user_answer: data.answer }),
+    onError: (err) => {
+      if (isAxiosError(err) && err.response?.status === 402) {
+        setCreditError(true);
+      }
+    },
     onSuccess: (result, variables) => {
       setAnswerResult(result);
       setIsSubmitted(true);
@@ -544,6 +551,15 @@ export default function QuizTake() {
       )}
 
       {/* Navigation Controls */}
+      {creditError && (
+        <p className="text-sm text-content-secondary">
+          채점을 위한 크레딧이 부족합니다.{' '}
+          <Link to="/pricing" className="underline underline-offset-2 hover:text-white transition-colors">
+            플랜 업그레이드
+          </Link>
+        </p>
+      )}
+
       <footer className="pt-8 flex flex-col-reverse sm:flex-row items-center gap-4 justify-between">
         <div className="flex gap-3 w-full sm:w-auto">
           <button

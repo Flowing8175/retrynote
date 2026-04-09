@@ -6,11 +6,14 @@ from app.database import get_db
 from app.models.user import User
 from app.models.objection import WeakPoint
 from app.schemas.diagram import DiagramGenerateRequest, DiagramResponse
+from app.schemas.billing import LimitExceededError
 from app.services.diagram_service import (
     get_cached_diagram,
     generate_diagram,
     DiagramGenerationError,
 )
+from app.services.usage_service import UsageService
+from app.tier_config import TIER_LIMITS, UserTier
 from app.middleware.auth import get_current_user
 
 router = APIRouter()
@@ -44,6 +47,21 @@ async def generate_concept_diagram(
                 cached=True,
                 created_at=cached.created_at,
             )
+
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 1)
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="다이어그램 생성 크레딧이 부족합니다.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+                upgrade_url="/pricing",
+            ).model_dump(),
+        )
 
     try:
         diagram = await generate_diagram(

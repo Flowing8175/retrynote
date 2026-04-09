@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import MermaidDiagram from '@/components/MermaidDiagram';
 import { diagramApi, type DiagramResponse } from '@/api/diagram';
 
-type PageState = 'loading' | 'success' | 'error' | 'not-found';
+type PageState = 'loading' | 'success' | 'error' | 'not-found' | 'quota_exceeded';
 
 export default function DiagramPage() {
   const { conceptKey } = useParams<{ conceptKey: string }>();
@@ -41,7 +41,11 @@ export default function DiagramPage() {
       setPageState('success');
     } catch (err) {
       if ((err as Error).name === 'CanceledError' || (err as Error).name === 'AbortError') return;
-      setPageState('error');
+      if (isAxiosError(err) && err.response?.status === 402) {
+        setPageState('quota_exceeded');
+      } else {
+        setPageState('error');
+      }
     }
   };
 
@@ -85,6 +89,19 @@ export default function DiagramPage() {
     );
   }
 
+  if (pageState === 'quota_exceeded') {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <p className="text-sm text-content-secondary">
+          다이어그램 생성을 위한 크레딧이 부족합니다.{' '}
+          <Link to="/pricing" className="underline underline-offset-2 hover:text-white transition-colors">
+            플랜 업그레이드
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
   if (pageState === 'error') {
     return (
       <div className="flex h-[60vh] items-center justify-center">
@@ -107,9 +124,10 @@ export default function DiagramPage() {
         <div className="flex items-center gap-4">
           <button
             onClick={handleBack}
-            className="text-sm font-medium text-content-muted hover:text-white transition-colors"
+            className="rounded-lg p-1.5 text-content-muted hover:text-white hover:bg-surface-hover transition-colors"
+            aria-label="돌아가기"
           >
-            ← 돌아가기
+            <ArrowLeft size={20} />
           </button>
           <h1 className="text-lg font-semibold text-content-primary">
             {diagram?.concept_label} — {diagram?.title}

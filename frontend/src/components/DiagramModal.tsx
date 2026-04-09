@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import Modal from './Modal';
 import MermaidDiagram from './MermaidDiagram';
@@ -12,7 +12,7 @@ interface DiagramModalProps {
   conceptLabel: string;
 }
 
-type FetchState = 'loading' | 'success' | 'error';
+type FetchState = 'loading' | 'success' | 'error' | 'quota_exceeded';
 
 export default function DiagramModal({
   isOpen,
@@ -55,7 +55,11 @@ export default function DiagramModal({
       if ((err as Error).name === 'CanceledError' || (err as Error).name === 'AbortError') {
         return;
       }
-      setFetchState('error');
+      if (isAxiosError(err) && err.response?.status === 402) {
+        setFetchState('quota_exceeded');
+      } else {
+        setFetchState('error');
+      }
     }
   };
 
@@ -117,6 +121,17 @@ export default function DiagramModal({
             </div>
           </div>
           <MermaidDiagram code={diagram.mermaid_code} />
+        </div>
+      )}
+
+      {fetchState === 'quota_exceeded' && (
+        <div className="flex items-center justify-center py-12">
+          <p className="text-sm text-content-secondary">
+            다이어그램 생성을 위한 크레딧이 부족합니다.{' '}
+            <Link to="/pricing" className="underline underline-offset-2 hover:text-white transition-colors" onClick={handleClose}>
+              플랜 업그레이드
+            </Link>
+          </p>
         </div>
       )}
 

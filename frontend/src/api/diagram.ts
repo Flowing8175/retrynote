@@ -19,7 +19,7 @@ export const diagramApi = {
     const response = await apiClient.post<DiagramResponse>(
       '/diagrams/generate',
       { concept_key: conceptKey, force },
-      { signal },
+      { signal, _skipUpgradeModal: true } as object,
     );
     return response.data;
   },

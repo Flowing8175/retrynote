@@ -42,6 +42,9 @@ from app.schemas.objection import ObjectionCreate, ObjectionResponse
 from app.middleware.auth import get_current_user
 from app.middleware.rate_limit_pro import pro_rate_limit
 from app.workers.celery_app import dispatch_task
+from app.services.usage_service import UsageService
+from app.tier_config import TIER_LIMITS, UserTier
+from app.schemas.billing import LimitExceededError
 from app.services.quiz_service import (
     _update_weak_point,
     _grade_single_answer,
@@ -216,9 +219,6 @@ async def create_quiz_session(
         await _validate_file_access(db, user.id, req.selected_file_ids)
 
     from app.config import settings as cfg
-    from app.services.usage_service import UsageService
-    from app.tier_config import TIER_LIMITS, UserTier
-    from app.schemas.billing import LimitExceededError
 
     model_name, generation_cost = _resolve_model_and_cost(req, cfg)
     usage_svc = UsageService()
@@ -433,6 +433,21 @@ async def submit_answer(
     item = item_result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
+
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 1)
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="채점 크레딧이 부족합니다.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+                upgrade_url="/pricing",
+            ).model_dump(),
+        )
 
     if session.status == QuizSessionStatus.ready:
         session.status = QuizSessionStatus.in_progress
@@ -680,6 +695,22 @@ async def submit_exam(
             status_code=400, detail="Session is not ready for submission"
         )
 
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    exam_cost = session.question_count if session.question_count is not None else 1
+    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", exam_cost)
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="시험 채점 크레딧이 부족합니다.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+                upgrade_url="/pricing",
+            ).model_dump(),
+        )
+
     if req.idempotency_key:
         if session.idempotency_key and session.idempotency_key != req.idempotency_key:
             pass
@@ -803,6 +834,21 @@ async def create_objection(
     if existing.scalar_one_or_none():
         raise HTTPException(
             status_code=400, detail="Objection already pending for this answer"
+        )
+
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 1)
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="이의제기 크레딧이 부족합니다.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+                upgrade_url="/pricing",
+            ).model_dump(),
         )
 
     objection = Objection(

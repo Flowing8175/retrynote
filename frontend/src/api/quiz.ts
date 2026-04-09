@@ -46,7 +46,8 @@ export const quizApi = {
   ): Promise<AnswerResponse> => {
     const response = await apiClient.post<AnswerResponse>(
       `/quiz-sessions/${sessionId}/items/${itemId}/answer`,
-      data
+      data,
+      { _skipUpgradeModal: true } as object,
     );
     return response.data;
   },

@@ -89,8 +89,11 @@ apiClient.interceptors.response.use(
     }
 
     if (error.response?.status === 402) {
-      const payload = error.response.data;
-      window.dispatchEvent(new CustomEvent('upgrade-required', { detail: payload }));
+      const config = error.config as InternalAxiosRequestConfig & { _skipUpgradeModal?: boolean };
+      if (!config?._skipUpgradeModal) {
+        const payload = error.response.data;
+        window.dispatchEvent(new CustomEvent('upgrade-required', { detail: payload }));
+      }
     }
 
     return Promise.reject(error);

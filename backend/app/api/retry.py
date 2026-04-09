@@ -4,6 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.schemas.billing import LimitExceededError
+from app.services.usage_service import UsageService
+from app.tier_config import TIER_LIMITS, UserTier
 from app.models.quiz import (
     QuizSession,
     QuizSessionStatus,
@@ -44,6 +47,7 @@ async def create_retry_set(
         # Fallback: derive concept keys directly from AnswerLog when WeakPoint is empty
         if not concept_keys:
             from sqlalchemy import distinct
+
             log_result = await db.execute(
                 select(distinct(QuizItem.concept_key))
                 .join(AnswerLog, AnswerLog.quiz_item_id == QuizItem.id)
@@ -64,7 +68,10 @@ async def create_retry_set(
 
     elif req.source == "quiz_session":
         if not req.quiz_session_id:
-            raise HTTPException(status_code=400, detail="quiz_session_id is required for quiz_session source")
+            raise HTTPException(
+                status_code=400,
+                detail="quiz_session_id is required for quiz_session source",
+            )
         session_check = await db.execute(
             select(QuizSession).where(
                 QuizSession.id == req.quiz_session_id,
@@ -75,6 +82,7 @@ async def create_retry_set(
             raise HTTPException(status_code=404, detail="Quiz session not found")
 
         from sqlalchemy import distinct
+
         log_result = await db.execute(
             select(distinct(QuizItem.concept_key))
             .join(AnswerLog, AnswerLog.quiz_item_id == QuizItem.id)
@@ -95,8 +103,7 @@ async def create_retry_set(
         # Fallback: use all concept_keys in this session regardless of judgement
         if not concept_keys:
             all_result = await db.execute(
-                select(distinct(QuizItem.concept_key))
-                .where(
+                select(distinct(QuizItem.concept_key)).where(
                     QuizItem.quiz_session_id == req.quiz_session_id,
                     QuizItem.concept_key.isnot(None),
                     QuizItem.concept_key != "",
@@ -121,6 +128,21 @@ async def create_retry_set(
 
     if not concept_keys:
         raise HTTPException(status_code=400, detail="No weak concepts found for retry")
+
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 1)
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="재도전 크레딧이 부족합니다.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+                upgrade_url="/pricing",
+            ).model_dump(),
+        )
 
     effective_size = req.size if req.size is not None else 10
 
