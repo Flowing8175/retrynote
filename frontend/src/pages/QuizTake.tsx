@@ -525,17 +525,21 @@ export default function QuizTake() {
                       onClick={() => handleOptionSelect(key)}
                       disabled={(isSubmitted && !isExamMode) || isCompleted}
                       className={`relative group flex items-start gap-4 p-5 rounded-2xl text-left transition-all border ${
-                        isSelected 
-                          ? 'bg-brand-500/15 text-brand-200 border-brand-500/30 ring-1 ring-inset ring-brand-500/30 shadow-sm shadow-brand-900/20' 
-                          : shouldShowCorrect 
-                            ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
-                            : 'bg-surface text-content-primary border-white/[0.05] hover:bg-surface-hover'
-                      } ${isWrong ? 'bg-semantic-error/10 text-semantic-error border-semantic-error/30' : ''}`}
+                        isWrong
+                          ? 'bg-semantic-error/10 text-semantic-error border-semantic-error/40 ring-1 ring-inset ring-semantic-error/30'
+                          : shouldShowCorrect
+                            ? 'bg-semantic-success/10 text-semantic-success border-semantic-success/40 ring-1 ring-inset ring-semantic-success/30'
+                            : isSelected
+                              ? 'bg-brand-500/15 text-brand-200 border-brand-500/30 ring-1 ring-inset ring-brand-500/30 shadow-sm shadow-brand-900/20'
+                              : 'bg-surface text-content-primary border-white/[0.05] hover:bg-surface-hover'
+                      }`}
                     >
-                      <span className={`text-base font-semibold tabular-nums mt-0.5 ${isSelected ? 'text-brand-100' : 'text-content-muted'}`}>
+                      <span className={`text-base font-semibold tabular-nums mt-0.5 ${
+                        isWrong ? 'text-semantic-error' : shouldShowCorrect ? 'text-semantic-success' : isSelected ? 'text-brand-100' : 'text-content-muted'
+                      }`}>
                         {key.toUpperCase()}
                       </span>
-                      <span className={`text-base font-medium leading-relaxed ${isSelected ? 'text-brand-50' : ''}`}>{text}</span>
+                      <span className={`text-base font-medium leading-relaxed ${isSelected && !isWrong ? 'text-brand-50' : ''}`}>{text}</span>
                       {isCorrect && !isExamMode && <ParticleEffect />}
                     </button>
                   );
