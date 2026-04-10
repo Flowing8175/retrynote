@@ -35,17 +35,17 @@ TIER_LIMITS: dict[UserTier, TierLimits] = {
     ),
     UserTier.lite: TierLimits(
         storage_bytes=LITE_STORAGE_BYTES,
-        quiz_per_window=200,
+        quiz_per_window=50,
         ocr_pages_per_window=100,
     ),
     UserTier.standard: TierLimits(
         storage_bytes=STANDARD_STORAGE_BYTES,
-        quiz_per_window=1000,
+        quiz_per_window=300,
         ocr_pages_per_window=500,
     ),
     UserTier.pro: TierLimits(
         storage_bytes=PRO_STORAGE_BYTES,
-        quiz_per_window=3000,
+        quiz_per_window=1000,
         ocr_pages_per_window=2000,
     ),
 }

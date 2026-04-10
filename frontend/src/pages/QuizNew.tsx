@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide-react';
+import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles, Info } from 'lucide-react';
 import { filesApi, quizApi } from '@/api';
 import { Modal, StatusBadge, SkeletonTransition } from '@/components';
 import { isFileProcessingStatus } from '@/types/file';
@@ -96,7 +96,9 @@ export default function QuizNew() {
   const [questionCount, setQuestionCount] = useState(5);
   const [autoCount, setAutoCount] = useState(false);
   const [difficulty, setDifficulty] = useState('');
-  const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>([]);
+  const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>([
+    'multiple_choice', 'ox', 'short_answer', 'fill_blank',
+  ]);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [preferredTier, setPreferredTierState] = useState<string | null>(
     () => localStorage.getItem('quiz_preferred_tier')
@@ -578,12 +580,13 @@ export default function QuizNew() {
                   <div className="grid grid-cols-2 gap-2">
                     {QUESTION_TYPES.map((qt) => {
                       const isSelected = selectedQuestionTypes.includes(qt.value);
+                      const isEssay = qt.value === 'essay';
                       return (
                         <label
                           key={qt.value}
                           className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-colors border ${
-                            isSelected 
-                              ? 'bg-brand-500/5 border-brand-500/30' 
+                            isSelected
+                              ? 'bg-brand-500/5 border-brand-500/30'
                               : 'bg-surface-deep border-transparent hover:bg-surface-hover'
                           }`}
                         >
@@ -594,6 +597,14 @@ export default function QuizNew() {
                             className="w-4 h-4 rounded border-white/[0.1] bg-surface text-brand-500 focus:ring-brand-500"
                           />
                           <span className="text-sm text-white">{qt.label}</span>
+                          {isEssay && (
+                            <span className="relative ml-auto group">
+                              <Info size={14} className="text-content-muted cursor-pointer" />
+                              <span className="pointer-events-none absolute bottom-full right-0 mb-2 w-52 rounded-lg bg-surface-deep border border-white/[0.1] px-3 py-2 text-xs text-content-muted opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg">
+                                AI가 채점하며 채점 시 1크레딧이 소모됩니다.
+                              </span>
+                            </span>
+                          )}
                         </label>
                       );
                     })}

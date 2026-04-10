@@ -434,20 +434,22 @@ async def submit_answer(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    usage_svc = UsageService()
-    tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 1)
-    if not allowed:
-        raise HTTPException(
-            status_code=402,
-            detail=LimitExceededError(
-                detail="채점 크레딧이 부족합니다.",
-                limit_type="quiz",
-                current_usage=TIER_LIMITS[tier].quiz_per_window,
-                limit=TIER_LIMITS[tier].quiz_per_window,
-                upgrade_url="/pricing",
-            ).model_dump(),
-        )
+    # Only AI-graded (essay) questions consume credits
+    if item.question_type == QuestionType.essay:
+        usage_svc = UsageService()
+        tier = UserTier(user.tier)
+        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 1)
+        if not allowed:
+            raise HTTPException(
+                status_code=402,
+                detail=LimitExceededError(
+                    detail="AI 채점 크레딧이 부족합니다.",
+                    limit_type="quiz",
+                    current_usage=TIER_LIMITS[tier].quiz_per_window,
+                    limit=TIER_LIMITS[tier].quiz_per_window,
+                    upgrade_url="/pricing",
+                ).model_dump(),
+            )
 
     if session.status == QuizSessionStatus.ready:
         session.status = QuizSessionStatus.in_progress
@@ -695,21 +697,29 @@ async def submit_exam(
             status_code=400, detail="Session is not ready for submission"
         )
 
-    usage_svc = UsageService()
-    tier = UserTier(user.tier)
-    exam_cost = session.question_count if session.question_count is not None else 1
-    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", exam_cost)
-    if not allowed:
-        raise HTTPException(
-            status_code=402,
-            detail=LimitExceededError(
-                detail="시험 채점 크레딧이 부족합니다.",
-                limit_type="quiz",
-                current_usage=TIER_LIMITS[tier].quiz_per_window,
-                limit=TIER_LIMITS[tier].quiz_per_window,
-                upgrade_url="/pricing",
-            ).model_dump(),
+    # Only charge credits for essay items (AI-graded)
+    essay_count_result = await db.execute(
+        select(func.count(QuizItem.id)).where(
+            QuizItem.quiz_session_id == session_id,
+            QuizItem.question_type == QuestionType.essay,
         )
+    )
+    essay_count = essay_count_result.scalar() or 0
+    if essay_count > 0:
+        usage_svc = UsageService()
+        tier = UserTier(user.tier)
+        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", essay_count)
+        if not allowed:
+            raise HTTPException(
+                status_code=402,
+                detail=LimitExceededError(
+                    detail="AI 채점 크레딧이 부족합니다.",
+                    limit_type="quiz",
+                    current_usage=TIER_LIMITS[tier].quiz_per_window,
+                    limit=TIER_LIMITS[tier].quiz_per_window,
+                    upgrade_url="/pricing",
+                ).model_dump(),
+            )
 
     if req.idempotency_key:
         if session.idempotency_key and session.idempotency_key != req.idempotency_key:
