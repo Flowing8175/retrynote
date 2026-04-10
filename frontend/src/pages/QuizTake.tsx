@@ -33,35 +33,6 @@ function normalizeOxValue(value: unknown) {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
 
-function ParticleEffect() {
-  const particles = Array.from({ length: 8 }).map((_, i) => ({
-    id: i,
-    tx: `${(Math.random() - 0.5) * 200}px`,
-    ty: `${(Math.random() - 0.5) * 200}px`,
-    size: `${Math.random() * 4 + 3}px`,
-    delay: `${Math.random() * 0.1}s`,
-  }));
-
-  return (
-    <div className="particle-container">
-      {particles.map((p) => (
-        <div
-          key={p.id}
-          className="particle"
-          style={{
-            '--tx': p.tx,
-            '--ty': p.ty,
-            width: p.size,
-            height: p.size,
-            animationDelay: p.delay,
-            backgroundColor: 'oklch(0.72 0.12 170)'
-          } as React.CSSProperties}
-        />
-      ))}
-    </div>
-  );
-}
-
 const generatingPhrases = [
   '학습 자료 분석 중...',
   '핵심 개념 추출 중...',
@@ -603,7 +574,6 @@ export default function QuizTake() {
                   const isCorrectAnswer = isOxQuestion
                     ? normalizeOxValue(answerResult?.correct_answer?.answer) === normalizeOxValue(key)
                     : answerResult?.correct_answer?.answer === key;
-                  const isCorrect = answerResult?.judgement === 'correct' && isCorrectAnswer;
                   const isWrong = isSubmitted && isSelected && answerResult?.judgement !== 'correct';
                   const shouldShowCorrect = isSubmitted && !isExamMode && isCorrectAnswer;
 
@@ -628,7 +598,6 @@ export default function QuizTake() {
                         {key.toUpperCase()}
                       </span>
                       <span className={`text-base font-medium leading-relaxed ${isSelected && !isWrong ? 'text-brand-50' : ''}`}>{text}</span>
-                      {isCorrect && !isExamMode && <ParticleEffect />}
                     </button>
                   );
                 })}
