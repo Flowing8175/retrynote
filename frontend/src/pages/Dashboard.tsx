@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import { dashboardApi } from '@/api';
 import CoachingDisplay from '@/components/CoachingDisplay';
 import { SkeletonTransition } from '@/components';
@@ -169,9 +170,6 @@ export default function Dashboard() {
   const [selectedCategoryTag, setSelectedCategoryTag] = useState<string | null>(null);
   const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
 
-  const navigate = useNavigate();
-  const handleStartQuiz = () => navigate('/quiz/new');
-
   const { data: dashboardData, isLoading, isError } = useQuery({
     queryKey: ['dashboard', range, selectedFileId, selectedCategoryTag],
     queryFn: () => dashboardApi.getDashboard(range, selectedFileId, selectedCategoryTag),
@@ -218,41 +216,67 @@ export default function Dashboard() {
   return (
     <SkeletonTransition loading={isLoading} skeleton={<DashboardSkeleton />}>
       {!hasData ? (
-        <div className="max-w-4xl mx-auto space-y-16 py-20">
-        <CreditUsageBar />
-        <div className="animate-fade-in-up">
-          <h1 className="text-3xl font-semibold tracking-tight text-content-primary md:text-4xl leading-tight">
-            성장의 첫 걸음,<br />자료를 올려보세요.
-          </h1>
-          <p className="mt-6 text-lg text-content-secondary max-w-2xl leading-relaxed">
-            학습 자료를 업로드하면 AI가 핵심 개념을 분석하여 당신만의 맞춤형 퀴즈를 생성합니다.
+        <div className="max-w-3xl mx-auto py-12 md:py-20">
+          {/* Eyebrow */}
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand-300/60 mb-10 animate-fade-in-up">
+            RetryNote 시작하기
           </p>
-        </div>
 
-        <div className="space-y-6">
-          <Link to="/files" className="group flex items-start gap-5 rounded-xl bg-surface p-6 border border-white/[0.05] hover:bg-surface-hover transition-colors">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 text-sm font-bold">1</div>
+          {/* Editorial headline */}
+          <div className="animate-fade-in-up stagger-1 mb-10">
+            <h1 className="text-5xl md:text-[3.75rem] font-semibold tracking-tight text-white leading-[1.08]">
+              자료를 올리면<br />
+              AI가 <span className="text-brand-300">핵심만 추려</span><br />
+              퀴즈로 만들어 드립니다.
+            </h1>
+          </div>
+
+          {/* Credit bar — after headline, less intrusive */}
+          <div className="mb-10 animate-fade-in-up stagger-2">
+            <CreditUsageBar />
+          </div>
+
+          {/* Primary CTA — upload is the only real action */}
+          <Link
+            to="/files"
+            className="group flex items-center justify-between rounded-xl bg-surface border border-white/[0.07] px-7 py-6 hover:border-brand-500/25 hover:bg-surface-hover transition-all duration-200 animate-fade-in-up stagger-3"
+          >
             <div>
-              <h2 className="text-lg font-semibold text-white">자료 업로드</h2>
-              <p className="mt-1 text-sm text-content-secondary">PDF, Word, 이미지 등 학습 자료를 올려주세요.</p>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-brand-300/60 mb-2">
+                01 — 지금 시작하세요
+              </div>
+              <h2 className="text-xl font-semibold text-white mb-1">자료 업로드</h2>
+              <p className="text-sm text-content-secondary">
+                PDF, Word, 이미지 등 학습 자료를 올려주세요.
+              </p>
+            </div>
+            <div className="shrink-0 ml-6 flex h-10 w-10 items-center justify-center rounded-lg border border-brand-500/20 text-brand-300 group-hover:border-brand-500/50 group-hover:bg-brand-500/10 transition-all duration-200">
+              <ArrowRight size={18} />
             </div>
           </Link>
-          <button type="button" onClick={handleStartQuiz} className="group w-full flex items-start gap-5 rounded-xl bg-surface p-6 border border-white/[0.05] hover:bg-surface-hover transition-colors text-left">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 text-sm font-bold">2</div>
-            <div>
-              <h2 className="text-lg font-semibold text-white">퀴즈 생성</h2>
-              <p className="mt-1 text-sm text-content-secondary">AI가 자료를 분석해 핵심 문제를 만들어줍니다.</p>
+
+          {/* Steps 2 & 3 — timeline continuation, not cards */}
+          <div className="mt-1 ml-[1.75rem] border-l border-white/[0.05] animate-fade-in-up stagger-4">
+            <div className="flex items-baseline gap-5 px-6 py-5 border-b border-white/[0.04]">
+              <span className="text-[10px] font-mono text-white/25 shrink-0 tabular-nums">02</span>
+              <div>
+                <span className="text-sm font-medium text-content-muted/70">퀴즈 생성</span>
+                <span className="hidden sm:inline text-sm text-content-muted/40 ml-2">
+                  — AI가 자료를 분석해 핵심 문제를 만들어줍니다.
+                </span>
+              </div>
             </div>
-          </button>
-          <div className="flex items-start gap-5 rounded-xl bg-surface-deep/50 p-6 border border-white/[0.05] opacity-60">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/[0.05] text-content-muted text-sm font-bold">3</div>
-            <div>
-              <h2 className="text-lg font-semibold text-content-muted">오답 분석 & 재도전</h2>
-              <p className="mt-1 text-sm text-content-muted">틀린 문제를 복습하고 약점을 보완하세요.</p>
+            <div className="flex items-baseline gap-5 px-6 py-5">
+              <span className="text-[10px] font-mono text-white/10 shrink-0 tabular-nums">03</span>
+              <div>
+                <span className="text-sm font-medium text-content-muted/35">오답 분석 & 재도전</span>
+                <span className="hidden sm:inline text-sm text-content-muted/20 ml-2">
+                  — 틀린 문제를 복습하고 약점을 보완하세요.
+                </span>
+              </div>
             </div>
           </div>
         </div>
-      </div>
       ) : (
     <>
     <div className="space-y-20 py-8">

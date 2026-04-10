@@ -58,16 +58,7 @@ def build_coaching_summary_cache_key(
     return f"dashboard:coaching:{user_id}:{range_value}:{file_id or 'none'}:{category_tag or 'none'}"
 
 
-def apply_coaching_tone(message: str, accuracy: float) -> str:
-    if accuracy >= 0.8 and "우수" not in message:
-        return f"현재 성과가 우수합니다. {message}"
-
-    if accuracy < 0.5 and "개선" not in message:
-        return f"현재 결과는 개선이 필요합니다. {message}"
-
-    if 0.5 <= accuracy < 0.8 and "취약" not in message:
-        return f"현재 취약한 부분이 보입니다. {message}"
-
+def apply_coaching_tone(message: str, _accuracy: float) -> str:
     return message
 
 
