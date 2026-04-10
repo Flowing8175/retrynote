@@ -45,6 +45,7 @@ export interface QuizSessionDetail {
   max_score: number | null;
   items_count: number;
   created_at: string;
+  error_message?: string | null;
 }
 
 export interface QuizSessionHistoryItem {

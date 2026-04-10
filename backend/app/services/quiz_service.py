@@ -779,6 +779,15 @@ async def generate_quiz(job_id: str):
                 system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
             )
 
+            if ai_result.get("rejected"):
+                session.status = QuizSessionStatus.generation_failed
+                job.status = "failed"
+                job.error_message = "INVALID_INPUT:" + ai_result.get(
+                    "rejection_reason", "퀴즈를 만들기 어려운 입력입니다. 학습하고 싶은 주제나 자료를 입력해 주세요."
+                )
+                await db.commit()
+                return
+
             all_questions = ai_result.get("questions", [])
             questions = (
                 all_questions

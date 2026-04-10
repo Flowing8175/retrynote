@@ -1,6 +1,6 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles, Info } from 'lucide-react';
 import { filesApi, quizApi } from '@/api';
 import { Modal, StatusBadge, SkeletonTransition } from '@/components';
@@ -113,8 +113,29 @@ export default function QuizNew() {
   };
   const [showNoSourceModal, setShowNoSourceModal] = useState(false);
   const [noSourceConfirmed, setNoSourceConfirmed] = useState(false);
+  const location = useLocation();
+  const locationState = location.state as { inputError?: string; inputSourceMode?: string } | null;
   const [topic, setTopic] = useState('');
+  const [topicError, setTopicError] = useState<string | null>(() => {
+    if (locationState?.inputSourceMode === 'no_source' && locationState.inputError) {
+      return locationState.inputError;
+    }
+    return null;
+  });
+  const [fileError, setFileError] = useState<string | null>(() => {
+    if (locationState?.inputSourceMode === 'document_based' && locationState.inputError) {
+      return locationState.inputError;
+    }
+    return null;
+  });
   const [formMessage, setFormMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (locationState?.inputError) {
+      window.history.replaceState({}, '');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -209,6 +230,7 @@ export default function QuizNew() {
 
   const handleFileToggle = (fileId: string) => {
     setFormMessage(null);
+    setFileError(null);
     setSelectedFileIds((prev) =>
       prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
     );
@@ -342,7 +364,10 @@ export default function QuizNew() {
         </div>
 
         {sourceMode === 'document_based' ? (
-          <div className="space-y-6 animate-fade-in-up bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
+          <div className={`space-y-6 animate-fade-in-up bg-surface rounded-3xl p-6 md:p-8 ${fileError ? 'border border-semantic-error' : 'border border-white/[0.05]'}`}>
+            {fileError && (
+              <p className="text-xs text-semantic-error -mb-2">{fileError}</p>
+            )}
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex flex-wrap gap-2">
                 <button
@@ -438,11 +463,15 @@ export default function QuizNew() {
               id="topic-input"
               type="text"
               value={topic}
-              onChange={(e) => setTopic(e.target.value)}
+              onChange={(e) => { setTopic(e.target.value); setTopicError(null); }}
               placeholder="예: 양자역학, 서양미술사, 파이썬 기초..."
-              className="w-full bg-surface-deep border border-white/[0.05] rounded-xl text-base px-5 py-4 placeholder:text-content-muted focus:ring-2 focus:ring-brand-500 focus:outline-none transition-shadow"
+              className={`w-full bg-surface-deep rounded-xl text-base px-5 py-4 placeholder:text-content-muted focus:outline-none transition-shadow ${topicError ? 'border border-semantic-error focus:ring-2 focus:ring-semantic-error/50' : 'border border-white/[0.05] focus:ring-2 focus:ring-brand-500'}`}
             />
-            <p className="text-xs text-content-muted">주제를 비워두면 무작위로 흥미로운 상식 퀴즈가 생성됩니다.</p>
+            {topicError ? (
+              <p className="text-xs text-semantic-error">{topicError}</p>
+            ) : (
+              <p className="text-xs text-content-muted">주제를 비워두면 무작위로 흥미로운 상식 퀴즈가 생성됩니다.</p>
+            )}
           </div>
         )}
       </section>

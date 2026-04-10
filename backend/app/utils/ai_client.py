@@ -67,6 +67,8 @@ GENERATION_SCHEMA = {
     "type": "object",
     "required": ["questions"],
     "properties": {
+        "rejected": {"type": "boolean"},
+        "rejection_reason": {"type": "string"},
         "questions": {
             "type": "array",
             "items": {

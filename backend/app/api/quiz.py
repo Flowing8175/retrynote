@@ -316,6 +316,14 @@ async def get_quiz_session(
         .where(QuizItem.quiz_session_id == session_id)
     )
 
+    job_result = await db.execute(
+        select(Job)
+        .where(Job.target_type == "quiz_session", Job.target_id == session_id)
+        .order_by(Job.created_at.desc())
+        .limit(1)
+    )
+    job = job_result.scalar_one_or_none()
+
     return QuizSessionDetail(
         id=session.id,
         mode=session.mode.value,
@@ -331,6 +339,7 @@ async def get_quiz_session(
         max_score=session.max_score,
         items_count=items_count.scalar() or 0,
         created_at=session.created_at,
+        error_message=job.error_message if job else None,
     )
 
 

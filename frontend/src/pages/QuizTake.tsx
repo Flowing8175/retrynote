@@ -137,6 +137,16 @@ export default function QuizTake() {
         : false,
   });
 
+  useEffect(() => {
+    if (sessionData?.status === 'generation_failed' && sessionData.error_message?.startsWith('INVALID_INPUT:')) {
+      const reason = sessionData.error_message.slice('INVALID_INPUT:'.length);
+      navigate('/quiz/new', {
+        replace: true,
+        state: { inputError: reason, inputSourceMode: sessionData.source_mode },
+      });
+    }
+  }, [sessionData?.status, sessionData?.error_message]);
+
   const {
     data: itemsData,
     isLoading: itemsLoading,
