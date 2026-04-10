@@ -5,6 +5,12 @@ import { quizApi } from '@/api';
 import { StatusBadge, SkeletonTransition } from '@/components';
 import { ChevronRight, AlertCircle, Flame } from 'lucide-react';
 
+function resolveOptionText(answer: string, options: Record<string, unknown> | unknown[] | null): string {
+  if (!options || Array.isArray(options)) return answer;
+  const resolved = (options as Record<string, unknown>)[answer];
+  return resolved ? String(resolved) : answer;
+}
+
 function formatMode(mode: string) {
   return mode === 'exam' ? '시험 모드' : '일반 모드';
 }
@@ -353,14 +359,16 @@ export default function QuizResults() {
                             ? 'bg-brand-500/10 border-brand-500/30 text-brand-300'
                             : 'bg-semantic-error/10 border-semantic-error/30 text-semantic-error'
                         }`}>
-                          {log?.user_answer || '미응답'}
+                          {log?.user_answer
+                            ? resolveOptionText(log.user_answer, item.options)
+                            : '미응답'}
                         </div>
                       </div>
                       {!isCorrect && (
                         <div className="space-y-2">
                           <div className="text-xs font-medium text-brand-300">정답</div>
                           <div className="p-4 bg-brand-500/15 border border-brand-500/40 text-brand-200 rounded-xl text-sm font-medium">
-                            {String(item.correct_answer?.answer || '알 수 없음')}
+                            {resolveOptionText(String(item.correct_answer?.answer || '알 수 없음'), item.options)}
                           </div>
                         </div>
                       )}

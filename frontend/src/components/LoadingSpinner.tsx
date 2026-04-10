@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 
 const loadingPhrases = [
-  '퀴즈 로딩 중',
-  '자료 꼼꼼히 읽는 중',
-  '핵심 개념 정리 중',
-  '문제 만드는 중',
-  '정답 검토 중',
-  '거의 다 됐어요!',
+  { text: '퀴즈 로딩 중', duration: 3000 },
+  { text: '자료 꼼꼼히 읽는 중', duration: 3000 },
+  { text: '핵심 개념 정리 중', duration: 3000 },
+  { text: '문제 만드는 중', duration: 3000 },
+  { text: '정답 검토 중', duration: 3000 },
+  { text: '거의 다 됐어요!', duration: 15000 },
 ];
 
 interface PillShimmerProps {
@@ -43,11 +43,16 @@ export default function LoadingSpinner({ message }: LoadingSpinnerProps) {
   const [currentPhrase, setCurrentPhrase] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentPhrase((prev) => (prev + 1) % loadingPhrases.length);
-    }, 3000);
-    return () => clearInterval(interval);
-  }, []);
+    const schedule = () => {
+      const duration = loadingPhrases[currentPhrase].duration;
+      const timeout = setTimeout(() => {
+        setCurrentPhrase((prev) => (prev + 1) % loadingPhrases.length);
+      }, duration);
+      return timeout;
+    };
+    const timeout = schedule();
+    return () => clearTimeout(timeout);
+  }, [currentPhrase]);
 
   return (
     <div className="flex flex-col items-center justify-center py-14" role="status" aria-live="polite">
@@ -57,7 +62,7 @@ export default function LoadingSpinner({ message }: LoadingSpinnerProps) {
         <PillShimmer width={88} delay={0.75} opacity={0.38} />
       </div>
       <p className="mt-5 text-sm font-medium text-content-muted text-center">
-        {message || loadingPhrases[currentPhrase]}
+        {message || loadingPhrases[currentPhrase].text}
       </p>
     </div>
   );
