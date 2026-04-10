@@ -209,7 +209,6 @@ export default function Dashboard() {
   const recentWrongNotes = dashboardData.recent_wrong_notes.slice(0, 4);
   const weakConcepts = dashboardData.weak_concepts.slice(0, 5);
   const primaryAction = getPrimaryAction(dashboardData);
-  const rangeLabel = range === '7d' ? '최근 7일' : range === '30d' ? '최근 30일' : '전체 기간';
 
   const allRetryState: RetryLocationState = {
     conceptKeys: dashboardData.retry_recommendations.map((r) => r.concept_key),
@@ -280,7 +279,6 @@ export default function Dashboard() {
                 </button>
               ))}
             </div>
-            <span className="text-xs text-content-muted">{rangeLabel}</span>
           </div>
 
           <div className="space-y-3">
