@@ -9,6 +9,7 @@ import type {
   AnswerSubmit,
   AnswerResponse,
   AnswerLogEntry,
+  DraftAnswerEntry,
   DraftAnswerSubmit,
   DraftAnswerResponse,
   ExamSubmit,
@@ -83,6 +84,11 @@ export const quizApi = {
 
   getAnswerLogs: async (sessionId: string): Promise<AnswerLogEntry[]> => {
     const response = await apiClient.get<AnswerLogEntry[]>(`/quiz-sessions/${sessionId}/answer-logs`);
+    return response.data;
+  },
+
+  getDraftAnswers: async (sessionId: string): Promise<DraftAnswerEntry[]> => {
+    const response = await apiClient.get<DraftAnswerEntry[]>(`/quiz-sessions/${sessionId}/draft-answers`);
     return response.data;
   },
 

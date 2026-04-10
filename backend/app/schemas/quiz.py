@@ -147,6 +147,12 @@ class DraftAnswerResponse(BaseModel):
     saved_at: datetime
 
 
+class DraftAnswerEntry(BaseModel):
+    item_id: str
+    user_answer: str
+    saved_at: datetime
+
+
 class ExamSubmit(BaseModel):
     idempotency_key: str = Field(max_length=255)
 

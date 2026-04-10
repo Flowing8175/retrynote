@@ -32,6 +32,7 @@ from app.schemas.quiz import (
     AnswerLogEntry,
     DraftAnswerSubmit,
     DraftAnswerResponse,
+    DraftAnswerEntry,
     ExamSubmit,
     ExamSubmitResponse,
     SessionCompleteResponse,
@@ -689,6 +690,32 @@ async def save_draft_answer(
 
     await db.commit()
     return DraftAnswerResponse(saved_at=draft.saved_at)
+
+
+@router.get("/{session_id}/draft-answers", response_model=list[DraftAnswerEntry])
+async def get_draft_answers(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session_result = await db.execute(
+        select(QuizSession).where(QuizSession.id == session_id)
+    )
+    session = session_result.scalar_one_or_none()
+    if not session or session.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    drafts_result = await db.execute(
+        select(DraftAnswer).where(
+            DraftAnswer.quiz_session_id == session_id,
+            DraftAnswer.user_id == user.id,
+        )
+    )
+    drafts = drafts_result.scalars().all()
+    return [
+        DraftAnswerEntry(item_id=d.quiz_item_id, user_answer=d.user_answer, saved_at=d.saved_at)
+        for d in drafts
+    ]
 
 
 @router.post("/{session_id}/submit", response_model=ExamSubmitResponse)

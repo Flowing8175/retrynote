@@ -125,6 +125,12 @@ export interface SessionCompleteResponse {
   max_score: number;
 }
 
+export interface DraftAnswerEntry {
+  item_id: string;
+  user_answer: string;
+  saved_at: string;
+}
+
 export interface AnswerLogEntry {
   item_id: string;
   answer_log_id: string;

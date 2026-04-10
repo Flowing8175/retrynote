@@ -242,11 +242,19 @@ export default function QuizTake() {
   });
 
   const isCompleted = !!sessionData && COMPLETED_STATUSES.has(sessionData.status);
+  const isInProgress = !!sessionData && sessionData.status === 'in_progress';
+  const isExamSession = sessionData?.mode === 'exam';
 
   const { data: answerLogsData } = useQuery({
     queryKey: ['answerLogs', sessionId],
     queryFn: () => quizApi.getAnswerLogs(sessionId || ''),
-    enabled: !!sessionId && isCompleted,
+    enabled: !!sessionId && (isCompleted || (isInProgress && !isExamSession)),
+  });
+
+  const { data: draftAnswersData } = useQuery({
+    queryKey: ['draftAnswers', sessionId],
+    queryFn: () => quizApi.getDraftAnswers(sessionId || ''),
+    enabled: !!sessionId && isInProgress && isExamSession,
   });
 
   useEffect(() => {
@@ -265,14 +273,51 @@ export default function QuizTake() {
     setSubmittedAnswers(submitted);
     setDraftAnswers(submitted);
     setAnswerResultsByItemId(results);
-    setFurthestAvailableIndex(itemsData.length - 1);
-    const firstItem = itemsData[0];
-    if (submitted[firstItem.id]) {
-      setUserAnswer(submitted[firstItem.id]);
-      setIsSubmitted(true);
-      setAnswerResult(results[firstItem.id] ?? null);
+
+    if (isCompleted) {
+      // Completed: allow free navigation, show first question with its result
+      setFurthestAvailableIndex(itemsData.length - 1);
+      const firstItem = itemsData[0];
+      if (submitted[firstItem.id]) {
+        setUserAnswer(submitted[firstItem.id]);
+        setIsSubmitted(true);
+        setAnswerResult(results[firstItem.id] ?? null);
+      }
+    } else {
+      // In-progress (normal mode): resume at the next unanswered question
+      const answeredCount = Object.keys(submitted).length;
+      const nextIndex = Math.min(answeredCount, itemsData.length - 1);
+      setFurthestAvailableIndex(nextIndex);
+      setCurrentItemIndex(nextIndex);
+      const nextItem = itemsData[nextIndex];
+      if (submitted[nextItem.id]) {
+        setUserAnswer(submitted[nextItem.id]);
+        setIsSubmitted(true);
+        setAnswerResult(results[nextItem.id] ?? null);
+      } else {
+        setUserAnswer('');
+        setIsSubmitted(false);
+        setAnswerResult(null);
+      }
     }
-  }, [answerLogsData, itemsData]);
+  }, [answerLogsData, itemsData, isCompleted]);
+
+  useEffect(() => {
+    if (!draftAnswersData || !itemsData?.length) return;
+    const drafts: Record<string, string> = {};
+    for (const d of draftAnswersData) {
+      drafts[d.item_id] = d.user_answer;
+    }
+    setDraftAnswers(drafts);
+    setSubmittedAnswers(drafts);
+    const answeredCount = Object.keys(drafts).length;
+    const nextIndex = Math.min(answeredCount, itemsData.length - 1);
+    setFurthestAvailableIndex(nextIndex);
+    setCurrentItemIndex(nextIndex);
+    const nextItem = itemsData[nextIndex];
+    setUserAnswer(drafts[nextItem.id] || '');
+    setIsSubmitted(false);
+  }, [draftAnswersData, itemsData]);
 
   const submitAnswerMutation = useMutation({
     mutationFn: (data: { itemId: string; answer: string }) =>
