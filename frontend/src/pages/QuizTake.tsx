@@ -193,6 +193,7 @@ export default function QuizTake() {
   const [creditError, setCreditError] = useState(false);
   const [answerResultsByItemId, setAnswerResultsByItemId] = useState<Record<string, AnswerResponse>>({});
   const [furthestAvailableIndex, setFurthestAvailableIndex] = useState(0);
+  const suggestedFeedbackRef = useRef<Record<string, string>>({});
   const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
 
   const { data: sessionData, isLoading: sessionLoading, isError: sessionIsError, error: sessionError } = useQuery({
@@ -268,7 +269,12 @@ export default function QuizTake() {
     const results: Record<string, AnswerResponse> = {};
     for (const log of answerLogsData) {
       submitted[log.item_id] = log.user_answer;
-      results[log.item_id] = { ...(log as AnswerLogEntry), next_item_id: null } as AnswerResponse;
+      const savedFeedback = suggestedFeedbackRef.current[log.item_id];
+      results[log.item_id] = {
+        ...(log as AnswerLogEntry),
+        next_item_id: null,
+        ...(savedFeedback ? { suggested_feedback: savedFeedback } : {}),
+      } as AnswerResponse;
     }
     setSubmittedAnswers(submitted);
     setDraftAnswers(submitted);
@@ -328,6 +334,9 @@ export default function QuizTake() {
       }
     },
     onSuccess: (result, variables) => {
+      if (result.suggested_feedback) {
+        suggestedFeedbackRef.current[variables.itemId] = result.suggested_feedback;
+      }
       setAnswerResult(result);
       setIsSubmitted(true);
       setCurrentAnswer(variables.itemId, variables.answer);
