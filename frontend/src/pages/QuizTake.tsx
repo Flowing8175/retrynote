@@ -128,7 +128,7 @@ export default function QuizTake() {
   const queryClient = useQueryClient();
   const { currentSession, currentAnswerMap, setCurrentSession, setCurrentItems, setCurrentAnswer } = useQuizStore();
   const currentAnswerMapRef = useRef(currentAnswerMap);
-  const feedbackRef = useRef<HTMLDivElement>(null);
+
 
   useEffect(() => {
     currentAnswerMapRef.current = currentAnswerMap;
@@ -294,7 +294,7 @@ export default function QuizTake() {
       setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
       setAnswerResultsByItemId((prev) => ({ ...prev, [variables.itemId]: result }));
       setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
-      setTimeout(() => feedbackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
+      setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
 
       if (!result.next_item_id && sessionData?.mode === 'normal' && sessionId) {
         completeQuizMutation.mutate();
@@ -636,7 +636,7 @@ export default function QuizTake() {
 
           {/* Result Feedback (Immediate Mode Only) */}
           {isSubmitted && !isExamMode && answerResult && (
-            <div ref={feedbackRef} className={`animate-fade-in-up p-6 rounded-2xl border ${answerResult.judgement === 'correct' ? 'bg-brand-500/5 border-brand-500/30' : answerResult.judgement === 'partial' ? 'bg-yellow-500/5 border-yellow-500/30' : 'bg-semantic-error/5 border-semantic-error/30'}`}>
+            <div className={`animate-fade-in-up p-6 rounded-2xl border ${answerResult.judgement === 'correct' ? 'bg-brand-500/5 border-brand-500/30' : answerResult.judgement === 'partial' ? 'bg-yellow-500/5 border-yellow-500/30' : 'bg-semantic-error/5 border-semantic-error/30'}`}>
               <div className="flex items-center gap-4 mb-4">
                 {answerResult.judgement === 'correct' ? (
                   <CheckCircle2 size={24} className="text-brand-300" />
