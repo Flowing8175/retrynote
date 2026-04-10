@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.quiz import AnswerLog, QuizItem, Judgement, QuizSessionFile
+from app.models.quiz import Judgement, QuizSessionFile
 from app.models.file import File
 
 

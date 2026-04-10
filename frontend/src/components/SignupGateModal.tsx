@@ -50,6 +50,7 @@ export default function SignupGateModal({ onClose, topic }: Props) {
         try {
           await guestApi.migrateSession({ topic, questions });
         } catch {
+          // migration failure is non-fatal
         }
         clearGuestQuiz();
       }

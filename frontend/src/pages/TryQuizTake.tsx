@@ -71,6 +71,7 @@ export default function TryQuizTake() {
     };
 
     init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   // Poll when status is draft/generating
@@ -97,6 +98,7 @@ export default function TryQuizTake() {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.status]);
 
   const handleSubmit = async () => {

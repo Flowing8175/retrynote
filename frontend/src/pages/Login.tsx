@@ -44,6 +44,7 @@ export default function Login() {
         try {
           await guestApi.migrateSession({ topic: guestState.topic, questions: guestState.questions });
         } catch {
+          // migration failure is non-fatal
         }
         guestState.clearGuestQuiz();
       }

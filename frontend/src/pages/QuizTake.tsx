@@ -111,7 +111,8 @@ export default function QuizTake() {
   const queryClient = useQueryClient();
   const { currentSession, currentAnswerMap, setCurrentSession, setCurrentItems, setCurrentAnswer } = useQuizStore();
   const currentAnswerMapRef = useRef(currentAnswerMap);
-  
+  const bottomRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     currentAnswerMapRef.current = currentAnswerMap;
   }, [currentAnswerMap]);
@@ -145,7 +146,7 @@ export default function QuizTake() {
         state: { inputError: reason, inputSourceMode: sessionData.source_mode },
       });
     }
-  }, [sessionData?.status, sessionData?.error_message]);
+  }, [sessionData?.status, sessionData?.error_message, sessionData?.source_mode, navigate]);
 
   const {
     data: itemsData,
@@ -222,6 +223,7 @@ export default function QuizTake() {
       setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
       setAnswerResultsByItemId((prev) => ({ ...prev, [variables.itemId]: result }));
       setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
+      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
 
       if (!result.next_item_id && sessionData?.mode === 'normal' && sessionId) {
         completeQuizMutation.mutate();
@@ -680,6 +682,7 @@ export default function QuizTake() {
         conceptKey={diagramModal?.conceptKey ?? ''}
         conceptLabel={diagramModal?.conceptLabel ?? ''}
       />
+      <div ref={bottomRef} />
     </div>
   );
 }

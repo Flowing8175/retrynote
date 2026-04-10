@@ -1,5 +1,5 @@
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,7 +23,6 @@ from app.models.search import Job, DraftAnswer
 from app.utils.normalize import normalize_answer, normalize_concept_key
 from app.prompts import (
     SYSTEM_PROMPT_QUIZ_GENERATION,
-    SYSTEM_PROMPT_GRADING_SHORT,
     SYSTEM_PROMPT_OBJECTION_REVIEW,
 )
 from app.prompts.generation import build_generation_prompt

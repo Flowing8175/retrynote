@@ -51,7 +51,6 @@ async def get_guest_session(
     db: AsyncSession = Depends(get_db),
     x_guest_session: str = Header(..., alias="X-Guest-Session"),
 ) -> GuestSession:
-    forwarded_for = None
     session = await GuestSessionService.get_or_create(db, x_guest_session, "unknown")
     await GuestSessionService.update_activity(db, x_guest_session)
     return session
@@ -282,14 +281,6 @@ async def submit_public_answer(
         include_essay=True,
     )
 
-    raw_correct = item.correct_answer_json
-    if isinstance(raw_correct, dict):
-        correct_answer = raw_correct.get("answer", str(raw_correct))
-    elif isinstance(raw_correct, str):
-        correct_answer = raw_correct
-    else:
-        correct_answer = ""
-
     existing_active = await db.execute(
         select(AnswerLog)
         .where(
@@ -395,10 +386,8 @@ GUEST_MAX_FILES = 3
 
 @router.post("/files", status_code=201)
 async def upload_guest_file(
-    request: Request,
     file: UploadFile | None = FastAPIFile(None),
     manual_text: str | None = Form(None),
-    source_url: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
     guest: GuestSession = Depends(get_guest_session_with_ip),
     _rate: None = Depends(guest_ip_rate_limit),

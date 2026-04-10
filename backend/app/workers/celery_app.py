@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
 from celery import Celery
 from app.config import settings
 

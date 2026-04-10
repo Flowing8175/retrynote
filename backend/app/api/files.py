@@ -98,7 +98,6 @@ async def _read_and_validate_upload(
     if file:
         original_filename = file.filename
         ext = os.path.splitext(file.filename or "")[1].lstrip(".").lower()
-        file_type = ext
 
         if ext not in settings_ref.allowed_file_types.split(","):
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")

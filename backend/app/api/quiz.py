@@ -15,7 +15,6 @@ from app.models.quiz import (
     QuestionType,
     AnswerLog,
     Judgement,
-    ErrorType,
     QuizSessionFile,
 )
 from app.models.user import User
@@ -48,7 +47,6 @@ from app.schemas.billing import LimitExceededError
 from app.services.quiz_service import (
     _update_weak_point,
     _grade_single_answer,
-    GradingResult,
     _recalculate_session_totals,
 )
 

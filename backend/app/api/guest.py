@@ -7,7 +7,7 @@ from app.prompts.generation import (
     SYSTEM_PROMPT_QUIZ_GENERATION,
     build_generation_prompt,
 )
-from app.rate_limit import limiter, _get_real_client_ip
+from app.rate_limit import limiter
 from app.utils.ai_client import call_ai_structured, GENERATION_SCHEMA
 from app.config import settings
 
