@@ -131,6 +131,7 @@ async def list_quiz_sessions(
     return [
         QuizSessionHistoryItem(
             id=session.id,
+            title=session.title,
             mode=session.mode.value,
             source_mode=session.source_mode.value,
             status=session.status.value,
@@ -239,6 +240,7 @@ async def create_quiz_session(
 
     session = QuizSession(
         user_id=user.id,
+        title=req.topic or None,
         mode=QuizMode(req.mode),
         source_mode=SourceMode(req.source_mode),
         status=QuizSessionStatus.draft,

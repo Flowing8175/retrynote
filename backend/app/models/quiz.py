@@ -75,6 +75,7 @@ class QuizSession(CommonMixin, Base):
     guest_session_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("guest_sessions.id"), nullable=True
     )
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     mode: Mapped[QuizMode] = mapped_column(Enum(QuizMode), nullable=False)
     source_mode: Mapped[SourceMode] = mapped_column(Enum(SourceMode), nullable=False)
     status: Mapped[QuizSessionStatus] = mapped_column(

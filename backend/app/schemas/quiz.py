@@ -80,6 +80,7 @@ class QuizSessionHistoryItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: str
+    title: str | None
     mode: str
     source_mode: str
     status: str
