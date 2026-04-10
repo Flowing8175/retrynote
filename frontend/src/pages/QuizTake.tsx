@@ -20,6 +20,28 @@ const DEFAULT_OX_OPTIONS: Record<string, string> = {
 
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
 
+// ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1) — smooth, refined deceleration
+function easeOutQuart(t: number) {
+  return 1 - Math.pow(1 - t, 4);
+}
+
+function smoothScrollToElement(el: HTMLElement, duration = 450) {
+  const start = window.scrollY;
+  const target = el.getBoundingClientRect().top + start;
+  const distance = target - start;
+  let startTime: number | null = null;
+
+  function step(now: number) {
+    if (!startTime) startTime = now;
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    window.scrollTo(0, start + distance * easeOutQuart(progress));
+    if (progress < 1) requestAnimationFrame(step);
+  }
+
+  requestAnimationFrame(step);
+}
+
 const QUESTION_TYPE_LABELS: Record<string, string> = {
   multiple_choice: '객관식',
   fill_blank: '빈칸 채우기',
@@ -268,7 +290,7 @@ export default function QuizTake() {
       setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
       setAnswerResultsByItemId((prev) => ({ ...prev, [variables.itemId]: result }));
       setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
-      setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
+      setTimeout(() => { if (bottomRef.current) smoothScrollToElement(bottomRef.current); }, 50);
 
       if (!result.next_item_id && sessionData?.mode === 'normal' && sessionId) {
         completeQuizMutation.mutate();
