@@ -1,12 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
 import React, { Suspense } from 'react';
 import AppErrorBoundary from '@/components/AppErrorBoundary';
 import GuestErrorBoundary from '@/components/GuestErrorBoundary';
 import { useAuthStore } from '@/stores';
 import { Layout } from '@/components';
 import UpgradeModal from '@/components/UpgradeModal';
-import LoadingSpinner from '@/components/LoadingSpinner';
 
 const Landing = React.lazy(() => import('@/pages/Landing'));
 const Login = React.lazy(() => import('@/pages/Login'));
@@ -49,16 +48,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
-function LandingOrDashboard() {
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
-  return (
-    <Suspense fallback={<LoadingSpinner />}>
-      <Landing />
-    </Suspense>
-  );
-}
-
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />;
@@ -66,7 +55,12 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
 function SmartHomeRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
-  return isAuthenticated ? <Navigate to="/dashboard" replace /> : <>{children}</>;
+  const [searchParams] = useSearchParams();
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
+  if (localStorage.getItem('rn-has-account') === 'true' && !searchParams.has('landing')) {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -93,14 +87,6 @@ function App() {
             </SmartHomeRoute>
           } />
 
-          <Route
-            path="/"
-            element={
-              <LazyRoute>
-                <LandingOrDashboard />
-              </LazyRoute>
-            }
-          />
           <Route path="/try" element={<GuestErrorBoundary><LazyRoute><TryQuiz /></LazyRoute></GuestErrorBoundary>} />
           <Route path="/try/quiz/:sessionId" element={<GuestErrorBoundary><LazyRoute><TryQuizTake /></LazyRoute></GuestErrorBoundary>} />
           <Route path="/try/quiz/:sessionId/results" element={<GuestErrorBoundary><LazyRoute><TryQuizResults /></LazyRoute></GuestErrorBoundary>} />

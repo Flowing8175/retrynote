@@ -10,7 +10,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const isJustVerified = searchParams.get('verified') === 'true';
-  const { setUser, setTokens } = useAuthStore();
+  const { setUser, setTokens, rememberMe, setRememberMe } = useAuthStore();
   const [usernameOrEmail, setUsernameOrEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -157,6 +157,16 @@ export default function Login() {
                 />
               </div>
 
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  className="h-4 w-4 rounded border border-white/20 bg-surface-deep/90 accent-brand-500 cursor-pointer"
+                />
+                <span className="text-sm text-content-secondary">로그인 유지</span>
+              </label>
+
               <button
                 type="submit"
                 disabled={loading}
@@ -171,6 +181,12 @@ export default function Login() {
                 </Link>
                 <Link to="/signup" className="text-sm font-semibold text-brand-300 hover:text-brand-400">
                   새 계정 만들기
+                </Link>
+              </div>
+
+              <div className="text-center mt-1">
+                <Link to="/?landing=1" className="text-xs text-content-secondary/50 hover:text-content-secondary transition-colors duration-150">
+                  서비스 소개 보기
                 </Link>
               </div>
             </form>
