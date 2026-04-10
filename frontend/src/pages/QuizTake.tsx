@@ -144,6 +144,7 @@ export default function QuizTake() {
   const [answerResultsByItemId, setAnswerResultsByItemId] = useState<Record<string, AnswerResponse>>({});
   const [furthestAvailableIndex, setFurthestAvailableIndex] = useState(0);
   const suggestedFeedbackRef = useRef<Record<string, string>>({});
+  const justCompletedRef = useRef(false);
   const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
 
   const { data: sessionData, isLoading: sessionLoading, isError: sessionIsError, error: sessionError } = useQuery({
@@ -231,8 +232,14 @@ export default function QuizTake() {
     setAnswerResultsByItemId(results);
 
     if (isCompleted) {
-      // Completed: allow free navigation, show first question with its result
+      // Completed: allow free navigation
       setFurthestAvailableIndex(itemsData.length - 1);
+      // If the session just completed in this interaction, stay on the current
+      // question — don't reset to the first one and clobber the displayed result.
+      if (justCompletedRef.current) {
+        justCompletedRef.current = false;
+        return;
+      }
       const firstItem = itemsData[0];
       if (submitted[firstItem.id]) {
         setUserAnswer(submitted[firstItem.id]);
@@ -305,6 +312,7 @@ export default function QuizTake() {
   const completeQuizMutation = useMutation({
     mutationFn: () => quizApi.completeQuizSession(sessionId || ''),
     onSuccess: async () => {
+      justCompletedRef.current = true;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] }),
         queryClient.invalidateQueries({ queryKey: ['quiz-history'] }),
