@@ -19,8 +19,7 @@ const DIFFICULTY_OPTIONS: { value: Difficulty; label: string }[] = [
 const QUESTION_COUNT_OPTIONS = [3, 5] as const;
 
 const ACCEPTED_FILE_TYPES = '.pdf,.docx,.txt,.md,.png,.jpg,.jpeg';
-const MAX_FILES = 3;
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB
 
 const EXAMPLE_TOPICS = [
   'Python 기초',
@@ -66,20 +65,14 @@ export default function TryQuiz() {
 
   const addFiles = useCallback((incoming: File[]) => {
     setFileError('');
-    const combined = [...files];
-    for (const f of incoming) {
-      if (combined.length >= MAX_FILES) {
-        setFileError(`최대 ${MAX_FILES}개의 파일만 업로드할 수 있습니다.`);
-        break;
-      }
-      if (f.size > MAX_FILE_SIZE) {
-        setFileError(`각 파일은 10MB 이하여야 합니다. (${f.name})`);
-        break;
-      }
-      combined.push(f);
+    const f = incoming[0];
+    if (!f) return;
+    if (f.size > MAX_FILE_SIZE) {
+      setFileError(`파일은 3MB 이하여야 합니다. (${f.name})`);
+      return;
     }
-    setFiles(combined);
-  }, [files]);
+    setFiles([f]);
+  }, []);
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
@@ -399,13 +392,12 @@ export default function TryQuiz() {
                         파일을 드래그하거나 클릭하여 선택
                       </p>
                       <p className="mt-1 text-xs text-content-secondary/60">
-                        PDF, DOCX, TXT, MD, PNG, JPG · 최대 3개 · 각 10MB 이하
+                        PDF, DOCX, TXT, MD, PNG, JPG · 3MB 이하
                       </p>
                     </button>
                     <input
                       ref={fileInputRef}
                       type="file"
-                      multiple
                       accept={ACCEPTED_FILE_TYPES}
                       onChange={handleFileInputChange}
                       className="hidden"
