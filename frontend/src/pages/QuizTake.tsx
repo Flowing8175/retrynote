@@ -61,6 +61,51 @@ function ParticleEffect() {
   );
 }
 
+const generatingPhrases = [
+  '학습 자료 분석 중...',
+  '핵심 개념 추출 중...',
+  '문항 설계 중...',
+  '정답 및 해설 작성 중...',
+  '마지막 검토 중...',
+  '거의 완성됐어요!',
+];
+
+function QuizGeneratingScreen({ onCancel }: { onCancel: () => void }) {
+  const [phraseIndex, setPhraseIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setPhraseIndex((i) => (i + 1) % generatingPhrases.length), 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="max-w-3xl mx-auto py-32 text-center space-y-8 animate-fade-in">
+      <div className="flex flex-col items-center gap-2.5 mx-auto animate-fade-in-up stagger-1">
+        <PillShimmer width={220} />
+        <PillShimmer width={160} delay={0.3} opacity={0.75} />
+        <PillShimmer width={200} delay={0.55} opacity={0.55} />
+        <PillShimmer width={120} delay={0.8} opacity={0.38} />
+        <PillShimmer width={80} delay={1.0} opacity={0.22} />
+      </div>
+      <div className="space-y-4 animate-fade-in-up stagger-3">
+        <h1 key={phraseIndex} className="text-3xl font-semibold text-white animate-fade-in">
+          {generatingPhrases[phraseIndex]}
+        </h1>
+        <p className="text-base text-content-secondary leading-relaxed animate-fade-in-up stagger-4">
+          AI가 학습 자료를 분석하여 문항을 설계하고 있습니다.<br />잠시만 기다려 주세요.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onCancel}
+        className="mt-2 text-sm text-content-muted underline underline-offset-2 transition-colors hover:text-white animate-fade-in-up stagger-5"
+      >
+        취소하고 돌아가기
+      </button>
+    </div>
+  );
+}
+
 function QuizTakeSkeleton() {
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-12 animate-pulse" aria-hidden="true">
@@ -355,31 +400,7 @@ export default function QuizTake() {
   }
 
   if (sessionData.status === 'draft' || sessionData.status === 'generating') {
-    return (
-      <div className="max-w-3xl mx-auto py-32 text-center space-y-8">
-        <div className="flex flex-col items-center gap-2.5 mx-auto">
-          <PillShimmer width={200} />
-          <PillShimmer width={140} delay={0.4} opacity={0.65} />
-          <PillShimmer width={88} delay={0.75} opacity={0.38} />
-        </div>
-        <div className="space-y-4">
-          <h1 className="text-3xl font-semibold text-white">퀴즈 생성 중...</h1>
-          <p className="text-base text-content-secondary leading-relaxed">
-            AI가 학습 자료를 분석하여 문항을 설계하고 있습니다.<br/>잠시만 기다려 주세요.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => navigate('/quiz/new')}
-          className="mt-2 text-sm underline underline-offset-2 transition-colors"
-          style={{ color: '#A0AEC0' }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#FFFFFF'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = '#A0AEC0'; }}
-        >
-          취소하고 돌아가기
-        </button>
-      </div>
-    );
+    return <QuizGeneratingScreen onCancel={() => navigate('/quiz/new')} />;
   }
 
   if (sessionData.status === 'generation_failed') {

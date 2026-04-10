@@ -2,6 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { guestApi } from '@/api/guestClient';
 import type { GuestQuizSession, GuestQuizItem, GuestAnswerResult } from '@/types/guest';
+import { PillShimmer } from '@/components';
+
+const generatingPhrases = [
+  '학습 자료 분석 중...',
+  '핵심 개념 추출 중...',
+  '문항 설계 중...',
+  '정답 및 해설 작성 중...',
+  '마지막 검토 중...',
+  '거의 완성됐어요!',
+];
 
 const QUESTION_TYPE_LABELS: Record<string, string> = {
   multiple_choice: '객관식',
@@ -12,6 +22,37 @@ const QUESTION_TYPE_LABELS: Record<string, string> = {
 };
 
 const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E'];
+
+function TryQuizGeneratingScreen() {
+  const [phraseIndex, setPhraseIndex] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setPhraseIndex((i) => (i + 1) % generatingPhrases.length), 3000);
+    return () => clearInterval(id);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-surface-deep flex flex-col">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
+        <span className="text-lg font-bold text-content-primary">RetryNote</span>
+      </header>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-6 animate-fade-in">
+          <div className="flex flex-col items-center gap-2.5 animate-fade-in-up stagger-1">
+            <PillShimmer width={220} />
+            <PillShimmer width={160} delay={0.3} opacity={0.75} />
+            <PillShimmer width={200} delay={0.55} opacity={0.55} />
+            <PillShimmer width={120} delay={0.8} opacity={0.38} />
+            <PillShimmer width={80} delay={1.0} opacity={0.22} />
+          </div>
+          <p key={phraseIndex} className="text-content-secondary text-base animate-fade-in">
+            {generatingPhrases[phraseIndex]}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function TryQuizTake() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -177,20 +218,7 @@ export default function TryQuizTake() {
   const isPreparingOrLoading = loading || !session || session.status === 'draft' || session.status === 'generating' || items.length === 0;
 
   if (isPreparingOrLoading) {
-    return (
-      <div className="min-h-screen bg-surface-deep flex flex-col">
-        {/* Header */}
-        <header className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
-          <span className="text-lg font-bold text-content-primary">RetryNote</span>
-        </header>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-10 h-10 rounded-full border-2 border-brand-500 border-t-transparent animate-spin mx-auto mb-4" />
-            <p className="text-content-secondary text-base">문제를 준비 중입니다...</p>
-          </div>
-        </div>
-      </div>
-    );
+    return <TryQuizGeneratingScreen />;
   }
 
   return (
