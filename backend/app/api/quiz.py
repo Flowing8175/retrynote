@@ -618,7 +618,18 @@ async def delete_quiz_session(
     if session.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    session.deleted_at = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
+    session.deleted_at = now
+
+    answer_logs_result = await db.execute(
+        select(AnswerLog).where(
+            AnswerLog.quiz_session_id == session_id,
+            AnswerLog.deleted_at.is_(None),
+        )
+    )
+    for log in answer_logs_result.scalars().all():
+        log.deleted_at = now
+
     await db.commit()
 
 

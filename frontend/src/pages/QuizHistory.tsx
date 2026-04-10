@@ -198,7 +198,7 @@ export default function QuizHistory() {
       >
         <div className="space-y-5">
           <p className="text-sm leading-6 text-content-secondary">
-            삭제된 퀴즈는 복구할 수 없습니다. 관련 오답 기록은 유지됩니다.
+            삭제된 퀴즈는 복구할 수 없습니다. 관련 오답 기록도 함께 삭제됩니다.
           </p>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
