@@ -36,7 +36,6 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
   return (
     <div className="min-h-screen bg-background text-foreground font-sans pt-16">
       <Navbar />
-      <AnnouncementBanner />
       <div className="mx-auto flex w-full max-w-[1600px] items-start">
         {showSidebar && (
           <>
@@ -125,6 +124,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
               </button>
             </div>
           )}
+          <AnnouncementBanner />
           <div className="animate-fade-in stagger-1">
             {children}
           </div>
