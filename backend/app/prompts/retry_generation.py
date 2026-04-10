@@ -46,6 +46,7 @@ similarity_safety_note 규칙:
 - 같은 문장 재사용
 - 같은 유형 반복 남발
 - JSON 외 텍스트 출력
+- "자료에서 설명한", "지문에서 언급한", "위 내용에 따르면" 등의 수식어를 문제에 포함하는 것 — 문제는 개념 자체를 직접 물어야 한다
 """
 
 
@@ -116,6 +117,7 @@ def build_retry_prompt(
 - 오류 유형: {error_type}
 - 사용자 답: {user_answer}
 - 정답: {correct_answer}
+- 이전 해설: {previous_explanation}
 
 이전 문제:
 {previous_question}
