@@ -215,11 +215,13 @@ export default function QuizNew() {
   };
 
   const handleQuestionTypeToggle = (questionType: string) => {
-    setSelectedQuestionTypes((prev) =>
-      prev.includes(questionType)
-        ? prev.filter((value) => value !== questionType)
-        : [...prev, questionType]
-    );
+    setSelectedQuestionTypes((prev) => {
+      if (prev.includes(questionType)) {
+        if (prev.length === 1) return prev; // keep at least one selected
+        return prev.filter((value) => value !== questionType);
+      }
+      return [...prev, questionType];
+    });
   };
 
   const resetNoSourceModal = () => {
