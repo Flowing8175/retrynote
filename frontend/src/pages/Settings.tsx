@@ -5,10 +5,11 @@ import type { AxiosError } from 'axios';
 import { authApi } from '@/api';
 import { Modal } from '@/components';
 import { useAuthStore } from '@/stores';
+import { useUsageStatus } from '@/lib/useUsageStatus';
 
 export default function Settings() {
   const { user, logout } = useAuthStore();
-  const usageStatus = useAuthStore((s) => s.usageStatus);
+  const { data: usageStatus } = useUsageStatus();
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
