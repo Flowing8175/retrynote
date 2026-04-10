@@ -14,10 +14,18 @@ const guestClient = axios.create({
   baseURL: API_BASE_URL,
 });
 
+let _turnstileToken = '';
+export const setGuestTurnstileToken = (token: string) => {
+  _turnstileToken = token;
+};
+
 guestClient.interceptors.request.use((config) => {
   const { guestSessionId } = useGuestStore.getState();
   if (guestSessionId && config.headers) {
     config.headers['X-Guest-Session'] = guestSessionId;
+  }
+  if (_turnstileToken && config.headers) {
+    config.headers['X-Turnstile-Token'] = _turnstileToken;
   }
   return config;
 });

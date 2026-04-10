@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Turnstile } from '@marsidev/react-turnstile';
-import { guestApi } from '@/api/guestClient';
+import { guestApi, setGuestTurnstileToken } from '@/api/guestClient';
 import { useGuestStore } from '@/stores/guestStore';
 
 const INPUT_CLASS =
@@ -136,10 +136,9 @@ export default function TryQuiz() {
     setError('');
     setLoading(true);
 
-    // Ensure guest session exists so the interceptor can attach the header
-    getOrCreateSessionId();
-
     try {
+      // Ensure guest session exists so the interceptor can attach the header
+      getOrCreateSessionId();
       let selectedFileIds: string[] | undefined;
 
       if (inputMode === 'file' && files.length > 0) {
@@ -480,8 +479,9 @@ export default function TryQuiz() {
                 {/* Turnstile */}
                 <Turnstile
                   siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
-                  onSuccess={(token) => setTurnstileToken(token)}
-                  onError={() => setTurnstileToken('')}
+                  onSuccess={(token) => { setTurnstileToken(token); setGuestTurnstileToken(token); }}
+                  onExpire={() => { setTurnstileToken(''); setGuestTurnstileToken(''); }}
+                  onError={() => { setTurnstileToken(''); setGuestTurnstileToken(''); }}
                 />
 
                 {/* Submit */}
