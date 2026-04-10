@@ -20,27 +20,6 @@ const DEFAULT_OX_OPTIONS: Record<string, string> = {
 
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
 
-// ease-in-out-cubic: starts slow, accelerates, decelerates — natural for scroll
-function easeInOutCubic(t: number) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
-
-function smoothScrollToElement(el: HTMLElement, duration = 600) {
-  const start = window.scrollY;
-  const distance = el.getBoundingClientRect().top;
-  if (distance <= 0) return;
-  let startTime: number | null = null;
-
-  function step(now: number) {
-    if (startTime === null) startTime = now;
-    const elapsed = now - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    window.scrollTo(0, start + distance * easeInOutCubic(progress));
-    if (progress < 1) requestAnimationFrame(step);
-  }
-
-  requestAnimationFrame(step);
-}
 
 const QUESTION_TYPE_LABELS: Record<string, string> = {
   multiple_choice: '객관식',
@@ -178,7 +157,7 @@ export default function QuizTake() {
   const queryClient = useQueryClient();
   const { currentSession, currentAnswerMap, setCurrentSession, setCurrentItems, setCurrentAnswer } = useQuizStore();
   const currentAnswerMapRef = useRef(currentAnswerMap);
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const feedbackRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     currentAnswerMapRef.current = currentAnswerMap;
@@ -344,7 +323,7 @@ export default function QuizTake() {
       setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
       setAnswerResultsByItemId((prev) => ({ ...prev, [variables.itemId]: result }));
       setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
-      setTimeout(() => { if (bottomRef.current) smoothScrollToElement(bottomRef.current); }, 50);
+      setTimeout(() => feedbackRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
 
       if (!result.next_item_id && sessionData?.mode === 'normal' && sessionId) {
         completeQuizMutation.mutate();
@@ -688,7 +667,7 @@ export default function QuizTake() {
 
           {/* Result Feedback (Immediate Mode Only) */}
           {isSubmitted && !isExamMode && answerResult && (
-            <div className={`animate-fade-in-up p-6 rounded-2xl border ${answerResult.judgement === 'correct' ? 'bg-brand-500/5 border-brand-500/30' : answerResult.judgement === 'partial' ? 'bg-yellow-500/5 border-yellow-500/30' : 'bg-semantic-error/5 border-semantic-error/30'}`}>
+            <div ref={feedbackRef} className={`animate-fade-in-up p-6 rounded-2xl border ${answerResult.judgement === 'correct' ? 'bg-brand-500/5 border-brand-500/30' : answerResult.judgement === 'partial' ? 'bg-yellow-500/5 border-yellow-500/30' : 'bg-semantic-error/5 border-semantic-error/30'}`}>
               <div className="flex items-center gap-4 mb-4">
                 {answerResult.judgement === 'correct' ? (
                   <CheckCircle2 size={24} className="text-brand-300" />
@@ -779,7 +758,6 @@ export default function QuizTake() {
         conceptKey={diagramModal?.conceptKey ?? ''}
         conceptLabel={diagramModal?.conceptLabel ?? ''}
       />
-      <div ref={bottomRef} />
     </div>
   );
 }
