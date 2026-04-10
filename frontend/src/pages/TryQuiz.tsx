@@ -324,6 +324,7 @@ export default function TryQuiz() {
                 </div>
 
                 {/* Tab content */}
+                <div className="min-h-48">
                 {inputMode === 'topic' && (
                   <div className="grid gap-3">
                     <label htmlFor="topic-input" className="text-sm font-semibold text-content-primary">
@@ -429,6 +430,7 @@ export default function TryQuiz() {
                     )}
                   </div>
                 )}
+                </div>
 
                 {/* Options row */}
                 <div className="flex flex-wrap gap-6">
