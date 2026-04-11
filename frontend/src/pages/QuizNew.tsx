@@ -511,7 +511,6 @@ export default function QuizNew() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium text-content-primary">문제 수</div>
-                {autoCount && <span className="text-xs text-brand-300">AI가 분량에 맞게 조절</span>}
               </div>
               <div className="flex flex-wrap gap-3">
                 {QUESTION_COUNT_PRESETS.map((p) => (
@@ -528,19 +527,17 @@ export default function QuizNew() {
                     {p}
                   </button>
                 ))}
-                <div className="flex flex-col gap-1 flex-1">
-                  <button
-                    onClick={() => setAutoCount(!autoCount)}
-                    className={`flex-1 min-w-[100px] h-14 text-sm font-medium rounded-xl transition-all border ${
-                      autoCount
-                        ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
-                        : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
-                    }`}
-                  >
-                    자동 조절
-                  </button>
-                  <span className="text-xs text-gray-500 dark:text-gray-400 px-1">AI가 자료 분량과 복잡도에 맞춰 5~20문항 자동 선택</span>
-                </div>
+                <button
+                  onClick={() => setAutoCount(!autoCount)}
+                  className={`flex-1 min-w-[100px] h-14 flex flex-col items-center justify-center gap-0.5 text-sm font-medium rounded-xl transition-all border ${
+                    autoCount
+                      ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
+                      : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
+                  }`}
+                >
+                  자동 조절
+                  <span className={`text-[10px] font-normal leading-tight ${autoCount ? 'text-brand-400' : 'text-content-muted'}`}>AI가 분량에 맞게 자동 선택</span>
+                </button>
               </div>
             </div>
           </div>
@@ -593,26 +590,29 @@ export default function QuizNew() {
 
                 <div className="space-y-4">
                   <div className="text-xs font-medium text-content-muted">난이도</div>
-                  <div className="flex flex-wrap gap-3">
-                    {DIFFICULTY_OPTIONS.map((opt) => (
-                      <div key={opt.value} className="flex flex-col gap-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    {DIFFICULTY_OPTIONS.map((opt) => {
+                      const desc = opt.value === 'easy' ? '기본 개념 위주, 직관적 선택지'
+                        : opt.value === 'medium' ? '응용 개념 포함'
+                        : opt.value === 'hard' ? '함정 선택지, 세부 개념까지'
+                        : null;
+                      return (
                         <button
+                          key={opt.value}
                           onClick={() => setDifficulty(opt.value)}
-                          className={`text-xs font-medium px-4 py-2 rounded-xl transition-colors border ${
+                          className={`flex flex-col items-start gap-0.5 px-4 py-2.5 rounded-xl transition-colors border text-left ${
                             difficulty === opt.value
                               ? 'bg-surface-raised text-white border-white/[0.1]'
                               : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
                           }`}
                         >
-                          {opt.label === '난이도 무관' ? '자동 (다양한 난이도)' : opt.label}
+                          <span className="text-xs font-medium">
+                            {opt.label === '난이도 무관' ? '자동 (다양한 난이도)' : opt.label}
+                          </span>
+                          {desc && <span className="text-[10px] text-content-muted font-normal">{desc}</span>}
                         </button>
-                        <span className="text-xs text-gray-500 dark:text-gray-400 px-1">
-                          {opt.value === 'easy' && '기본 개념 위주, 직관적 선택지'}
-                          {opt.value === 'medium' && '응용 개념 포함'}
-                          {opt.value === 'hard' && '함정 선택지, 세부 개념까지'}
-                        </span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -641,7 +641,7 @@ export default function QuizNew() {
                             <span className="text-sm text-white">{qt.label}</span>
                           </div>
                           {isEssay && (
-                            <span className="text-xs text-amber-600 dark:text-amber-500 px-1">
+                            <span className="text-xs text-content-muted px-1">
                               AI 채점 시 1크레딧 소모
                             </span>
                           )}
