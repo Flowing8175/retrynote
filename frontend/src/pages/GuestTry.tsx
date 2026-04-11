@@ -222,7 +222,7 @@ export default function GuestTry() {
                   결과 저장 + 오답 추적하려면 가입하세요
                 </p>
                 <p className="text-xs text-[oklch(0.50_0.01_250)] mt-1">
-                  지금 풀어본 문제가 대시보드에 자동으로 저장됩니다
+                  가입 후 대시보드 &gt; 퀴즈 기록에 자동 저장됩니다
                 </p>
               </div>
               <button

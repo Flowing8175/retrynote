@@ -23,6 +23,17 @@ function formatQuestionType(type: string) {
   }
 }
 
+const errorTypeDefinitions: Record<string, string> = {
+  'concept_confusion': '핵심 개념을 잘못 이해했습니다',
+  'missing_keyword': '필수 키워드나 용어를 놓쳤습니다',
+  'expression_mismatch': '답은 맞지만 표현·용어가 달랐습니다',
+  'careless_mistake': '단순 계산·기입 실수입니다',
+  'ambiguous_question': '문제의 의도가 명확하지 않았습니다',
+  'insufficient_source': '주어진 자료가 부족했습니다',
+  'reasoning_error': '개념은 알지만 풀이 과정에서 실수했습니다',
+  'no_response': '응답을 제공하지 않았습니다',
+};
+
 function formatErrorType(type: string) {
   switch (type) {
     case 'concept_confusion':
@@ -278,7 +289,7 @@ export default function WrongNotes() {
                         {item.error_type && (
                           <div className="flex items-center gap-3">
                             <span className="text-xs font-medium text-semantic-warning bg-semantic-warning/10 px-2.5 py-1 rounded-md">틀린 이유</span>
-                            <span className="text-sm text-white">{formatErrorType(item.error_type)}</span>
+                            <span className="text-sm text-white" title={errorTypeDefinitions[item.error_type] || ''}>{formatErrorType(item.error_type)}</span>
                           </div>
                         )}
                         {item.explanation && (

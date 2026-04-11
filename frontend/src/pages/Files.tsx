@@ -33,6 +33,22 @@ function formatFileType(file: FileDetail) {
   return file.source_type === 'upload' ? 'UPLOAD' : 'DATA';
 }
 
+function getStatusHint(status: string): string {
+  const hints: Record<string, string> = {
+    uploaded: '처리 중입니다',
+    parsing: '처리 중입니다',
+    parsed: '처리 중입니다',
+    ocr_pending: '처리 중입니다',
+    ocr_processing: '처리 중입니다',
+    embedding_pending: '처리 중입니다',
+    embedding_processing: '처리 중입니다',
+    ready: '퀴즈 생성 가능',
+    failed_partial: '일부만 사용 가능',
+    failed_terminal: '다시 업로드하세요',
+  };
+  return hints[status.toLowerCase()] || '';
+}
+
 function FilesSkeleton() {
   return (
     <div className="max-w-6xl mx-auto space-y-12 py-10 animate-pulse" aria-hidden="true">
@@ -463,7 +479,14 @@ export default function Files() {
                             <span className="text-xs text-content-muted">
                               {formatFileSize(file.file_size_bytes)} · {formatDateTime(file.created_at)}
                             </span>
-                            <StatusBadge status={file.status} />
+                            <div className="flex flex-col gap-0.5">
+                              <StatusBadge status={file.status} />
+                              {getStatusHint(file.status) && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  {getStatusHint(file.status)}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {isEditing ? (

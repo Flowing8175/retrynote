@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles, Info } from 'lucide-react';
+import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide-react';
 import { filesApi, quizApi } from '@/api';
 import { Modal, StatusBadge, SkeletonTransition } from '@/components';
 import { isFileProcessingStatus } from '@/types/file';
@@ -490,19 +490,23 @@ export default function QuizNew() {
           <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-8">
             <div className="space-y-4">
               <div className="text-sm font-medium text-content-primary">피드백 방식</div>
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-3">
                 {(['normal', 'exam'] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setMode(m)}
-                    className={`flex-1 py-3 text-sm font-medium rounded-xl transition-all border ${
-                      mode === m 
-                        ? 'bg-surface-raised text-white border-white/[0.1] shadow-sm' 
-                        : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
-                    }`}
-                  >
-                    {m === 'normal' ? '한 문제씩 확인' : '전체 풀이 후 확인'}
-                  </button>
+                  <div key={m} className="flex flex-col gap-1">
+                    <button
+                      onClick={() => setMode(m)}
+                      className={`w-full py-3 text-sm font-medium rounded-xl transition-all border ${
+                        mode === m
+                          ? 'bg-surface-raised text-white border-white/[0.1] shadow-sm'
+                          : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
+                      }`}
+                    >
+                      {m === 'normal' ? '한 문제씩 확인' : '전체 풀이 후 확인'}
+                    </button>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 px-1">
+                      {m === 'normal' ? '각 문제 직후 정답·해설 확인' : '시험 모드 · 모든 문제 풀이 후 결과 확인'}
+                    </span>
+                  </div>
                 ))}
               </div>
             </div>
@@ -527,16 +531,19 @@ export default function QuizNew() {
                     {p}
                   </button>
                 ))}
-                <button
-                  onClick={() => setAutoCount(!autoCount)}
-                  className={`flex-1 min-w-[100px] h-14 text-sm font-medium rounded-xl transition-all border ${
-                    autoCount 
-                      ? 'bg-brand-500/10 text-brand-300 border-brand-500/30' 
-                      : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
-                  }`}
-                >
-                  자동 조절
-                </button>
+                <div className="flex flex-col gap-1 flex-1">
+                  <button
+                    onClick={() => setAutoCount(!autoCount)}
+                    className={`flex-1 min-w-[100px] h-14 text-sm font-medium rounded-xl transition-all border ${
+                      autoCount
+                        ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
+                        : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
+                    }`}
+                  >
+                    자동 조절
+                  </button>
+                  <span className="text-xs text-gray-500 dark:text-gray-400 px-1">AI가 자료 분량과 복잡도에 맞춰 5~20문항 자동 선택</span>
+                </div>
               </div>
             </div>
           </div>
@@ -577,7 +584,7 @@ export default function QuizNew() {
                               ? 'bg-brand-500/20 text-brand-300'
                               : 'bg-white/[0.06] text-content-muted'
                           }`}>
-                            ×{MODEL_TIER_COSTS[option.tier] ?? 1}
+                            {MODEL_TIER_COSTS[option.tier] ?? 1}크레딧/퀴즈
                           </span>
                         </div>
                         <div className="mt-1 text-[11px] text-content-muted">{option.value}</div>
@@ -589,19 +596,26 @@ export default function QuizNew() {
 
                 <div className="space-y-4">
                   <div className="text-xs font-medium text-content-muted">난이도</div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-3">
                     {DIFFICULTY_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setDifficulty(opt.value)}
-                        className={`text-xs font-medium px-4 py-2 rounded-xl transition-colors border ${
-                          difficulty === opt.value 
-                            ? 'bg-surface-raised text-white border-white/[0.1]' 
-                            : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
+                      <div key={opt.value} className="flex flex-col gap-1">
+                        <button
+                          onClick={() => setDifficulty(opt.value)}
+                          className={`text-xs font-medium px-4 py-2 rounded-xl transition-colors border ${
+                            difficulty === opt.value
+                              ? 'bg-surface-raised text-white border-white/[0.1]'
+                              : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
+                          }`}
+                        >
+                          {opt.label === '난이도 무관' ? '자동 (다양한 난이도)' : opt.label}
+                        </button>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 px-1">
+                          {opt.value === '' && '다양한 난이도 혼합'}
+                          {opt.value === 'easy' && '기본 개념 위주, 직관적 선택지'}
+                          {opt.value === 'medium' && '응용 개념 포함'}
+                          {opt.value === 'hard' && '함정 선택지, 세부 개념까지'}
+                        </span>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -615,25 +629,24 @@ export default function QuizNew() {
                       return (
                         <label
                           key={qt.value}
-                          className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-colors border ${
+                          className={`flex flex-col gap-2 px-4 py-3 rounded-xl cursor-pointer transition-colors border ${
                             isSelected
                               ? 'bg-brand-500/5 border-brand-500/30'
                               : 'bg-surface-deep border-transparent hover:bg-surface-hover'
                           }`}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleQuestionTypeToggle(qt.value)}
-                            className="w-4 h-4 rounded border-white/[0.1] bg-surface text-brand-500 focus:ring-brand-500"
-                          />
-                          <span className="text-sm text-white">{qt.label}</span>
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleQuestionTypeToggle(qt.value)}
+                              className="w-4 h-4 rounded border-white/[0.1] bg-surface text-brand-500 focus:ring-brand-500"
+                            />
+                            <span className="text-sm text-white">{qt.label}</span>
+                          </div>
                           {isEssay && (
-                            <span className="relative ml-auto group">
-                              <Info size={14} className="text-content-muted cursor-pointer" />
-                              <span className="pointer-events-none absolute bottom-full right-0 mb-2 w-52 rounded-lg bg-surface-deep border border-white/[0.1] px-3 py-2 text-xs text-content-muted opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg">
-                                AI가 채점하며 채점 시 1크레딧이 소모됩니다.
-                              </span>
+                            <span className="text-xs text-amber-600 dark:text-amber-500 px-1">
+                              AI 채점 시 1크레딧 소모
                             </span>
                           )}
                         </label>
@@ -710,6 +723,21 @@ export default function QuizNew() {
               자료 없이 생성할 경우, AI가 학습한 일반적인 배경지식을 바탕으로 문제를 출제합니다. 최신 정보가 아니거나 원하시는 맥락과 정확히 일치하지 않을 수 있습니다.
             </p>
           </div>
+
+          <details className="bg-surface-deep p-4 rounded-xl border border-white/[0.05] group">
+            <summary className="text-sm font-medium text-white cursor-pointer flex items-center gap-2">
+              <span className="group-open:rotate-180 inline-block transition-transform">▶</span>
+              예시 보기
+            </summary>
+            <div className="mt-4 space-y-2 text-xs text-content-secondary">
+              <p>배경지식 모드로 생성되는 문제의 특징:</p>
+              <ul className="list-disc list-inside space-y-1 ml-1">
+                <li>교과서/학습 자료 없이 일반 상식 기반 출제</li>
+                <li>실시간 정보보다는 학습 데이터(2024년 이전) 기반</li>
+                <li>개념 이해도 확인, 응용 문제 포함 가능</li>
+              </ul>
+            </div>
+          </details>
 
           <label className="flex items-center gap-3 cursor-pointer">
             <input

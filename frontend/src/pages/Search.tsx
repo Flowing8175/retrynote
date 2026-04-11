@@ -98,6 +98,9 @@ export default function Search() {
             <option value="quiz_history">퀴즈 기록만</option>
           </select>
         </div>
+        <p className="text-xs text-content-secondary mt-2 px-0.5">
+          전체 기록: 모든 자료·오답노트·퀴즈 기록 | 자료만: 파일명과 내용 | 오답노트만: 오답노트 | 퀴즈 기록만: 퀴즈 풀이 기록
+        </p>
       </section>
 
       {isLoading ? (

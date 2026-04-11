@@ -147,6 +147,11 @@ export default function Retry() {
                 AI 추천 개념
               </button>
             </div>
+            {conceptMode === 'ai' && (
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                최근 오답에서 반복된 약점 개념을 자동 선택
+              </p>
+            )}
 
             <div className="mt-6">
               {conceptMode === 'manual' ? (
@@ -214,7 +219,7 @@ export default function Retry() {
                 onChange={(e) => handleQuestionCountChange(e.target.value)}
                 className={`w-24 rounded-xl border border-white/[0.10] bg-surface-deep px-4 py-2.5 text-xl font-semibold text-content-primary focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-opacity ${autoCount ? 'opacity-30 cursor-not-allowed' : ''}`}
               />
-              <span className={`text-base text-content-secondary transition-opacity ${autoCount ? 'opacity-30' : ''}`}>문제</span>
+              <span className={`text-base text-content-secondary transition-opacity ${autoCount ? 'opacity-30' : ''}`}>문항</span>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {QUESTION_COUNT_PRESETS.map((preset) => (

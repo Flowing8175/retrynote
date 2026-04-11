@@ -78,7 +78,7 @@ export default function Signup() {
           {guestSessionId ? (
             <>
               <h1 className="mt-3 text-[clamp(2rem,4vw,3.1rem)] font-semibold leading-[1.08] tracking-[-0.03em] text-content-primary">
-                가입하면 방금 풀었던 퀴즈 결과가 자동 저장됩니다!
+                가입하면 대시보드 &gt; 퀴즈 기록에 자동 저장됩니다!
               </h1>
               <p className="mt-5 text-base leading-[1.8] text-content-secondary">
                 오답을 추적하고 약점을 집중적으로 복습하세요.

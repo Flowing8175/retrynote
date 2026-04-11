@@ -84,6 +84,7 @@ export default function UsageBar({ expanded = true }: UsageBarProps) {
       >
         {tierDisplay && (
           <span
+            title={`현재 요금제: ${tierDisplay.name}`}
             className={`inline-flex items-center justify-center w-7 h-7 text-[10px] font-bold rounded-md border ${getTierBadgeClass(tier!)} ${showCelebration ? 'tier-badge-celebrate' : ''}`}
           >
             {tierDisplay.name[0]}
@@ -178,6 +179,9 @@ export default function UsageBar({ expanded = true }: UsageBarProps) {
             </div>
           );
         })}
+        <div className="text-xs text-content-muted pt-1">
+          <span style={{ color: 'oklch(0.72 0.18 160)' }}>●</span> 여유 있음 <span style={{ color: 'oklch(0.78 0.15 85)' }}>●</span> 사용량 높음 <span style={{ color: 'oklch(0.65 0.18 15)' }}>●</span> 거의 모두 사용
+        </div>
       </div>
     </div>
   );
