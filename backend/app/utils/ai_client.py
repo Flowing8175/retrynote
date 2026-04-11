@@ -37,10 +37,23 @@ async def _log_token_usage(
     completion_tokens: int,
     total_tokens: int,
     cached_tokens: int = 0,
+    cache_key: str | None = None,
 ) -> None:
     try:
         from app.database import async_session
         from app.models.admin import SystemLog
+
+        meta: dict[str, Any] = {
+            "model": model,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "total_tokens": total_tokens,
+            "cached_tokens": cached_tokens,
+        }
+        if prompt_tokens > 0:
+            meta["cached_token_ratio"] = round(cached_tokens / prompt_tokens, 4)
+        if cache_key:
+            meta["cache_key"] = cache_key
 
         async with async_session() as session:
             log = SystemLog(
@@ -49,13 +62,7 @@ async def _log_token_usage(
                 service_name="ai_client",
                 event_type="ai_token_usage",
                 message=f"Token usage for model {model}",
-                meta_json={
-                    "model": model,
-                    "prompt_tokens": prompt_tokens,
-                    "completion_tokens": completion_tokens,
-                    "total_tokens": total_tokens,
-                    "cached_tokens": cached_tokens,
-                },
+                meta_json=meta,
             )
             session.add(log)
             await session.commit()
@@ -365,6 +372,7 @@ async def _call_gemini_structured(
     model: str,
     temperature: float = 0.3,
     max_tokens: int = 4096,
+    cache_key: str | None = None,
 ) -> dict[str, Any]:
     from google.genai import types
 
@@ -419,6 +427,7 @@ async def _call_gemini_structured(
                 getattr(usage, "candidates_token_count", 0) or 0,
                 getattr(usage, "total_token_count", 0) or 0,
                 cached_tokens=getattr(usage, "cached_content_token_count", 0) or 0,
+                cache_key=cache_key,
             )
         )
     return result
@@ -431,12 +440,20 @@ async def call_ai_structured(
     model: str | None = None,
     temperature: float = 0.3,
     max_tokens: int = 4096,
+    cache_key: str | None = None,
+    cache_retention: str | None = None,
 ) -> dict[str, Any]:
     model = model or settings.balanced_generation_model
 
     if model.startswith("gemini-"):
         return await _call_gemini_structured(
-            prompt, schema, system_message, model, temperature, max_tokens
+            prompt,
+            schema,
+            system_message,
+            model,
+            temperature,
+            max_tokens,
+            cache_key=cache_key,
         )
 
     completion_kwargs: dict[str, Any] = {
@@ -461,18 +478,29 @@ async def call_ai_structured(
     else:
         completion_kwargs["max_tokens"] = max_tokens
 
+    if cache_key:
+        completion_kwargs["prompt_cache_key"] = cache_key
+    if cache_retention:
+        completion_kwargs["prompt_cache_retention"] = cache_retention
+
     response = await client.chat.completions.create(**completion_kwargs, timeout=60)
     content = response.choices[0].message.content
     if content is None:
         raise ValueError("AI returned empty response")
     result = json.loads(content)
     if response.usage is not None:
+        cached = 0
+        details = getattr(response.usage, "prompt_tokens_details", None)
+        if details is not None:
+            cached = getattr(details, "cached_tokens", 0) or 0
         asyncio.create_task(
             _log_token_usage(
                 model,
                 response.usage.prompt_tokens,
                 response.usage.completion_tokens,
                 response.usage.total_tokens,
+                cached_tokens=cached,
+                cache_key=cache_key,
             )
         )
     return result
@@ -504,6 +532,8 @@ async def stream_ai_text(
     model: str | None = None,
     temperature: float = 0.3,
     max_tokens: int = 512,
+    cache_key: str | None = None,
+    cache_retention: str | None = None,
 ):
     """Yield text chunks from OpenAI streaming API (non-structured, plain text)."""
     model = model or settings.balanced_generation_model
@@ -566,6 +596,10 @@ async def stream_ai_text(
         token_limit_key: max_tokens,
         "stream": True,
     }
+    if cache_key:
+        kwargs["prompt_cache_key"] = cache_key
+    if cache_retention:
+        kwargs["prompt_cache_retention"] = cache_retention
     stream = await client.chat.completions.create(**kwargs)  # type: ignore[call-overload]
     async for chunk in stream:
         delta = chunk.choices[0].delta if chunk.choices else None

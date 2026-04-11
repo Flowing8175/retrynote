@@ -127,6 +127,7 @@ async def generate_coaching_summary(
             COACHING_STREAM_SYSTEM_PROMPT,
             model=cfg.balanced_generation_model,
             max_tokens=256,
+            cache_key="coaching_v1",
         ):
             collected += chunk
     except Exception:

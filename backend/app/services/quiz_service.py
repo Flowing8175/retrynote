@@ -491,6 +491,7 @@ async def _grade_single_answer(
                 primary_model=primary,
                 fallback_model=fallback,
                 system_message=SYSTEM_PROMPT_GRADING_SHORT,
+                cache_key="grading_short_v1",
             )
             return GradingResult(
                 judgement=Judgement(ai["judgement"]),
@@ -529,6 +530,7 @@ async def _grade_single_answer(
                 primary_model=primary,
                 fallback_model=fallback,
                 system_message=SYSTEM_PROMPT_GRADING_ESSAY,
+                cache_key="grading_essay_v1",
             )
             return GradingResult(
                 judgement=Judgement(ai["judgement"]),
@@ -658,6 +660,8 @@ async def generate_quiz(job_id: str):
                     or cfg.balanced_generation_model,
                     fallback_model=cfg.eco_generation_model,
                     system_message=SYSTEM_PROMPT_RETRY_GENERATION,
+                    cache_key="retry_gen_v1",
+                    cache_retention="24h",
                 )
 
                 # Phase 3: match results by concept_key and insert
@@ -776,6 +780,8 @@ async def generate_quiz(job_id: str):
                 or cfg.balanced_generation_model,
                 fallback_model=cfg.eco_generation_model,
                 system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
+                cache_key="quiz_gen_v1",
+                cache_retention="24h",
             )
 
             if ai_result.get("rejected"):
@@ -1077,6 +1083,7 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
                 primary_model=cfg.balanced_generation_model,
                 fallback_model=cfg.eco_generation_model,
                 system_message=SYSTEM_PROMPT_OBJECTION_REVIEW,
+                cache_key="objection_v1",
             )
             objection.review_result_json = ai_result
             objection.decided_at = datetime.now(timezone.utc)

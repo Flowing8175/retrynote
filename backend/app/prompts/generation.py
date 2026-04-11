@@ -292,23 +292,21 @@ def build_generation_prompt(
 
     topic_line = f"- 주제: {topic}" if topic else ""
 
-    return f"""아래 자료를 기반으로 {count_instruction}
-
-자료:
+    return f"""자료:
 {source_context}
 
-요구사항:
-- 생성할 문제 유형: {", ".join(question_types)}
-- 난이도: {difficulty}
-{topic_line}
-- 각 문제는 반드시 concept_key, concept_label, category_tag를 포함해야 합니다
-- source_refs는 자료의 내용을 참조해야 합니다
-- low_confidence_source는 자료 근거가 불충분하면 true로 설정합니다
-{low_confidence_note}
-
-최근 출제된 개념 (반복 제한):
-{recent_concepts_str}
+위 자료를 기반으로 퀴즈 문제를 생성하세요. 각 문제는 반드시 concept_key, concept_label, category_tag를 포함해야 하며, source_refs는 자료의 내용을 참조해야 하고, low_confidence_source는 자료 근거가 불충분하면 true로 설정합니다.
 
 JSON 형식으로 응답하세요: {{"questions": [...]}}
 각 문제는 다음 필드를 포함해야 합니다:
-question_type, question_text, options, correct_answer, explanation, concept_key, concept_label, category_tag, difficulty, source_refs, low_confidence_source"""
+question_type, question_text, options, correct_answer, explanation, concept_key, concept_label, category_tag, difficulty, source_refs, low_confidence_source
+
+요구사항:
+- {count_instruction}
+- 생성할 문제 유형: {", ".join(question_types)}
+- 난이도: {difficulty}
+{topic_line}
+{low_confidence_note}
+
+최근 출제된 개념 (반복 제한):
+{recent_concepts_str}"""

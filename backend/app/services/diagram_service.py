@@ -166,6 +166,7 @@ async def generate_diagram(
         schema,
         system_message=system_prompt,
         max_tokens=2048,
+        cache_key="diagram_gen_v1",
     )
 
     mermaid_code: str = ai_result.get("mermaid_code", "")
@@ -187,6 +188,7 @@ async def generate_diagram(
             schema,
             system_message=system_prompt,
             max_tokens=2048,
+            cache_key="diagram_gen_v1",
         )
         mermaid_code = ai_result.get("mermaid_code", "")
         diagram_type = ai_result.get("diagram_type", diagram_type)
