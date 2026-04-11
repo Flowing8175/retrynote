@@ -1,7 +1,62 @@
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
+import type { ResourceType, UpgradePromptPayload } from '@/types/billing';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+type UnknownRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is UnknownRecord {
+  return typeof value === 'object' && value !== null;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value : null;
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function readLimitType(value: unknown): ResourceType | 'model_access' | null {
+  switch (value) {
+    case 'quiz':
+    case 'ocr':
+    case 'storage':
+    case 'model_access':
+      return value;
+    default:
+      return null;
+  }
+}
+
+function normalizeUpgradePayload(payload: unknown): UpgradePromptPayload | null {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const nestedDetail = payload.detail;
+  const source = isRecord(nestedDetail) ? nestedDetail : payload;
+
+  const limitType = readLimitType(source.limitType ?? source.limit_type);
+
+  if (!limitType) {
+    return null;
+  }
+
+  const detail =
+    readString(source.detail) ??
+    readString(payload.detail) ??
+    '사용 한도를 초과했습니다.';
+
+  return {
+    detail,
+    limitType,
+    currentUsage: readNumber(source.currentUsage ?? source.current_usage) ?? 0,
+    limit: readNumber(source.limit) ?? 0,
+    upgradeUrl: readString(source.upgradeUrl ?? source.upgrade_url) ?? '/pricing',
+  };
+}
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -91,8 +146,10 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 402) {
       const config = error.config as InternalAxiosRequestConfig & { _skipUpgradeModal?: boolean };
       if (!config?._skipUpgradeModal) {
-        const payload = error.response.data;
-        window.dispatchEvent(new CustomEvent('upgrade-required', { detail: payload }));
+        const payload = normalizeUpgradePayload(error.response.data);
+        if (payload) {
+          window.dispatchEvent(new CustomEvent<UpgradePromptPayload>('upgrade-required', { detail: payload }));
+        }
       }
     }
 
