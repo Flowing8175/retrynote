@@ -540,11 +540,6 @@ export default function QuizTake() {
               <span className="text-content-secondary text-2xl font-normal"> / {itemsData?.length}</span>
             </div>
           </div>
-          <div className="text-right space-y-1">
-            <div className="text-sm font-medium text-white bg-surface border border-white/[0.05] px-3 py-1.5 rounded-lg">
-              {isExamMode ? '시험 모드' : '일반 모드'}
-            </div>
-          </div>
         </div>
         <div className="h-2 bg-surface rounded-full overflow-hidden border border-white/[0.05]">
           <div 
