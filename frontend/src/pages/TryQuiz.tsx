@@ -101,6 +101,38 @@ export default function TryQuiz() {
     setFileError('');
   };
 
+  const waitForFilesReady = async (fileIds: string[]): Promise<void> => {
+    const POLL_INTERVAL = 2000;
+    const TIMEOUT = 60_000;
+    const start = Date.now();
+    const terminalStatuses = new Set(['ready', 'failed_partial', 'failed_terminal']);
+
+    return new Promise((resolve, reject) => {
+      const tick = async () => {
+        if (Date.now() - start > TIMEOUT) {
+          reject(new Error('file_processing_timeout'));
+          return;
+        }
+        try {
+          const allFiles = await guestApi.listFiles();
+          const relevant = allFiles.filter((f) => fileIds.includes(f.file_id));
+          const allDone = relevant.every((f) => terminalStatuses.has(f.status));
+          const anyFailed = relevant.some((f) => f.status === 'failed_terminal');
+          if (allDone && anyFailed) {
+            reject(new Error('file_processing_failed'));
+          } else if (allDone) {
+            resolve();
+          } else {
+            setTimeout(tick, POLL_INTERVAL);
+          }
+        } catch {
+          reject(new Error('network'));
+        }
+      };
+      setTimeout(tick, POLL_INTERVAL);
+    });
+  };
+
   const pollUntilReady = async (sessionId: string): Promise<void> => {
     const POLL_INTERVAL = 2000;
     const TIMEOUT = 60_000;
@@ -150,6 +182,7 @@ export default function TryQuiz() {
           })
         );
         selectedFileIds = uploads.map((u) => u.file_id);
+        await waitForFilesReady(selectedFileIds);
       }
 
       const payload: Parameters<typeof guestApi.createQuizSession>[0] = {
@@ -179,6 +212,10 @@ export default function TryQuiz() {
         setError(
           '오늘 무료 체험 횟수를 초과했습니다. 가입하면 더 많은 퀴즈를 만들 수 있습니다.'
         );
+      } else if (msg === 'file_processing_failed') {
+        setError('파일 처리에 실패했습니다. 다른 파일로 다시 시도해주세요.');
+      } else if (msg === 'file_processing_timeout') {
+        setError('파일 처리 시간이 초과되었습니다. 다시 시도해주세요.');
       } else if (msg === 'timeout') {
         setError('문제 생성 시간이 초과되었습니다. 다시 시도해주세요.');
       } else if (msg === 'generation_failed') {
