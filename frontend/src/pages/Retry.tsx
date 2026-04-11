@@ -3,6 +3,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { retryApi, wrongNotesApi } from '@/api';
+import { SegmentedControl, OptionGroup } from '@/components/ui';
 import type { RetryLocationState } from '@/types';
 import { getDetailMessage } from '@/utils/errorMessages';
 
@@ -123,30 +124,14 @@ export default function Retry() {
 
           {/* 개념 선택 모드 토글 */}
           <div>
-            <div className="inline-flex rounded-2xl bg-surface-deep p-1 gap-1">
-              <button
-                type="button"
-                onClick={() => setConceptMode('manual')}
-                className={
-                  conceptMode === 'manual'
-                    ? 'rounded-xl px-5 py-2.5 text-sm font-medium bg-surface text-content-primary shadow-sm'
-                    : 'rounded-xl px-5 py-2.5 text-sm font-medium text-content-secondary hover:bg-surface-hover'
-                }
-              >
-                내가 고른 개념
-              </button>
-              <button
-                type="button"
-                onClick={() => setConceptMode('ai')}
-                className={
-                  conceptMode === 'ai'
-                    ? 'rounded-xl px-5 py-2.5 text-sm font-medium bg-surface text-content-primary shadow-sm'
-                    : 'rounded-xl px-5 py-2.5 text-sm font-medium text-content-secondary hover:bg-surface-hover'
-                }
-              >
-                AI 추천 개념
-              </button>
-            </div>
+            <SegmentedControl
+              options={[
+                { value: 'manual' as const, label: '내가 고른 개념' },
+                { value: 'ai' as const, label: 'AI 추천 개념' },
+              ]}
+              value={conceptMode}
+              onChange={setConceptMode}
+            />
             {conceptMode === 'ai' && (
               <p className="mt-2 text-xs text-content-muted">
                 최근 오답에서 반복된 약점 개념을 자동 선택
@@ -221,35 +206,28 @@ export default function Retry() {
               />
               <span className={`text-base text-content-secondary transition-opacity ${autoCount ? 'opacity-30' : ''}`}>문항</span>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {QUESTION_COUNT_PRESETS.map((preset) => (
-                <button
-                  key={preset}
-                  type="button"
-                  disabled={autoCount}
-                  onClick={() => setQuestionCount(preset)}
-                  className={`rounded-xl px-5 py-2 text-base font-medium transition-colors ${
-                    autoCount
-                      ? 'cursor-not-allowed opacity-30 bg-surface-deep text-content-muted'
-                      : questionCount === preset
-                        ? 'bg-brand-500/15 text-brand-300 ring-1 ring-brand-500/30'
-                        : 'bg-surface-deep text-content-secondary hover:bg-surface-hover'
-                  }`}
-                >
-                  {preset}문제
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setAutoCount((prev) => !prev)}
-                className={`rounded-xl px-5 py-2 text-base font-medium transition-colors ${
-                  autoCount
-                    ? 'bg-brand-500/15 text-brand-300 ring-1 ring-brand-500/30'
-                    : 'bg-surface-deep text-content-secondary hover:bg-surface-hover'
-                }`}
-              >
-                AI 결정
-              </button>
+            <div className="mt-4">
+              <OptionGroup
+                options={[
+                  ...QUESTION_COUNT_PRESETS.map((preset) => ({ value: String(preset), label: `${preset}문제` })),
+                  { value: 'auto', label: 'AI 결정' },
+                ]}
+                value={autoCount ? 'auto' : String(questionCount)}
+                onChange={(v) => {
+                  if (v === 'auto') {
+                    if (autoCount) {
+                      setAutoCount(false);
+                    } else {
+                      setAutoCount(true);
+                    }
+                  } else {
+                    setAutoCount(false);
+                    setQuestionCount(Number(v));
+                  }
+                }}
+                size="md"
+                layout="wrap"
+              />
             </div>
             {autoCount && (
               <p className="mt-3 text-sm leading-relaxed text-content-muted">

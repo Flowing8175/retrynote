@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import MermaidDiagram from '@/components/MermaidDiagram';
+import { OptionGroup } from '@/components/ui';
 import { diagramApi, type DiagramResponse, DIAGRAM_TYPES, type DiagramTypeValue } from '@/api/diagram';
 
 type PageState = 'loading' | 'success' | 'error' | 'not-found' | 'quota_exceeded';
@@ -151,21 +152,13 @@ export default function DiagramPage() {
         </button>
       </div>
 
-      <div className="flex gap-1.5 flex-wrap">
-        {DIAGRAM_TYPES.map(({ value, label }) => (
-          <button
-            key={value}
-            onClick={() => handleTypeChange(value)}
-            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              selectedType === value
-                ? 'bg-primary text-white'
-                : 'bg-surface-hover text-content-secondary hover:text-white'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <OptionGroup
+        options={DIAGRAM_TYPES.map(({ value, label }) => ({ value, label }))}
+        value={selectedType}
+        onChange={(v) => handleTypeChange(v as DiagramTypeValue)}
+        size="sm"
+        layout="wrap"
+      />
 
       <div className="min-h-[60vh] rounded-2xl border border-white/[0.05] bg-[oklch(0.155_0.015_235)] p-6 sm:p-8">
         {diagram && <MermaidDiagram code={diagram.mermaid_code} className="w-full" />}

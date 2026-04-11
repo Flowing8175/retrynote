@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight } from 'lucide-react';
 import { dashboardApi } from '@/api';
 import CoachingDisplay from '@/components/CoachingDisplay';
-import { SkeletonTransition } from '@/components';
+import { SkeletonTransition, SegmentedControl } from '@/components';
 import DiagramModal from '@/components/DiagramModal';
 import type { DashboardResponse, RetryLocationState } from '@/types';
 import { formatPercent, formatQuestionType, formatDateTime } from '@/utils/formatters';
@@ -286,25 +286,19 @@ export default function Dashboard() {
       {/* Hero Section */}
       <section className="grid gap-12 lg:grid-cols-[1fr_300px] items-start">
         <div className="animate-fade-in-up space-y-10">
-          {/* Range picker — squared down, no pill shapes */}
-          <div className="flex items-center gap-4">
-            <div className="flex gap-px bg-surface-deep p-1 rounded-md border border-white/[0.05]">
-              {(['7d', '30d', 'all'] as const).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  onClick={() => setRange(item)}
-                  className={`text-xs font-medium uppercase tracking-widest transition-all px-3 py-1.5 rounded-sm ${
-                    range === item
-                      ? 'bg-surface text-white shadow-sm'
-                      : 'text-content-muted hover:text-content-secondary'
-                  }`}
-                >
-                  {item === '7d' ? '7일' : item === '30d' ? '30일' : '전체'}
-                </button>
-              ))}
-            </div>
-          </div>
+           {/* Range picker — squared down, no pill shapes */}
+           <div className="flex items-center gap-4">
+             <SegmentedControl
+               options={[
+                 { value: '7d' as const, label: '7일' },
+                 { value: '30d' as const, label: '30일' },
+                 { value: 'all' as const, label: '전체' },
+               ]}
+               value={range}
+               onChange={setRange}
+               size="sm"
+             />
+           </div>
 
           <div className="space-y-3">
             <h1 className="text-4xl font-semibold tracking-tight text-white leading-tight">

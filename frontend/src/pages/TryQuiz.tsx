@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { guestApi, setGuestTurnstileToken } from '@/api/guestClient';
 import { useGuestStore } from '@/stores/guestStore';
+import { SegmentedControl, OptionGroup } from '@/components/ui';
 
 const INPUT_CLASS =
   'w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-[0.95rem] text-base text-content-primary placeholder:text-content-secondary transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none';
@@ -336,28 +337,15 @@ export default function TryQuiz() {
                 )}
 
                 {/* Input mode tabs */}
-                <div className="flex gap-1 rounded-2xl border border-white/[0.08] bg-surface-deep p-1">
-                  {(
-                    [
-                      { key: 'topic', label: '주제 입력' },
-                      { key: 'text', label: '텍스트 붙여넣기' },
-                      { key: 'file', label: '파일 업로드' },
-                    ] as { key: InputMode; label: string }[]
-                  ).map((tab) => (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      onClick={() => setInputMode(tab.key)}
-                      className={`flex-1 rounded-xl py-2 text-sm font-semibold transition-colors ${
-                        inputMode === tab.key
-                          ? 'bg-brand-500 text-brand-900'
-                          : 'text-content-secondary hover:text-content-primary'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
+                <SegmentedControl
+                  options={[
+                    { value: 'topic' as InputMode, label: '주제 입력' },
+                    { value: 'text' as InputMode, label: '텍스트 붙여넣기' },
+                    { value: 'file' as InputMode, label: '파일 업로드' },
+                  ]}
+                  value={inputMode}
+                  onChange={setInputMode}
+                />
 
                 {/* Tab content */}
                 <div className="min-h-48">
@@ -375,21 +363,14 @@ export default function TryQuiz() {
                       className={INPUT_CLASS}
                     />
                     {/* Example topic chips */}
-                    <div className="flex flex-wrap gap-2 pt-1">
-                      {EXAMPLE_TOPICS.map((ex) => (
-                        <button
-                          key={ex}
-                          type="button"
-                          onClick={() => setTopic(ex)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all duration-150 ${
-                            topic === ex
-                              ? 'bg-brand-500/15 text-brand-300 border-brand-500/30'
-                              : 'bg-surface-deep text-content-muted border-white/[0.06] hover:border-white/[0.15] hover:text-content-secondary'
-                          }`}
-                        >
-                          {ex}
-                        </button>
-                      ))}
+                    <div className="pt-1">
+                      <OptionGroup
+                        options={EXAMPLE_TOPICS.map((ex) => ({ value: ex, label: ex }))}
+                        value={topic}
+                        onChange={(v) => setTopic(v as string)}
+                        size="sm"
+                        layout="wrap"
+                      />
                     </div>
                   </div>
                 )}
@@ -473,43 +454,25 @@ export default function TryQuiz() {
                   {/* Question count */}
                   <div className="grid gap-2">
                     <span className="text-sm font-semibold text-content-primary">문제 수</span>
-                    <div className="flex gap-2">
-                      {QUESTION_COUNT_OPTIONS.map((n) => (
-                        <button
-                          key={n}
-                          type="button"
-                          onClick={() => setQuestionCount(n)}
-                          className={`w-12 h-10 rounded-xl text-sm font-semibold border transition-colors ${
-                            questionCount === n
-                              ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
-                              : 'bg-surface-deep text-content-secondary border-white/[0.08] hover:bg-white/[0.05]'
-                          }`}
-                        >
-                          {n}
-                        </button>
-                      ))}
-                    </div>
+                    <OptionGroup
+                      options={QUESTION_COUNT_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
+                      value={String(questionCount)}
+                      onChange={(v) => setQuestionCount(Number(v) as 3 | 5)}
+                      size="md"
+                      layout="row"
+                    />
                   </div>
 
                   {/* Difficulty */}
                   <div className="grid gap-2">
                     <span className="text-sm font-semibold text-content-primary">난이도</span>
-                    <div className="flex gap-2">
-                      {DIFFICULTY_OPTIONS.map((opt) => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setDifficulty(opt.value)}
-                          className={`px-3 h-10 rounded-xl text-sm font-semibold border transition-colors ${
-                            difficulty === opt.value
-                              ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
-                              : 'bg-surface-deep text-content-secondary border-white/[0.08] hover:bg-white/[0.05]'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
+                    <OptionGroup
+                      options={DIFFICULTY_OPTIONS}
+                      value={difficulty}
+                      onChange={(v) => setDifficulty(v as Difficulty)}
+                      size="md"
+                      layout="row"
+                    />
                   </div>
                 </div>
 

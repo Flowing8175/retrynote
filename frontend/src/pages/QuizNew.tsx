@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide-react';
 import { filesApi, quizApi } from '@/api';
 import { Modal, StatusBadge, SkeletonTransition } from '@/components';
+import { OptionGroup } from '@/components/ui';
 import { isFileProcessingStatus } from '@/types/file';
 import { getDetailMessage } from '@/utils/errorMessages';
 import { formatFileSize, formatFileSource } from '@/utils/formatters';
@@ -236,16 +237,6 @@ export default function QuizNew() {
     );
   };
 
-  const handleQuestionTypeToggle = (questionType: string) => {
-    setSelectedQuestionTypes((prev) => {
-      if (prev.includes(questionType)) {
-        if (prev.length === 1) return prev; // keep at least one selected
-        return prev.filter((value) => value !== questionType);
-      }
-      return [...prev, questionType];
-    });
-  };
-
   const resetNoSourceModal = () => {
     setShowNoSourceModal(false);
     setNoSourceConfirmed(false);
@@ -327,41 +318,16 @@ export default function QuizNew() {
           <h2 className="text-xl font-semibold text-white">자료 선택</h2>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <button
-            onClick={() => setSourceMode('document_based')}
-            className={`group relative text-left p-6 rounded-3xl transition-all border ${
-              sourceMode === 'document_based'
-                ? 'bg-brand-500/5 border-brand-500/30'
-                : 'bg-surface border-white/[0.05] hover:bg-surface-hover'
-            }`}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <BookOpen size={20} className={sourceMode === 'document_based' ? 'text-brand-300' : 'text-content-muted'} />
-              <h3 className={`text-lg font-semibold ${sourceMode === 'document_based' ? 'text-white' : 'text-content-secondary'}`}>내 자료에서 출제</h3>
-            </div>
-            <p className="text-sm text-content-secondary leading-relaxed">
-              업로드한 문서나 PDF를 바탕으로 퀴즈를 만듭니다. 가장 정확하고 권장되는 방식입니다.
-            </p>
-          </button>
-
-          <button
-            onClick={() => setSourceMode('no_source')}
-            className={`group relative text-left p-6 rounded-3xl transition-all border ${
-              sourceMode === 'no_source'
-                ? 'bg-brand-500/5 border-brand-500/30'
-                : 'bg-surface border-white/[0.05] hover:bg-surface-hover'
-            }`}
-          >
-            <div className="flex items-center gap-3 mb-3">
-              <Sparkles size={20} className={sourceMode === 'no_source' ? 'text-brand-300' : 'text-content-muted'} />
-              <h3 className={`text-lg font-semibold ${sourceMode === 'no_source' ? 'text-white' : 'text-content-secondary'}`}>AI 배경지식 출제</h3>
-            </div>
-            <p className="text-sm text-content-secondary leading-relaxed">
-              자료 없이 AI가 가진 지식만으로 주제를 선택해 퀴즈를 냅니다.
-            </p>
-          </button>
-        </div>
+        <OptionGroup
+          options={[
+            { value: 'document_based' as const, label: '내 자료에서 출제', description: '업로드한 문서나 PDF를 바탕으로 퀴즈를 만듭니다. 가장 정확하고 권장되는 방식입니다.', icon: <BookOpen size={20} /> },
+            { value: 'no_source' as const, label: 'AI 배경지식 출제', description: '자료 없이 AI가 가진 지식만으로 주제를 선택해 퀴즈를 냅니다.', icon: <Sparkles size={20} /> },
+          ]}
+          value={sourceMode}
+          onChange={(v) => setSourceMode(v as 'document_based' | 'no_source')}
+          size="lg"
+          layout="grid-2"
+        />
 
         {sourceMode === 'document_based' ? (
           <div className={`space-y-6 animate-fade-in-up bg-surface rounded-3xl p-6 md:p-8 ${fileError ? 'border border-semantic-error' : 'border border-white/[0.05]'}`}>
@@ -369,31 +335,16 @@ export default function QuizNew() {
               <p className="text-xs text-semantic-error -mb-2">{fileError}</p>
             )}
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={() => { setSelectedFolderId(null); setSelectedFileIds([]); }}
-                  className={`text-xs font-medium px-4 py-2 rounded-xl transition-colors border ${
-                    selectedFolderId === null 
-                      ? 'bg-surface-raised text-white border-white/[0.1]' 
-                      : 'bg-transparent text-content-secondary border-transparent hover:bg-white/5'
-                  }`}
-                >
-                  전체
-                </button>
-                {folders.map((folder) => (
-                  <button
-                    key={folder.id}
-                    onClick={() => { setSelectedFolderId(folder.id); setSelectedFileIds([]); }}
-                    className={`text-xs font-medium px-4 py-2 rounded-xl transition-colors border ${
-                      selectedFolderId === folder.id 
-                        ? 'bg-surface-raised text-white border-white/[0.1]' 
-                        : 'bg-transparent text-content-secondary border-transparent hover:bg-white/5'
-                    }`}
-                  >
-                    {folder.name}
-                  </button>
-                ))}
-              </div>
+              <OptionGroup
+                options={[
+                  { value: '__all__', label: '전체' },
+                  ...folders.map((folder) => ({ value: folder.id, label: folder.name })),
+                ]}
+                value={selectedFolderId ?? '__all__'}
+                onChange={(v) => { const sv = v as string; setSelectedFolderId(sv === '__all__' ? null : sv); setSelectedFileIds([]); }}
+                size="sm"
+                layout="wrap"
+              />
               <Link to="/files" className="inline-flex items-center py-2 px-2 text-xs font-medium text-brand-300 hover:text-white transition-colors">
                 자료 관리 →
               </Link>
@@ -490,55 +441,40 @@ export default function QuizNew() {
           <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-8">
             <div className="space-y-4">
               <div className="text-sm font-medium text-content-primary">피드백 방식</div>
-              <div className="flex flex-col gap-3">
-                {(['normal', 'exam'] as const).map((m) => (
-                  <div key={m} className="flex flex-col gap-1">
-                    <button
-                      onClick={() => setMode(m)}
-                      className={`w-full py-3 text-sm font-medium rounded-xl transition-all border ${
-                        mode === m
-                          ? 'bg-surface-raised text-white border-white/[0.1] shadow-sm'
-                          : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
-                      }`}
-                    >
-                      {m === 'normal' ? '한 문제씩 확인' : '전체 풀이 후 확인'}
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <OptionGroup
+                options={[
+                  { value: 'normal' as const, label: '한 문제씩 확인', description: '문제를 풀 때마다 바로 정답과 해설을 확인합니다' },
+                  { value: 'exam' as const, label: '전체 풀이 후 확인', description: '모든 문제를 푼 뒤 한꺼번에 결과를 확인합니다' },
+                ]}
+                value={mode}
+                onChange={(v) => setMode(v as 'normal' | 'exam')}
+                size="lg"
+                layout="row"
+                className="flex-col"
+              />
             </div>
 
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium text-content-primary">문제 수</div>
               </div>
-              <div className="flex flex-wrap gap-3">
-                {QUESTION_COUNT_PRESETS.map((p) => (
-                  <button
-                    key={p}
-                    disabled={autoCount}
-                    onClick={() => setQuestionCount(p)}
-                    className={`w-14 h-14 flex items-center justify-center text-base font-semibold rounded-xl transition-all border ${
-                      !autoCount && questionCount === p 
-                        ? 'bg-brand-500/10 text-brand-300 border-brand-500/30' 
-                        : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setAutoCount(!autoCount)}
-                  className={`flex-1 min-w-[100px] h-14 flex flex-col items-center justify-center gap-0.5 text-sm font-medium rounded-xl transition-all border ${
-                    autoCount
-                      ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
-                      : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
-                  }`}
-                >
-                  자동 조절
-                  <span className={`text-[10px] font-normal leading-tight ${autoCount ? 'text-brand-400' : 'text-content-muted'}`}>AI가 분량에 맞게 자동 선택</span>
-                </button>
-              </div>
+              <OptionGroup
+                options={[
+                  ...QUESTION_COUNT_PRESETS.map((p) => ({ value: String(p), label: String(p) })),
+                  { value: 'auto', label: '자동 조절', description: 'AI가 분량에 맞게 자동 선택' },
+                ]}
+                value={autoCount ? 'auto' : String(questionCount)}
+                onChange={(v) => {
+                  if (v === 'auto') {
+                    setAutoCount(true);
+                  } else {
+                    setAutoCount(false);
+                    setQuestionCount(Number(v));
+                  }
+                }}
+                size="md"
+                layout="wrap"
+              />
             </div>
           </div>
 
@@ -558,97 +494,53 @@ export default function QuizNew() {
               <div className="animate-fade-in-up space-y-8">
                 <div className="space-y-4">
                   <div className="text-xs font-medium text-content-muted">AI 모델</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {generationModelOptions.map((option) => (
-                      <button
-                        key={option.value}
-                        onClick={() => setPreferredTier(option.tier)}
-                        className={`text-left px-4 py-3 rounded-xl transition-colors border ${
-                          activeTier === option.tier
-                            ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
-                            : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="text-xs font-semibold">
-                            {MODEL_TIER_LABELS[option.tier] ?? option.tier}
-                          </span>
-                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md ${
-                            activeTier === option.tier
-                              ? 'bg-brand-500/20 text-brand-300'
-                              : 'bg-white/[0.06] text-content-muted'
-                          }`}>
-                            {MODEL_TIER_COSTS[option.tier] ?? 1}크레딧/퀴즈
-                          </span>
-                        </div>
-                        <div className="mt-1 text-[11px] text-content-muted">{option.value}</div>
-                      </button>
-                    ))}
-                  </div>
+                  <OptionGroup
+                    options={generationModelOptions.map((option) => ({
+                      value: option.tier,
+                      label: MODEL_TIER_LABELS[option.tier] ?? option.tier,
+                      description: option.value,
+                      badge: `${MODEL_TIER_COSTS[option.tier] ?? 1}크레딧/퀴즈`,
+                    }))}
+                    value={activeTier ?? ''}
+                    onChange={(v) => setPreferredTier(v as string)}
+                    size="md"
+                    layout="grid-2"
+                  />
 
                 </div>
 
                 <div className="space-y-4">
                   <div className="text-xs font-medium text-content-muted">난이도</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {DIFFICULTY_OPTIONS.map((opt) => {
-                      const desc = opt.value === 'easy' ? '기본 개념 위주, 직관적 선택지'
+                  <OptionGroup
+                    options={DIFFICULTY_OPTIONS.map((opt) => ({
+                      value: opt.value,
+                      label: opt.label === '난이도 무관' ? '자동 (다양한 난이도)' : opt.label,
+                      description: opt.value === 'easy' ? '기본 개념 위주, 직관적 선택지'
                         : opt.value === 'medium' ? '응용 개념 포함'
                         : opt.value === 'hard' ? '함정 선택지, 세부 개념까지'
-                        : null;
-                      return (
-                        <button
-                          key={opt.value}
-                          onClick={() => setDifficulty(opt.value)}
-                          className={`flex flex-col items-start gap-0.5 px-4 py-2.5 rounded-xl transition-colors border text-left ${
-                            difficulty === opt.value
-                              ? 'bg-surface-raised text-white border-white/[0.1]'
-                              : 'bg-transparent text-content-secondary border-white/[0.05] hover:bg-white/5'
-                          }`}
-                        >
-                          <span className="text-xs font-medium">
-                            {opt.label === '난이도 무관' ? '자동 (다양한 난이도)' : opt.label}
-                          </span>
-                          {desc && <span className="text-[10px] text-content-muted font-normal">{desc}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
+                        : undefined,
+                    }))}
+                    value={difficulty}
+                    onChange={(v) => setDifficulty(v as string)}
+                    size="md"
+                    layout="grid-2"
+                  />
                 </div>
 
                 <div className="space-y-4">
                   <div className="text-xs font-medium text-content-muted">문제 유형</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {QUESTION_TYPES.map((qt) => {
-                      const isSelected = selectedQuestionTypes.includes(qt.value);
-                      const isEssay = qt.value === 'essay';
-                      return (
-                        <label
-                          key={qt.value}
-                          className={`flex flex-col gap-2 px-4 py-3 rounded-xl cursor-pointer transition-colors border ${
-                            isSelected
-                              ? 'bg-brand-500/5 border-brand-500/30'
-                              : 'bg-surface-deep border-transparent hover:bg-surface-hover'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => handleQuestionTypeToggle(qt.value)}
-                              className="w-4 h-4 rounded border-white/[0.1] bg-surface text-brand-500 focus:ring-brand-500"
-                            />
-                            <span className="text-xs font-medium text-white">{qt.label}</span>
-                          </div>
-                          {isEssay && (
-                            <span className="text-xs text-content-muted px-1">
-                              AI 채점 시 1크레딧 소모
-                            </span>
-                          )}
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <OptionGroup
+                    options={QUESTION_TYPES.map((qt) => ({
+                      value: qt.value,
+                      label: qt.label,
+                      description: qt.value === 'essay' ? 'AI 채점 시 1크레딧 소모' : undefined,
+                    }))}
+                    value={selectedQuestionTypes}
+                    onChange={(v) => setSelectedQuestionTypes(v as string[])}
+                    multiple
+                    size="md"
+                    layout="grid-2"
+                  />
                 </div>
               </div>
             ) : (

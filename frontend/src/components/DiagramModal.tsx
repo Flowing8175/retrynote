@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import Modal from './Modal';
 import MermaidDiagram from './MermaidDiagram';
+import { OptionGroup } from '@/components/ui';
 import { diagramApi, type DiagramResponse, DIAGRAM_TYPES, type DiagramTypeValue } from '@/api/diagram';
 
 interface DiagramModalProps {
@@ -100,21 +101,18 @@ export default function DiagramModal({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title={conceptLabel} size="4xl">
-      <div className="mb-3 flex gap-1.5 flex-wrap">
-        {DIAGRAM_TYPES.map(({ value, label }) => (
-          <button
-            key={value}
-            onClick={() => handleTypeChange(value)}
-            disabled={fetchState === 'loading'}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
-              selectedType === value
-                ? 'bg-primary text-white'
-                : 'bg-surface-hover text-content-secondary hover:text-white'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="mb-3">
+        <OptionGroup
+          options={DIAGRAM_TYPES.map(({ value, label }) => ({
+            value,
+            label,
+            disabled: fetchState === 'loading',
+          }))}
+          value={selectedType}
+          onChange={(v) => handleTypeChange(v as DiagramTypeValue)}
+          size="sm"
+          layout="wrap"
+        />
       </div>
 
       {fetchState === 'loading' && (
