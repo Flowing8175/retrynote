@@ -382,6 +382,20 @@ export default function QuizTake() {
     }
   };
 
+  const handleSkip = () => {
+    if (!itemsData || currentItemIndex >= itemsData.length - 1) return;
+    const nextIndex = currentItemIndex + 1;
+    setFurthestAvailableIndex((prev) => Math.max(prev, nextIndex));
+    setCurrentItemIndex(nextIndex);
+    setIsSubmitted(!!submittedAnswers[itemsData[nextIndex].id]);
+    setAnswerResult(answerResultsByItemId[itemsData[nextIndex].id] || null);
+    setUserAnswer(submittedAnswers[itemsData[nextIndex].id] || draftAnswers[itemsData[nextIndex].id] || '');
+    if (headerRef.current) {
+      const top = headerRef.current.getBoundingClientRect().top + window.scrollY - 32;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }
+  };
+
   const handlePrev = () => {
     if (currentItemIndex > 0 && itemsData) {
       const prevIndex = currentItemIndex - 1;
@@ -703,20 +717,31 @@ export default function QuizTake() {
 
         <div className="w-full sm:w-auto">
           {(!isSubmitted || isExamMode) && !isCompleted ? (
-            <button
-              onClick={() => {
-                if (isExamMode) {
-                  saveDraftAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
-                } else {
-                  submitAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
-                }
-              }}
-              hidden={!isExamMode && !!currentQuestionType && AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType)}
-              disabled={!userAnswer.trim() || submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending}
-              className="w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0"
-            >
-              {isExamMode ? '저장 후 다음' : '정답 제출'}
-            </button>
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              {currentItemIndex < (itemsData?.length || 1) - 1 && (
+                <button
+                  onClick={handleSkip}
+                  disabled={submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending}
+                  className="flex-1 sm:flex-none h-12 px-6 bg-surface border border-white/[0.08] rounded-xl text-sm font-medium text-content-secondary hover:bg-surface-hover hover:text-white transition-colors disabled:opacity-30"
+                >
+                  건너뛰기
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  if (isExamMode) {
+                    saveDraftAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                  } else {
+                    submitAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                  }
+                }}
+                hidden={!isExamMode && !!currentQuestionType && AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType)}
+                disabled={!userAnswer.trim() || submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending}
+                className="flex-1 sm:flex-none w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0"
+              >
+                {isExamMode ? '저장 후 다음' : '정답 제출'}
+              </button>
+            </div>
           ) : (
             currentItemIndex < (itemsData?.length || 1) - 1 ? (
               <button
