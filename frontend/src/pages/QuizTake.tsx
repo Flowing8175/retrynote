@@ -128,6 +128,7 @@ export default function QuizTake() {
   const queryClient = useQueryClient();
   const { currentSession, currentAnswerMap, setCurrentSession, setCurrentItems, setCurrentAnswer } = useQuizStore();
   const currentAnswerMapRef = useRef(currentAnswerMap);
+  const headerRef = useRef<HTMLElement>(null);
 
 
   useEffect(() => {
@@ -373,6 +374,14 @@ export default function QuizTake() {
     }
   };
 
+  const handleNextWithScroll = () => {
+    handleNext();
+    if (headerRef.current) {
+      const top = headerRef.current.getBoundingClientRect().top + window.scrollY - 32;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }
+  };
+
   const handlePrev = () => {
     if (currentItemIndex > 0 && itemsData) {
       const prevIndex = currentItemIndex - 1;
@@ -522,7 +531,7 @@ export default function QuizTake() {
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-12">
       {/* Progress Header */}
-      <header className="space-y-4">
+      <header ref={headerRef} className="space-y-4">
         <div className="flex items-end justify-between">
           <div className="space-y-1">
             <div className="text-xs font-medium text-content-muted">진행 상황</div>
@@ -710,7 +719,7 @@ export default function QuizTake() {
           ) : (
             currentItemIndex < (itemsData?.length || 1) - 1 ? (
               <button
-                onClick={handleNext}
+                onClick={handleNextWithScroll}
                 className="w-full sm:w-auto bg-surface-raised text-white border border-white/[0.1] px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5"
               >
                 다음 문제
