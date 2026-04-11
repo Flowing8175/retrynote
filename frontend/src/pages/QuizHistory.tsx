@@ -124,7 +124,7 @@ export default function QuizHistory() {
             </div>
             <Link
               to="/quiz/new"
-              className="inline-flex items-center justify-center rounded-2xl bg-brand-500 px-4 py-2.5 text-sm font-bold text-content-inverse hover:-translate-y-px hover:bg-brand-600 transition-[transform,background-color] duration-150"
+            className="inline-flex items-center justify-center rounded-2xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-brand-900 hover:-translate-y-px hover:bg-brand-600 transition-[transform,background-color] duration-150"
             >
               새 퀴즈 만들기
             </Link>

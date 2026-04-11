@@ -93,7 +93,7 @@ function CreditUsageBar() {
   const pct = limit > 0 ? Math.max(0, Math.min((remaining / limit) * 100, 100)) : 0;
 
   const barColor =
-    pct > 50 ? 'bg-brand-500' : pct > 20 ? 'bg-yellow-500' : 'bg-red-500';
+    pct > 50 ? 'bg-brand-500' : pct > 20 ? 'bg-semantic-warning' : 'bg-semantic-error';
 
   return (
     <div className="rounded-2xl border border-white/[0.08] bg-surface px-5 py-4 space-y-2">

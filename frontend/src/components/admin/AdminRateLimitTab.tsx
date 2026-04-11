@@ -69,15 +69,15 @@ export default function AdminRateLimitTab({ isVerified, activeTab }: AdminRateLi
               >
                 {path}
               </span>
-              {count > 50 ? (
-                <span className="inline-flex shrink-0 items-center rounded-md border border-red-500/20 bg-red-500/15 px-2 py-0.5 font-mono text-xs font-semibold text-red-400">
-                  {count}
-                </span>
-              ) : (
-                <span className="inline-flex shrink-0 items-center rounded-md border border-white/[0.07] bg-white/5 px-2 py-0.5 font-mono text-xs font-medium text-content-muted">
-                  {count}
-                </span>
-              )}
+               {count > 50 ? (
+                 <span className="inline-flex shrink-0 items-center rounded-md border border-semantic-error-border bg-semantic-error-bg px-2 py-0.5 font-mono text-xs font-semibold text-semantic-error">
+                   {count}
+                 </span>
+               ) : (
+                 <span className="inline-flex shrink-0 items-center rounded-md border border-white/[0.07] bg-white/5 px-2 py-0.5 font-mono text-xs font-medium text-content-muted">
+                   {count}
+                 </span>
+               )}
             </div>
           ))}
         </div>
@@ -132,15 +132,15 @@ export default function AdminRateLimitTab({ isVerified, activeTab }: AdminRateLi
                     {event.path ?? '—'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {event.event_count > 50 ? (
-                      <span className="inline-flex items-center rounded-md border border-red-500/20 bg-red-500/15 px-2 py-0.5 font-mono text-xs font-semibold text-red-400">
-                        {event.event_count}
-                      </span>
-                    ) : (
-                      <span className="font-mono text-xs text-content-secondary">
-                        {event.event_count}
-                      </span>
-                    )}
+                     {event.event_count > 50 ? (
+                       <span className="inline-flex items-center rounded-md border border-semantic-error-border bg-semantic-error-bg px-2 py-0.5 font-mono text-xs font-semibold text-semantic-error">
+                         {event.event_count}
+                       </span>
+                     ) : (
+                       <span className="font-mono text-xs text-content-secondary">
+                         {event.event_count}
+                       </span>
+                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-content-muted">
                     {formatDateTime(event.latest_event)}

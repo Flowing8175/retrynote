@@ -172,7 +172,7 @@ export default function Signup() {
                     className={INPUT_CLASS}
                   />
                   {isPasswordFocused && (
-                    <p className="text-xs mt-0.5" style={{ color: '#A0AEC0' }}>
+                    <p className="text-xs mt-0.5 text-content-secondary">
                       영문 + 숫자 조합, 8자 이상
                     </p>
                   )}

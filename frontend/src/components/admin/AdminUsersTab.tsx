@@ -138,12 +138,12 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
             const rowSuccessText = rowSuccess[user.id];
             const storageMB = user.storage_used_bytes / 1024 / 1024;
             const storagePct = Math.min((storageMB / 500) * 100, 100);
-            const storageColor =
-              storagePct >= 90
-                ? 'bg-red-500'
-                : storagePct >= 70
-                  ? 'bg-amber-500'
-                  : 'bg-brand-500';
+             const storageColor =
+               storagePct >= 90
+                 ? 'bg-semantic-error'
+                 : storagePct >= 70
+                   ? 'bg-semantic-warning'
+                   : 'bg-brand-500';
 
             return (
               <tr key={user.id} className="align-top transition-colors hover:bg-surface-deep/50">
@@ -187,11 +187,11 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
                             isActive: !user.is_active,
                           })
                         }
-                        className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
-                          user.is_active
-                            ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20'
-                            : 'bg-green-500/10 text-green-400 hover:bg-green-500/20'
-                        }`}
+                         className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                           user.is_active
+                             ? 'bg-semantic-error-bg text-semantic-error hover:bg-semantic-error-bg/80'
+                             : 'bg-semantic-success-bg text-semantic-success hover:bg-semantic-success-bg/80'
+                         }`}
                       >
                         {statusPending ? (
                           <svg
@@ -267,12 +267,12 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
                     {isSelf && (
                       <span className="text-[11px] text-content-muted">본인 계정 — 변경 불가</span>
                     )}
-                    {rowError && (
-                      <span className="text-[11px] text-red-400">{rowError}</span>
-                    )}
-                    {rowSuccessText && (
-                      <span className="text-[11px] text-green-400">{rowSuccessText}</span>
-                    )}
+                     {rowError && (
+                       <span className="text-[11px] text-semantic-error">{rowError}</span>
+                     )}
+                     {rowSuccessText && (
+                       <span className="text-[11px] text-semantic-success">{rowSuccessText}</span>
+                     )}
                   </div>
                 </td>
               </tr>

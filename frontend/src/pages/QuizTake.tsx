@@ -668,14 +668,14 @@ export default function QuizTake() {
 
           {/* Result Feedback (Immediate Mode Only) */}
           {isSubmitted && !isExamMode && answerResult && (
-            <div className={`animate-fade-in-up p-6 rounded-2xl border ${answerResult.judgement === 'correct' ? 'bg-brand-500/5 border-brand-500/30' : answerResult.judgement === 'partial' ? 'bg-yellow-500/5 border-yellow-500/30' : 'bg-semantic-error/5 border-semantic-error/30'}`}>
+            <div className={`animate-fade-in-up p-6 rounded-2xl border ${answerResult.judgement === 'correct' ? 'bg-brand-500/5 border-brand-500/30' : answerResult.judgement === 'partial' ? 'bg-semantic-warning/5 border-semantic-warning/30' : 'bg-semantic-error/5 border-semantic-error/30'}`}>
               <div className="flex items-center gap-4 mb-4">
                 {answerResult.judgement === 'correct' ? (
                   <CheckCircle2 size={24} className="text-brand-300" />
                 ) : (
-                  <AlertCircle size={24} className={answerResult.judgement === 'partial' ? 'text-yellow-400' : 'text-semantic-error'} />
+                  <AlertCircle size={24} className={answerResult.judgement === 'partial' ? 'text-semantic-warning' : 'text-semantic-error'} />
                 )}
-                <h3 className={`text-lg font-semibold ${answerResult.judgement === 'correct' ? 'text-brand-300' : answerResult.judgement === 'partial' ? 'text-yellow-400' : 'text-semantic-error'}`}>
+                <h3 className={`text-lg font-semibold ${answerResult.judgement === 'correct' ? 'text-brand-300' : answerResult.judgement === 'partial' ? 'text-semantic-warning' : 'text-semantic-error'}`}>
                   {answerResult.judgement === 'correct' ? '정답입니다' : answerResult.judgement === 'partial' ? '부분 정답입니다' : '틀렸습니다'}
                 </h3>
               </div>

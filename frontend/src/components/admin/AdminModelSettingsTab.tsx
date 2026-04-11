@@ -54,17 +54,17 @@ export default function AdminModelSettingsTab({
             className="mt-2 w-full rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-3 text-sm text-content-primary placeholder-content-muted"
           />
         </div>
-        {modelSaveMsg && (
-          <div
-            className={`rounded-2xl px-4 py-3 text-sm font-medium ${
-              modelSaveMsg.includes('저장되었습니다')
-                ? 'border border-green-500/20 bg-green-500/10 text-green-400'
-                : 'border border-red-500/20 bg-red-500/10 text-red-400'
-            }`}
-          >
-            {modelSaveMsg}
-          </div>
-        )}
+         {modelSaveMsg && (
+           <div
+             className={`rounded-2xl px-4 py-3 text-sm font-medium ${
+               modelSaveMsg.includes('저장되었습니다')
+                 ? 'border border-semantic-success-border bg-semantic-success-bg text-semantic-success'
+                 : 'border border-semantic-error-border bg-semantic-error-bg text-semantic-error'
+             }`}
+           >
+             {modelSaveMsg}
+           </div>
+         )}
 
         <button
           onClick={() => updateModelSettingsMutation.mutate(modelForm)}

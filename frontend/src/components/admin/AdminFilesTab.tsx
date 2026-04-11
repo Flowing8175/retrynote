@@ -11,23 +11,23 @@ interface AdminFilesTabProps {
 function getStatusColorCls(status: string): { card: string; badge: string; dot: string } {
   if (status === 'ready') {
     return {
-      card: 'border-green-500/20 bg-green-500/5',
-      badge: 'bg-green-500/15 text-green-400 border border-green-500/20',
-      dot: 'bg-green-400',
+      card: 'border-semantic-success-border bg-semantic-success-bg',
+      badge: 'bg-semantic-success-bg text-semantic-success border border-semantic-success-border',
+      dot: 'bg-semantic-success',
     };
   }
   if (status.startsWith('failed')) {
     return {
-      card: 'border-red-500/20 bg-red-500/5',
-      badge: 'bg-red-500/15 text-red-400 border border-red-500/20',
-      dot: 'bg-red-400',
+      card: 'border-semantic-error-border bg-semantic-error-bg',
+      badge: 'bg-semantic-error-bg text-semantic-error border border-semantic-error-border',
+      dot: 'bg-semantic-error',
     };
   }
   if (status.includes('processing') || status.includes('parsing') || status === 'uploaded') {
     return {
-      card: 'border-amber-500/20 bg-amber-500/5',
-      badge: 'bg-amber-500/15 text-amber-400 border border-amber-500/20',
-      dot: 'bg-amber-400',
+      card: 'border-semantic-warning-border bg-semantic-warning-bg',
+      badge: 'bg-semantic-warning-bg text-semantic-warning border border-semantic-warning-border',
+      dot: 'bg-semantic-warning',
     };
   }
   return {
@@ -207,13 +207,13 @@ export default function AdminFilesTab({ isVerified, activeTab }: AdminFilesTabPr
                     {truncate(file.original_filename, 40)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {file.parse_error_code ? (
-                      <span className="font-mono text-xs text-red-400">
-                        {file.parse_error_code}
-                      </span>
-                    ) : (
-                      <span className="text-content-muted">—</span>
-                    )}
+                     {file.parse_error_code ? (
+                       <span className="font-mono text-xs text-semantic-error">
+                         {file.parse_error_code}
+                       </span>
+                     ) : (
+                       <span className="text-content-muted">—</span>
+                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap font-mono text-xs text-content-secondary">
                     {file.username}

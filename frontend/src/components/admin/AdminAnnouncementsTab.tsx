@@ -51,12 +51,12 @@ export default function AdminAnnouncementsTab({
                   {ann.ends_at ? formatDateTime(ann.ends_at) : '—'}
                 </td>
                 <td className="px-6 py-5 whitespace-nowrap text-right">
-                  <button
-                    onClick={() => deleteAnnouncementMutation.mutate(ann.id)}
-                    disabled={deleteAnnouncementMutation.isPending}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-full text-content-muted transition-colors hover:bg-red-500/10 hover:text-red-400 disabled:opacity-40"
-                    aria-label="삭제"
-                  >
+                   <button
+                     onClick={() => deleteAnnouncementMutation.mutate(ann.id)}
+                     disabled={deleteAnnouncementMutation.isPending}
+                     className="inline-flex h-10 w-10 items-center justify-center rounded-full text-content-muted transition-colors hover:bg-semantic-error-bg hover:text-semantic-error disabled:opacity-40"
+                     aria-label="삭제"
+                   >
                     <X size={14} />
                   </button>
                 </td>

@@ -78,7 +78,7 @@ export default function Search() {
   return (
     <div className="space-y-8">
       <section className="animate-fade-in-up px-1 pt-4 pb-2">
-        <h1 className="text-xl font-semibold text-content-muted mb-6">검색</h1>
+          <h1 className="text-xl font-semibold text-content-primary mb-6">검색</h1>
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem]">
           <input
             type="text"

@@ -475,7 +475,7 @@ export default function Files() {
                             <div className="flex flex-col gap-0.5">
                               <StatusBadge status={file.status} />
                               {getStatusHint(file.status) && (
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                <span className="text-xs text-content-muted">
                                   {getStatusHint(file.status)}
                                 </span>
                               )}

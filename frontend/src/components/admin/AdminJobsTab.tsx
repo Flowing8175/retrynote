@@ -29,10 +29,10 @@ const JOB_TYPE_OPTIONS = [
 
 function JobStatusBadge({ status }: { status: string }) {
   const config: Record<string, string> = {
-    pending: 'bg-amber-500/15 text-amber-400 border border-amber-500/20',
-    running: 'bg-blue-500/15 text-blue-400 border border-blue-500/20',
-    completed: 'bg-green-500/15 text-green-400 border border-green-500/20',
-    failed: 'bg-red-500/15 text-red-400 border border-red-500/20',
+    pending: 'bg-semantic-warning-bg text-semantic-warning border border-semantic-warning-border',
+    running: 'bg-semantic-info-bg text-semantic-info border border-semantic-info-border',
+    completed: 'bg-semantic-success-bg text-semantic-success border border-semantic-success-border',
+    failed: 'bg-semantic-error-bg text-semantic-error border border-semantic-error-border',
   };
   const cls = config[status] ?? 'bg-white/5 text-content-muted border border-white/[0.07]';
   return (
@@ -198,16 +198,16 @@ export default function AdminJobsTab({ isVerified, activeTab }: AdminJobsTabProp
                     {job.retry_count}
                   </td>
                   <td className="max-w-xs px-6 py-4">
-                    {errorDisplay ? (
-                      <span
-                        className="font-mono text-xs text-red-400"
-                        title={job.error_message ?? undefined}
-                      >
-                        {errorDisplay}
-                      </span>
-                    ) : (
-                      <span className="text-content-muted">—</span>
-                    )}
+                     {errorDisplay ? (
+                       <span
+                         className="font-mono text-xs text-semantic-error"
+                         title={job.error_message ?? undefined}
+                       >
+                         {errorDisplay}
+                       </span>
+                     ) : (
+                       <span className="text-content-muted">—</span>
+                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
@@ -222,11 +222,11 @@ export default function AdminJobsTab({ isVerified, activeTab }: AdminJobsTabProp
                         </button>
                       )}
                       {canCancel && (
-                        <button
-                          onClick={() => cancelMutation.mutate(job.id)}
-                          disabled={isCancelling}
-                          className="flex items-center gap-1 rounded-lg bg-red-500/15 px-2.5 py-1 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
+                       <button
+                           onClick={() => cancelMutation.mutate(job.id)}
+                           disabled={isCancelling}
+                           className="flex items-center gap-1 rounded-lg bg-semantic-error-bg px-2.5 py-1 text-xs font-medium text-semantic-error transition-colors hover:bg-semantic-error-bg/80 disabled:cursor-not-allowed disabled:opacity-50"
+                         >
                           {isCancelling && <SpinnerIcon />}
                           취소
                         </button>

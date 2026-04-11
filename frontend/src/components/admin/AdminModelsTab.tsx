@@ -27,9 +27,9 @@ export default function AdminModelsTab({ modelData }: AdminModelsTabProps) {
             </div>
             <div className="rounded-xl border border-white/[0.07] bg-surface px-4 py-3">
               <div className="text-content-secondary">실패 건수</div>
-              <div className={`font-mono font-medium ${model.failure_count > 0 ? 'text-red-400' : 'text-content-primary'}`}>
-                {model.failure_count}
-              </div>
+               <div className={`font-mono font-medium ${model.failure_count > 0 ? 'text-semantic-error' : 'text-content-primary'}`}>
+                 {model.failure_count}
+               </div>
             </div>
           </div>
         </div>

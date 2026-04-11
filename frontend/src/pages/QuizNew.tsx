@@ -674,8 +674,7 @@ export default function QuizNew() {
             <button
               type="button"
               onClick={handleCancelGeneration}
-              className="text-sm font-medium underline underline-offset-2 transition-colors px-6 py-4"
-              style={{ color: '#A0AEC0' }}
+              className="text-sm font-medium text-content-secondary underline underline-offset-2 transition-colors px-6 py-4"
             >
               취소하고 돌아가기
             </button>

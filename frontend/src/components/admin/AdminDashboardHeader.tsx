@@ -22,10 +22,10 @@ export default function AdminDashboardHeader({
               <ShieldCheck className="h-3 w-3" />
               ADMIN
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-md border border-green-500/20 bg-green-500/10 px-2 py-0.5 font-mono text-[10px] font-medium text-green-400">
-              <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
-              세션 인증됨
-            </span>
+             <span className="inline-flex items-center gap-1.5 rounded-md border border-semantic-success-border bg-semantic-success-bg px-2 py-0.5 font-mono text-[10px] font-medium text-semantic-success">
+               <span className="h-1.5 w-1.5 rounded-full bg-semantic-success" />
+               세션 인증됨
+             </span>
           </div>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-content-primary md:text-3xl">관리자 대시보드</h1>
           <p className="mt-1.5 text-sm leading-6 text-content-secondary">
@@ -46,23 +46,23 @@ export default function AdminDashboardHeader({
           </div>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-3">
-          <CheckCircle className="h-4 w-4 shrink-0 text-green-400" />
+           <CheckCircle className="h-4 w-4 shrink-0 text-semantic-success" />
           <div className="min-w-0">
             <div className="text-xl font-semibold text-semantic-success">{activeUsers}</div>
             <div className="truncate text-xs text-content-muted">활성 계정</div>
           </div>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-3">
-          <AlertTriangle className={`h-4 w-4 shrink-0 ${errors24h > 0 ? 'text-red-400' : 'text-content-muted'}`} />
-          <div className="min-w-0">
-            <div className={`text-xl font-semibold ${errors24h > 0 ? 'text-red-400' : 'text-content-primary'}`}>{errors24h}</div>
+           <AlertTriangle className={`h-4 w-4 shrink-0 ${errors24h > 0 ? 'text-semantic-error' : 'text-content-muted'}`} />
+           <div className="min-w-0">
+             <div className={`text-xl font-semibold ${errors24h > 0 ? 'text-semantic-error' : 'text-content-primary'}`}>{errors24h}</div>
             <div className="truncate text-xs text-content-muted">오류 (24h)</div>
           </div>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-3">
-          <Activity className={`h-4 w-4 shrink-0 ${errorRatePct > 5 ? 'text-red-400' : 'text-content-muted'}`} />
-          <div className="min-w-0">
-            <div className={`text-xl font-semibold ${errorRatePct > 5 ? 'text-red-400' : 'text-content-primary'}`}>{errorRatePct.toFixed(1)}%</div>
+           <Activity className={`h-4 w-4 shrink-0 ${errorRatePct > 5 ? 'text-semantic-error' : 'text-content-muted'}`} />
+           <div className="min-w-0">
+             <div className={`text-xl font-semibold ${errorRatePct > 5 ? 'text-semantic-error' : 'text-content-primary'}`}>{errorRatePct.toFixed(1)}%</div>
             <div className="truncate text-xs text-content-muted">오류율</div>
           </div>
         </div>

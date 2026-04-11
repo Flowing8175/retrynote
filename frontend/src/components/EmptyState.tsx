@@ -22,7 +22,7 @@ export default function EmptyState({ icon, eyebrow, title, message, actions }: E
           {eyebrow && (
             <div className="text-xs font-medium uppercase tracking-widest text-brand-300">{eyebrow}</div>
           )}
-          <h3 className="text-xl font-semibold text-white">{title}</h3>
+           <h3 className="text-xl font-semibold text-content-primary">{title}</h3>
           <p className="text-sm text-content-secondary leading-relaxed">
             {message}
           </p>

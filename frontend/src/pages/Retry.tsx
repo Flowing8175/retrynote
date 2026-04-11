@@ -148,7 +148,7 @@ export default function Retry() {
               </button>
             </div>
             {conceptMode === 'ai' && (
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-2 text-xs text-content-muted">
                 최근 오답에서 반복된 약점 개념을 자동 선택
               </p>
             )}
@@ -228,7 +228,7 @@ export default function Retry() {
                   type="button"
                   disabled={autoCount}
                   onClick={() => setQuestionCount(preset)}
-                  className={`rounded-full px-5 py-2 text-base font-medium transition-colors ${
+                  className={`rounded-xl px-5 py-2 text-base font-medium transition-colors ${
                     autoCount
                       ? 'cursor-not-allowed opacity-30 bg-surface-deep text-content-muted'
                       : questionCount === preset
@@ -242,7 +242,7 @@ export default function Retry() {
               <button
                 type="button"
                 onClick={() => setAutoCount((prev) => !prev)}
-                className={`rounded-full px-5 py-2 text-base font-medium transition-colors ${
+                className={`rounded-xl px-5 py-2 text-base font-medium transition-colors ${
                   autoCount
                     ? 'bg-brand-500/15 text-brand-300 ring-1 ring-brand-500/30'
                     : 'bg-surface-deep text-content-secondary hover:bg-surface-hover'
@@ -281,7 +281,7 @@ export default function Retry() {
                 createRetryMutation.mutate();
               }}
               disabled={createRetryMutation.isPending}
-              className="inline-flex items-center justify-center rounded-2xl bg-brand-500 px-5 py-3 text-sm font-bold text-content-inverse transition-colors hover:bg-brand-600 hover:-translate-y-px disabled:opacity-50"
+              className="inline-flex items-center justify-center rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-600 hover:-translate-y-px disabled:opacity-50"
             >
               {createRetryMutation.isPending ? '재도전 세트 준비 중…' : '재도전 세트 만들기'}
             </button>

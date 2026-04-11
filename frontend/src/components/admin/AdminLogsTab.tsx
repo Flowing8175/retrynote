@@ -91,20 +91,20 @@ export default function AdminLogsTab({ logsData, logLevelFilter, setLogLevelFilt
           })}
         </div>
 
-        <label className="ml-3 flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            checked={isTailMode}
-            onChange={(e) => setIsTailMode(e.target.checked)}
-            className="h-3.5 w-3.5 rounded border-white/20 bg-surface accent-brand-500"
-          />
-          <span className={`text-xs font-medium ${isTailMode ? 'text-brand-300' : 'text-content-muted'}`}>
-            실시간 테일 모드
-          </span>
-          {isTailMode && (
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-green-400" />
-          )}
-        </label>
+         <label className="ml-3 flex cursor-pointer items-center gap-2">
+           <input
+             type="checkbox"
+             checked={isTailMode}
+             onChange={(e) => setIsTailMode(e.target.checked)}
+             className="h-3.5 w-3.5 rounded border-white/20 bg-surface accent-brand-500"
+           />
+           <span className={`text-xs font-medium ${isTailMode ? 'text-brand-300' : 'text-content-muted'}`}>
+             실시간 테일 모드
+           </span>
+           {isTailMode && (
+             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-semantic-success" />
+           )}
+         </label>
 
         <button
           onClick={handleExport}

@@ -31,11 +31,11 @@ export function LogLevelBadge({ level }: { level: string }) {
   const normalized = level.toUpperCase();
   const cls =
     normalized === 'ERROR' || normalized === 'CRITICAL'
-      ? 'bg-red-500/15 text-red-400 border border-red-500/20'
+      ? 'bg-semantic-error-bg text-semantic-error border border-semantic-error-border'
       : normalized === 'WARNING' || normalized === 'WARN'
-        ? 'bg-amber-500/15 text-amber-400 border border-amber-500/20'
+        ? 'bg-semantic-warning-bg text-semantic-warning border border-semantic-warning-border'
         : normalized === 'INFO'
-          ? 'bg-teal-500/15 text-teal-300 border border-teal-500/20'
+          ? 'bg-semantic-info-bg text-semantic-info border border-semantic-info-border'
           : 'bg-white/5 text-content-muted border border-white/[0.07]';
   return (
     <span className={`inline-flex items-center rounded-md px-2 py-0.5 font-mono text-xs font-medium ${cls}`}>
@@ -46,15 +46,15 @@ export function LogLevelBadge({ level }: { level: string }) {
 
 export function HealthStatusBadge({ status }: { status: SystemHealthResponse['status'] }) {
   const config = {
-    ok: { cls: 'bg-green-500/15 text-green-400 border border-green-500/20', dot: 'bg-green-400', label: 'OK', pulse: true },
-    degraded: { cls: 'bg-amber-500/15 text-amber-400 border border-amber-500/20', dot: 'bg-amber-400', label: 'DEGRADED', pulse: false },
-    down: { cls: 'bg-red-500/15 text-red-400 border border-red-500/20', dot: 'bg-red-400', label: 'DOWN', pulse: false },
+    ok: { cls: 'bg-semantic-success-bg text-semantic-success border border-semantic-success-border', dot: 'bg-semantic-success', label: 'OK', pulse: true },
+    degraded: { cls: 'bg-semantic-warning-bg text-semantic-warning border border-semantic-warning-border', dot: 'bg-semantic-warning', label: 'DEGRADED', pulse: false },
+    down: { cls: 'bg-semantic-error-bg text-semantic-error border border-semantic-error-border', dot: 'bg-semantic-error', label: 'DOWN', pulse: false },
   } as const;
   const { cls, dot, label, pulse } = config[status];
   return (
     <span className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 font-mono text-sm font-semibold ${cls}`}>
       <span className="relative flex h-2 w-2">
-        {pulse && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-50" />}
+        {pulse && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-semantic-success opacity-50" />}
         <span className={`relative inline-flex h-2 w-2 rounded-full ${dot}`} />
       </span>
       {label}
@@ -66,15 +66,15 @@ export function ComponentStatusDot({ status }: { status: 'ok' | 'degraded' | 'do
   if (status === 'ok') {
     return (
       <span className="relative flex h-2.5 w-2.5">
-        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-40" />
-        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-400" />
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-semantic-success opacity-40" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-semantic-success" />
       </span>
     );
   }
   if (status === 'degraded') {
-    return <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-400" />;
+    return <span className="inline-flex h-2.5 w-2.5 rounded-full bg-semantic-warning" />;
   }
-  return <span className="inline-flex h-2.5 w-2.5 rounded-full bg-red-400" />;
+  return <span className="inline-flex h-2.5 w-2.5 rounded-full bg-semantic-error" />;
 }
 
 export type TabKey =

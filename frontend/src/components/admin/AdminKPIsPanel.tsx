@@ -18,8 +18,8 @@ function bytesToMB(bytes: number): string {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  failed: 'text-red-400',
-  pending: 'text-amber-400',
+  failed: 'text-semantic-error',
+  pending: 'text-semantic-warning',
   running: 'text-brand-300',
   completed: 'text-semantic-success',
 };
@@ -157,9 +157,9 @@ export default function AdminKPIsPanel({ isVerified }: AdminKPIsPanelProps) {
                   <span className="flex-1 truncate text-xs text-content-secondary">
                     {err.event_type}
                   </span>
-                  <span className="font-mono text-xs font-semibold text-red-400">
-                    {err.count}
-                  </span>
+                   <span className="font-mono text-xs font-semibold text-semantic-error">
+                     {err.count}
+                   </span>
                 </li>
               ))}
             </ol>

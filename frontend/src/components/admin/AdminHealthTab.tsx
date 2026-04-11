@@ -78,18 +78,18 @@ export default function AdminHealthTab({ healthData, refetchHealth }: AdminHealt
                 <AlertTriangle className="h-3.5 w-3.5" />
                 오류 (24h)
               </div>
-              <div className={`mt-2 font-mono text-xl font-semibold ${healthData.stats.errors_24h > 0 ? 'text-red-400' : 'text-content-primary'}`}>
-                {healthData.stats.errors_24h}
-              </div>
+               <div className={`mt-2 font-mono text-xl font-semibold ${healthData.stats.errors_24h > 0 ? 'text-semantic-error' : 'text-content-primary'}`}>
+                 {healthData.stats.errors_24h}
+               </div>
             </div>
             <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-3">
               <div className="flex items-center gap-1.5 text-xs text-content-muted">
                 <Activity className="h-3.5 w-3.5" />
                 오류율 (%)
               </div>
-              <div className={`mt-2 font-mono text-xl font-semibold ${healthData.stats.error_rate_pct > 5 ? 'text-red-400' : 'text-content-primary'}`}>
-                {healthData.stats.error_rate_pct.toFixed(1)}
-              </div>
+               <div className={`mt-2 font-mono text-xl font-semibold ${healthData.stats.error_rate_pct > 5 ? 'text-semantic-error' : 'text-content-primary'}`}>
+                 {healthData.stats.error_rate_pct.toFixed(1)}
+               </div>
             </div>
             <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-3">
               <div className="flex items-center gap-1.5 text-xs text-content-muted">
@@ -103,18 +103,18 @@ export default function AdminHealthTab({ healthData, refetchHealth }: AdminHealt
                 <Zap className="h-3.5 w-3.5" />
                 대기 중 작업
               </div>
-              <div className={`mt-2 font-mono text-xl font-semibold ${healthData.stats.pending_jobs > 0 ? 'text-amber-400' : 'text-content-primary'}`}>
-                {healthData.stats.pending_jobs}
-              </div>
+               <div className={`mt-2 font-mono text-xl font-semibold ${healthData.stats.pending_jobs > 0 ? 'text-semantic-warning' : 'text-content-primary'}`}>
+                 {healthData.stats.pending_jobs}
+               </div>
             </div>
             <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-4 py-3">
               <div className="flex items-center gap-1.5 text-xs text-content-muted">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 실패 작업 (24h)
               </div>
-              <div className={`mt-2 font-mono text-xl font-semibold ${healthData.stats.failed_jobs_24h > 0 ? 'text-red-400' : 'text-content-primary'}`}>
-                {healthData.stats.failed_jobs_24h}
-              </div>
+               <div className={`mt-2 font-mono text-xl font-semibold ${healthData.stats.failed_jobs_24h > 0 ? 'text-semantic-error' : 'text-content-primary'}`}>
+                 {healthData.stats.failed_jobs_24h}
+               </div>
             </div>
           </div>
         </>

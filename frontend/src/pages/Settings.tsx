@@ -86,15 +86,14 @@ export default function Settings() {
       </div>
 
       <div className="rounded-2xl border border-semantic-error/60 bg-semantic-error-bg p-6">
-        <h2 className="text-base font-semibold" style={{ color: '#FC8181' }}>위험 구역</h2>
+        <h2 className="text-base font-semibold text-semantic-error">위험 구역</h2>
         <p className="mt-2 text-sm leading-6 text-content-secondary">
           계정을 삭제하면 모든 자료, 퀴즈, 오답 데이터가 영구적으로 사라집니다. 이 작업은 되돌릴 수 없습니다.
         </p>
         <button
           type="button"
           onClick={openDeleteModal}
-          className="mt-4 inline-flex items-center rounded-xl border border-semantic-error/60 px-4 py-2.5 text-sm font-medium transition-colors hover:bg-semantic-error hover:text-content-inverse"
-          style={{ color: '#FC8181' }}
+          className="mt-4 inline-flex items-center rounded-xl border border-semantic-error/60 px-4 py-2.5 text-sm font-medium text-semantic-error transition-colors hover:bg-semantic-error hover:text-white"
         >
           계정 삭제
         </button>

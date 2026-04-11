@@ -99,13 +99,13 @@ export default function AdminDbTab({ isVerified, activeTab }: AdminDbTabProps) {
         </div>
       </div>
 
-      {error && (
-        <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] px-5 py-4 text-sm text-red-400">
-          {is403
-            ? 'DB 진단은 super_admin 권한이 필요합니다.'
-            : `데이터를 불러오지 못했습니다${httpStatus ? ` (HTTP ${httpStatus})` : ''}. 잠시 후 다시 시도해 주세요.`}
-        </div>
-      )}
+       {error && (
+         <div className="rounded-2xl border border-semantic-error-border bg-semantic-error-bg px-5 py-4 text-sm text-semantic-error">
+           {is403
+             ? 'DB 진단은 super_admin 권한이 필요합니다.'
+             : `데이터를 불러오지 못했습니다${httpStatus ? ` (HTTP ${httpStatus})` : ''}. 잠시 후 다시 시도해 주세요.`}
+         </div>
+       )}
 
       {data?.checked_at && (
         <p className="px-1 text-xs text-content-muted">
@@ -150,16 +150,16 @@ export default function AdminDbTab({ isVerified, activeTab }: AdminDbTabProps) {
               return (
                 <tr
                   key={table.name}
-                  className={`transition-colors hover:bg-surface-deep/50 ${large ? 'bg-amber-500/[0.03]' : ''}`}
+                   className={`transition-colors hover:bg-surface-deep/50 ${large ? 'bg-semantic-warning-bg' : ''}`}
                 >
                   <td className="px-6 py-3.5 whitespace-nowrap">
                     <div className="flex items-center gap-2">
                       <span className="font-mono text-sm text-content-primary">{table.name}</span>
-                      {large && (
-                        <span className="inline-flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
-                          ⚠️ 대용량
-                        </span>
-                      )}
+                       {large && (
+                         <span className="inline-flex items-center gap-1 rounded-md border border-semantic-warning-border bg-semantic-warning-bg px-2 py-0.5 text-xs font-medium text-semantic-warning">
+                           ⚠️ 대용량
+                         </span>
+                       )}
                     </div>
                   </td>
                   <td className="px-6 py-3.5 whitespace-nowrap text-right font-mono text-sm text-content-secondary">
