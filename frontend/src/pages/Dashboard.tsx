@@ -173,7 +173,7 @@ export default function Dashboard() {
   const { data: dashboardData, isLoading, isError } = useQuery({
     queryKey: ['dashboard', range, selectedFileId, selectedCategoryTag],
     queryFn: () => dashboardApi.getDashboard(range, selectedFileId, selectedCategoryTag),
-    staleTime: 5 * 60 * 1000,
+    staleTime: Infinity,
   });
 
 
