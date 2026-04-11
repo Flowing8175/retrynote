@@ -111,13 +111,11 @@ function App() {
            <Route
              path="/password-reset"
              element={
-               <PublicRoute>
-                  <LazyRoute>
-                    <PasswordReset />
-                  </LazyRoute>
-                </PublicRoute>
-              }
-            />
+               <LazyRoute>
+                 <PasswordReset />
+               </LazyRoute>
+             }
+           />
             <Route path="/verify-email" element={<LazyRoute><VerifyEmail /></LazyRoute>} />
              <Route
                path="/pricing"
