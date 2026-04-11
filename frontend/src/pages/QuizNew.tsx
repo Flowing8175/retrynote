@@ -638,7 +638,7 @@ export default function QuizNew() {
                               onChange={() => handleQuestionTypeToggle(qt.value)}
                               className="w-4 h-4 rounded border-white/[0.1] bg-surface text-brand-500 focus:ring-brand-500"
                             />
-                            <span className="text-sm text-white">{qt.label}</span>
+                            <span className="text-xs font-medium text-white">{qt.label}</span>
                           </div>
                           {isEssay && (
                             <span className="text-xs text-content-muted px-1">
