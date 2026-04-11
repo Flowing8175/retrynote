@@ -540,6 +540,12 @@ export default function QuizTake() {
               <span className="text-content-secondary text-2xl font-normal"> / {itemsData?.length}</span>
             </div>
           </div>
+          <button
+            onClick={() => navigate(-1)}
+            className="flex items-center justify-center h-9 px-4 bg-surface border border-white/[0.05] rounded-xl text-sm text-content-secondary hover:bg-surface-hover hover:text-white transition-colors"
+          >
+            나가기
+          </button>
         </div>
         <div className="h-2 bg-surface rounded-full overflow-hidden border border-white/[0.05]">
           <div 
