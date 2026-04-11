@@ -478,11 +478,6 @@ async def call_ai_structured(
     else:
         completion_kwargs["max_tokens"] = max_tokens
 
-    if cache_key:
-        completion_kwargs["prompt_cache_key"] = cache_key
-    if cache_retention:
-        completion_kwargs["prompt_cache_retention"] = cache_retention
-
     response = await client.chat.completions.create(**completion_kwargs, timeout=60)
     content = response.choices[0].message.content
     if content is None:
@@ -596,10 +591,6 @@ async def stream_ai_text(
         token_limit_key: max_tokens,
         "stream": True,
     }
-    if cache_key:
-        kwargs["prompt_cache_key"] = cache_key
-    if cache_retention:
-        kwargs["prompt_cache_retention"] = cache_retention
     stream = await client.chat.completions.create(**kwargs)  # type: ignore[call-overload]
     async for chunk in stream:
         delta = chunk.choices[0].delta if chunk.choices else None

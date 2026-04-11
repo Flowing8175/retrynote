@@ -67,7 +67,6 @@ async def generate_guest_quiz(
             temperature=0.5,
             max_tokens=3000,
             cache_key="quiz_gen_v1",
-            cache_retention="24h",
         )
     except Exception as exc:
         logger.warning("Guest quiz generation failed for topic=%r: %s", req.topic, exc)

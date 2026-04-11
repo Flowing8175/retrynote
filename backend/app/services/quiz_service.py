@@ -661,7 +661,6 @@ async def generate_quiz(job_id: str):
                     fallback_model=cfg.eco_generation_model,
                     system_message=SYSTEM_PROMPT_RETRY_GENERATION,
                     cache_key="retry_gen_v1",
-                    cache_retention="24h",
                 )
 
                 # Phase 3: match results by concept_key and insert
@@ -781,7 +780,6 @@ async def generate_quiz(job_id: str):
                 fallback_model=cfg.eco_generation_model,
                 system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
                 cache_key="quiz_gen_v1",
-                cache_retention="24h",
             )
 
             if ai_result.get("rejected"):
