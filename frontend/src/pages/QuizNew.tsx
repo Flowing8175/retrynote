@@ -503,9 +503,6 @@ export default function QuizNew() {
                     >
                       {m === 'normal' ? '한 문제씩 확인' : '전체 풀이 후 확인'}
                     </button>
-                    <span className="text-xs text-gray-500 dark:text-gray-400 px-1">
-                      {m === 'normal' ? '각 문제 직후 정답·해설 확인' : '시험 모드 · 모든 문제 풀이 후 결과 확인'}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -610,7 +607,6 @@ export default function QuizNew() {
                           {opt.label === '난이도 무관' ? '자동 (다양한 난이도)' : opt.label}
                         </button>
                         <span className="text-xs text-gray-500 dark:text-gray-400 px-1">
-                          {opt.value === '' && '다양한 난이도 혼합'}
                           {opt.value === 'easy' && '기본 개념 위주, 직관적 선택지'}
                           {opt.value === 'medium' && '응용 개념 포함'}
                           {opt.value === 'hard' && '함정 선택지, 세부 개념까지'}

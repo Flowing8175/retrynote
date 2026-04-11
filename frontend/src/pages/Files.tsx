@@ -35,13 +35,6 @@ function formatFileType(file: FileDetail) {
 
 function getStatusHint(status: string): string {
   const hints: Record<string, string> = {
-    uploaded: '처리 중입니다',
-    parsing: '처리 중입니다',
-    parsed: '처리 중입니다',
-    ocr_pending: '처리 중입니다',
-    ocr_processing: '처리 중입니다',
-    embedding_pending: '처리 중입니다',
-    embedding_processing: '처리 중입니다',
     ready: '퀴즈 생성 가능',
     failed_partial: '일부만 사용 가능',
     failed_terminal: '다시 업로드하세요',
