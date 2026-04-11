@@ -17,10 +17,14 @@ from app.services.dashboard_service import (
     compute_accuracy_by_file,
     compute_weak_concepts_data,
 )
+import asyncio
 import json
 
 router = APIRouter()
-COACHING_SUMMARY_CACHE_TTL_SECONDS = 60 * 60
+COACHING_SUMMARY_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7  # 7 days
+
+_COACHING_ACCURACY_INVALIDATION_THRESHOLD = 0.05  # 5 percentage points
+_COACHING_VOLUME_INVALIDATION_THRESHOLD = 10  # 10 questions
 
 
 def format_question_type_label(question_type: str) -> str:
@@ -97,6 +101,20 @@ def build_coaching_prompt(
 한두 문장의 코칭 메시지만 출력하세요. JSON이 아닌 순수 텍스트로 응답하세요."""
 
 
+def _coaching_cache_is_stale(
+    cached_accuracy: float,
+    cached_volume: int,
+    current_accuracy: float,
+    current_volume: int,
+) -> bool:
+    return (
+        abs(current_accuracy - cached_accuracy)
+        >= _COACHING_ACCURACY_INVALIDATION_THRESHOLD
+        or abs(current_volume - cached_volume)
+        >= _COACHING_VOLUME_INVALIDATION_THRESHOLD
+    )
+
+
 async def generate_coaching_summary(
     request: Request,
     user_id: str,
@@ -104,21 +122,49 @@ async def generate_coaching_summary(
     file_id: str | None,
     category_tag: str | None,
     overall_accuracy: float,
+    total_count: int,
     coaching_prompt: str,
 ) -> str:
     redis_client = getattr(request.app.state, "redis", None)
     cache_key = build_coaching_summary_cache_key(
         user_id, range_value, file_id, category_tag
     )
+    stats_key = cache_key + ":stats"
 
     if redis_client is not None:
         try:
-            cached = await redis_client.get(cache_key)
-            if cached is not None:
-                sanitized = sanitize_coaching_summary(cached) or cached
-                return apply_coaching_tone(sanitized, overall_accuracy)
+            cached_text, cached_stats_raw = await asyncio.gather(
+                redis_client.get(cache_key),
+                redis_client.get(stats_key),
+            )
+            if cached_text is not None:
+                stale = False
+                if cached_stats_raw is not None:
+                    snapshot = json.loads(cached_stats_raw)
+                    stale = _coaching_cache_is_stale(
+                        cached_accuracy=float(
+                            snapshot.get("accuracy", overall_accuracy)
+                        ),
+                        cached_volume=int(snapshot.get("volume", total_count)),
+                        current_accuracy=overall_accuracy,
+                        current_volume=total_count,
+                    )
+                if not stale:
+                    text = (
+                        cached_text
+                        if isinstance(cached_text, str)
+                        else cached_text.decode()
+                    )
+                    sanitized = sanitize_coaching_summary(text) or text
+                    return apply_coaching_tone(sanitized, overall_accuracy)
         except Exception:
-            redis_client = None
+            pass
+
+    if redis_client is None:
+        fallback = (
+            f"정답률 {overall_accuracy:.0%}입니다. 취약 개념 위주로 복습해보세요."
+        )
+        return apply_coaching_tone(fallback, overall_accuracy)
 
     collected = ""
     try:
@@ -136,13 +182,20 @@ async def generate_coaching_summary(
     if collected:
         sanitized = sanitize_coaching_summary(collected)
         result = apply_coaching_tone(sanitized or collected, overall_accuracy)
-        if redis_client is not None and sanitized:
-            try:
-                await redis_client.setex(
+        try:
+            stats_payload = json.dumps(
+                {"accuracy": overall_accuracy, "volume": total_count}
+            )
+            await asyncio.gather(
+                redis_client.setex(
                     cache_key, COACHING_SUMMARY_CACHE_TTL_SECONDS, sanitized
-                )
-            except Exception:
-                pass
+                ),
+                redis_client.setex(
+                    stats_key, COACHING_SUMMARY_CACHE_TTL_SECONDS, stats_payload
+                ),
+            )
+        except Exception:
+            pass
         return result
 
     fallback = f"정답률 {overall_accuracy:.0%}입니다. 취약 개념 위주로 복습해보세요."
@@ -300,6 +353,7 @@ async def get_dashboard(
             file_id,
             category_tag,
             overall_accuracy,
+            total_count,
             coaching_prompt,
         )
 
