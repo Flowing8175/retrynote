@@ -21,8 +21,26 @@ export default class AppErrorBoundary extends Component<AppErrorBoundaryProps, A
     return { hasError: true, errorMessage: null, componentStack: null };
   }
 
+  static isChunkLoadError(error: Error): boolean {
+    return (
+      error.message?.includes('Failed to fetch dynamically imported module') ||
+      error.message?.includes('Importing a module script failed') ||
+      error.name === 'ChunkLoadError'
+    );
+  }
+
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('AppErrorBoundary caught an error', error, errorInfo);
+
+    if (AppErrorBoundary.isChunkLoadError(error)) {
+      const key = 'chunk_reload_attempted';
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, '1');
+        window.location.reload();
+        return;
+      }
+    }
+
     this.setState({
       errorMessage: error.message || '알 수 없는 오류가 발생했습니다.',
       componentStack: errorInfo.componentStack || null,
