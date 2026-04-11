@@ -146,6 +146,7 @@ export default function Admin() {
     mutationFn: (data: AnnouncementCreate) => adminApi.createAnnouncement(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-announcements'] });
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
       setAnnouncementForm({ title: '', body: '', is_active: true, starts_at: null, ends_at: null });
     },
   });
@@ -154,6 +155,7 @@ export default function Admin() {
     mutationFn: (id: string) => adminApi.deleteAnnouncement(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-announcements'] });
+      queryClient.invalidateQueries({ queryKey: ['announcements'] });
     },
   });
 
