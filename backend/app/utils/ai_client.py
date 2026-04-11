@@ -1,12 +1,19 @@
 import asyncio
+import hashlib
 import json
 import logging
+import time
 import uuid
 from openai import AsyncOpenAI
 from app.config import settings
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+# Gemini explicit-cache minimum is ~1024 tokens on Flash (~4096 tokens on Pro).
+# ~4 chars per token is the conservative heuristic; skip creation below this
+# to avoid a guaranteed INVALID_ARGUMENT from the API.
+_GEMINI_CACHE_MIN_CHARS = 4096
 
 __all__ = [
     "GENERATION_SCHEMA",
@@ -29,6 +36,7 @@ async def _log_token_usage(
     prompt_tokens: int,
     completion_tokens: int,
     total_tokens: int,
+    cached_tokens: int = 0,
 ) -> None:
     try:
         from app.database import async_session
@@ -46,6 +54,7 @@ async def _log_token_usage(
                     "prompt_tokens": prompt_tokens,
                     "completion_tokens": completion_tokens,
                     "total_tokens": total_tokens,
+                    "cached_tokens": cached_tokens,
                 },
             )
             session.add(log)
@@ -61,6 +70,87 @@ def _get_gemini_client():
 
         _gemini_client = genai.Client(api_key=settings.gemini_api_key)
     return _gemini_client
+
+
+class _GeminiCacheRegistry:
+    """In-process registry of Gemini explicit context caches.
+
+    Keyed by (model, system_instruction) hash. Caches are created lazily on
+    first use and refreshed after TTL. Fails open — any creation error
+    returns None so callers fall back to sending the system instruction
+    inline on every request.
+    """
+
+    def __init__(self) -> None:
+        self._entries: dict[str, tuple[str, float]] = {}
+        self._lock = asyncio.Lock()
+
+    @staticmethod
+    def _key(model: str, system_instruction: str) -> str:
+        h = hashlib.sha256()
+        h.update(model.encode("utf-8"))
+        h.update(b"\0")
+        h.update(system_instruction.encode("utf-8"))
+        return h.hexdigest()[:16]
+
+    def evict(self, model: str, system_instruction: str) -> None:
+        self._entries.pop(self._key(model, system_instruction), None)
+
+    async def get_or_create(
+        self, model: str, system_instruction: str
+    ) -> str | None:
+        if not settings.gemini_context_cache_enabled:
+            return None
+        if len(system_instruction) < _GEMINI_CACHE_MIN_CHARS:
+            return None
+
+        key = self._key(model, system_instruction)
+        now = time.monotonic()
+        entry = self._entries.get(key)
+        if entry is not None and entry[1] > now:
+            return entry[0]
+
+        async with self._lock:
+            entry = self._entries.get(key)
+            if entry is not None and entry[1] > time.monotonic():
+                return entry[0]
+
+            try:
+                from google.genai import types
+
+                gemini = _get_gemini_client()
+                ttl = settings.gemini_context_cache_ttl_seconds
+                cached = await gemini.aio.caches.create(
+                    model=model,
+                    config=types.CreateCachedContentConfig(
+                        display_name=f"retrynote-{key}",
+                        system_instruction=system_instruction,
+                        ttl=f"{ttl}s",
+                    ),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "Gemini cache creation failed for model=%s: %s", model, exc
+                )
+                return None
+
+            cache_name = getattr(cached, "name", None)
+            if not cache_name:
+                return None
+            # Expire the local entry a bit before the server-side TTL so we
+            # never try to use a cache that Gemini already GC'd.
+            expires_at = time.monotonic() + max(60, ttl - 60)
+            self._entries[key] = (cache_name, expires_at)
+            logger.info(
+                "Created Gemini context cache %s for model=%s (ttl=%ss)",
+                cache_name,
+                model,
+                ttl,
+            )
+            return cache_name
+
+
+_gemini_cache_registry = _GeminiCacheRegistry()
 
 
 GENERATION_SCHEMA = {
@@ -263,6 +353,11 @@ OBJECTION_REVIEW_SCHEMA = {
 }
 
 
+def _is_cache_not_found_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "cached" in msg and ("not found" in msg or "expired" in msg or "invalid" in msg)
+
+
 async def _call_gemini_structured(
     prompt: str,
     schema: dict,
@@ -274,17 +369,44 @@ async def _call_gemini_structured(
     from google.genai import types
 
     gemini = _get_gemini_client()
-    response = await gemini.aio.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            system_instruction=system_message,
-            temperature=temperature,
-            max_output_tokens=max_tokens,
-            response_mime_type="application/json",
-            response_schema=schema,
-        ),
-    )
+    cache_name = await _gemini_cache_registry.get_or_create(model, system_message)
+
+    def _build_config(use_cache: bool) -> types.GenerateContentConfig:
+        kwargs: dict[str, Any] = {
+            "temperature": temperature,
+            "max_output_tokens": max_tokens,
+            "response_mime_type": "application/json",
+            "response_schema": schema,
+        }
+        if use_cache and cache_name:
+            kwargs["cached_content"] = cache_name
+        else:
+            kwargs["system_instruction"] = system_message
+        return types.GenerateContentConfig(**kwargs)
+
+    try:
+        response = await gemini.aio.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=_build_config(use_cache=True),
+        )
+    except Exception as exc:
+        if cache_name and _is_cache_not_found_error(exc):
+            logger.warning(
+                "Gemini cache %s rejected (%s); evicting and retrying inline",
+                cache_name,
+                exc,
+            )
+            _gemini_cache_registry.evict(model, system_message)
+            cache_name = None
+            response = await gemini.aio.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=_build_config(use_cache=False),
+            )
+        else:
+            raise
+
     if not response.text:
         raise ValueError("Gemini returned empty response")
     result = json.loads(response.text)
@@ -296,6 +418,7 @@ async def _call_gemini_structured(
                 getattr(usage, "prompt_token_count", 0) or 0,
                 getattr(usage, "candidates_token_count", 0) or 0,
                 getattr(usage, "total_token_count", 0) or 0,
+                cached_tokens=getattr(usage, "cached_content_token_count", 0) or 0,
             )
         )
     return result
@@ -389,15 +512,42 @@ async def stream_ai_text(
         from google.genai import types
 
         gemini = _get_gemini_client()
-        stream = await gemini.aio.models.generate_content_stream(
-            model=model,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=system_message,
-                temperature=temperature,
-                max_output_tokens=max_tokens,
-            ),
-        )
+        cache_name = await _gemini_cache_registry.get_or_create(model, system_message)
+
+        def _build_stream_config(use_cache: bool) -> types.GenerateContentConfig:
+            kwargs: dict[str, Any] = {
+                "temperature": temperature,
+                "max_output_tokens": max_tokens,
+            }
+            if use_cache and cache_name:
+                kwargs["cached_content"] = cache_name
+            else:
+                kwargs["system_instruction"] = system_message
+            return types.GenerateContentConfig(**kwargs)
+
+        try:
+            stream = await gemini.aio.models.generate_content_stream(
+                model=model,
+                contents=prompt,
+                config=_build_stream_config(use_cache=True),
+            )
+        except Exception as exc:
+            if cache_name and _is_cache_not_found_error(exc):
+                logger.warning(
+                    "Gemini cache %s rejected on stream (%s); retrying inline",
+                    cache_name,
+                    exc,
+                )
+                _gemini_cache_registry.evict(model, system_message)
+                cache_name = None
+                stream = await gemini.aio.models.generate_content_stream(
+                    model=model,
+                    contents=prompt,
+                    config=_build_stream_config(use_cache=False),
+                )
+            else:
+                raise
+
         async for chunk in stream:
             if chunk.text:
                 yield chunk.text

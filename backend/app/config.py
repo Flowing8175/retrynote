@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     balanced_generation_model: str = "gpt-5.4-mini"
     performance_generation_model: str = "gemini-3-flash"
 
+    gemini_context_cache_enabled: bool = True
+    gemini_context_cache_ttl_seconds: int = 3600
+
     upload_dir: str = "storage/uploads"
     max_upload_size_mb: int = 5
     allowed_file_types: str = "pdf,docx,pptx,txt,md,png,jpg,jpeg"
