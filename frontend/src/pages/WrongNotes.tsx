@@ -224,15 +224,16 @@ export default function WrongNotes() {
             </button>
           }
         />
-      ) : (
-        <div className="space-y-4">
-          {data.items.map((item: WrongNoteItem) => (
-            <article
-              key={item.id}
-              className={`group relative rounded-3xl border transition-all ${
-                selectedNotes.has(item.id) ? 'border-brand-500/30 bg-brand-500/5' : 'border-white/[0.05] bg-surface hover:bg-surface-hover'
-              }`}
-            >
+       ) : (
+         <div className="space-y-4" data-tour="wrong-notes-list">
+           {data.items.map((item: WrongNoteItem, index: number) => (
+             <article
+               key={item.id}
+               className={`group relative rounded-3xl border transition-all ${
+                 selectedNotes.has(item.id) ? 'border-brand-500/30 bg-brand-500/5' : 'border-white/[0.05] bg-surface hover:bg-surface-hover'
+               }`}
+               data-tour={index === 0 ? 'wrong-notes-item' : undefined}
+             >
               <div 
                 className="flex items-start gap-4 sm:gap-6 px-5 sm:px-8 py-6 cursor-pointer"
                 onClick={() => handleExpandToggle(item.id)}

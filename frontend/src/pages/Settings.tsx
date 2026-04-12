@@ -43,8 +43,8 @@ export default function Settings() {
         <h1 className="text-2xl font-bold text-content-primary">계정 설정</h1>
       </div>
 
-      {/* Account Info */}
-      <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 space-y-4">
+       {/* Account Info */}
+       <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 space-y-4" data-tour="settings-account">
         <h2 className="text-base font-semibold text-content-primary">계정 정보</h2>
         <div className="space-y-3">
           <div className="flex items-center justify-between py-2">

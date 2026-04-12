@@ -74,7 +74,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
             </aside>
 
             {/* Desktop Sidebar */}
-            <aside className={`fixed top-16 left-0 z-40 hidden h-[calc(100vh-4rem)] border-r border-white/[0.05] transition-all duration-300 lg:block ${sidebarExpanded ? 'w-64' : 'w-20'}`}>
+            <aside className={`fixed top-16 left-0 z-40 hidden h-[calc(100vh-4rem)] border-r border-white/[0.05] transition-all duration-300 lg:block ${sidebarExpanded ? 'w-64' : 'w-20'}`} data-tour="sidebar-nav">
               <div className="flex flex-col h-full bg-surface-deep/30">
                 <div className="p-4 border-b border-white/[0.05]">
                   <button

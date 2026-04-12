@@ -309,8 +309,8 @@ export default function QuizNew() {
         </div>
       </section>
 
-      {/* Source Selection Section */}
-      <section className="animate-fade-in-up stagger-1 space-y-8">
+       {/* Source Selection Section */}
+       <section className="animate-fade-in-up stagger-1 space-y-8" data-tour="quiz-source">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 font-semibold text-sm">
             1
@@ -427,8 +427,8 @@ export default function QuizNew() {
         )}
       </section>
 
-      {/* Configuration Section */}
-      <section className="animate-fade-in-up stagger-2 space-y-8">
+       {/* Configuration Section */}
+       <section className="animate-fade-in-up stagger-2 space-y-8" data-tour="quiz-options">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 font-semibold text-sm">
             2

@@ -119,7 +119,7 @@ export default function Retry() {
         </p>
       </section>
 
-      <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-8 md:px-8">
+       <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-8 md:px-8" data-tour="retry-form">
         <div className="space-y-10">
 
           {/* 개념 선택 모드 토글 */}

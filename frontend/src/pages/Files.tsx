@@ -274,8 +274,8 @@ export default function Files() {
         </div>
       </section>
 
-      {/* Main Grid */}
-      <section className="grid gap-8 lg:grid-cols-[240px_1fr] items-start">
+       {/* Main Grid */}
+       <section className="grid gap-8 lg:grid-cols-[240px_1fr] items-start" data-tour="files-area">
         {/* Sidebar: Folders */}
         <aside className="animate-fade-in-up space-y-6">
           <div className="bg-surface border border-white/[0.05] rounded-3xl p-5 space-y-4">
@@ -351,16 +351,17 @@ export default function Files() {
 
         {/* Content Area */}
         <div className="animate-fade-in-up stagger-1 space-y-8">
-          {/* Upload Area */}
-          <div
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            className={`relative group border-2 border-dashed rounded-3xl p-12 transition-all text-center ${
-              dragActive ? 'bg-brand-500/5 border-brand-500/50' : 'bg-surface/50 border-white/[0.1] hover:border-brand-500/30 hover:bg-surface'
-            }`}
-          >
+           {/* Upload Area */}
+           <div
+             onDragEnter={handleDrag}
+             onDragLeave={handleDrag}
+             onDragOver={handleDrag}
+             onDrop={handleDrop}
+             className={`relative group border-2 border-dashed rounded-3xl p-12 transition-all text-center ${
+               dragActive ? 'bg-brand-500/5 border-brand-500/50' : 'bg-surface/50 border-white/[0.1] hover:border-brand-500/30 hover:bg-surface'
+             }`}
+             data-tour="files-upload"
+           >
             <input
               type="file"
               id="file-upload"
