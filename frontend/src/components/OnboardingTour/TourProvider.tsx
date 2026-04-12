@@ -30,6 +30,9 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
         tourActiveRef.current = false;
         cleanupTourMockData(queryClient);
         localStorage.setItem('rn-tour-completed', 'true');
+        if (status === STATUS.FINISHED) {
+          navigate('/dashboard');
+        }
       }
     },
     [queryClient],
