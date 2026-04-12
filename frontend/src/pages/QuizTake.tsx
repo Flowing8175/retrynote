@@ -6,7 +6,7 @@ import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import { PillShimmer } from '@/components';
 import type { AnswerLogEntry, AnswerResponse } from '@/types';
-import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Waypoints } from 'lucide-react';
 import DiagramModal from '@/components/DiagramModal';
 import { getErrorMessage } from '@/utils/errorMessages';
 
@@ -583,9 +583,10 @@ export default function QuizTake() {
               {currentItem.concept_key && (
                 <button
                   onClick={() => setDiagramModal({ conceptKey: currentItem.concept_key!, conceptLabel: currentItem.concept_label || currentItem.concept_key! })}
-                  className="text-xs font-medium text-brand-300/60 hover:text-brand-300 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-300/80 hover:text-brand-200 bg-brand-500/8 hover:bg-brand-500/15 px-2.5 py-1 rounded-md border border-brand-500/15 hover:border-brand-500/25 transition-colors"
                 >
-                  개념 확인하기
+                  <Waypoints size={12} />
+                  다이어그램
                 </button>
               )}
             </div>
