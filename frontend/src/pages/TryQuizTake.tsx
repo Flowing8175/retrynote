@@ -83,6 +83,7 @@ export default function TryQuizTake() {
   const choiceOptions: Record<string, string> | null = isChoiceQuestion
     ? (currentItem?.options_json ?? (currentQuestionType === 'ox' ? DEFAULT_OX_OPTIONS : null))
     : null;
+  const optionDescriptions = currentItem?.option_descriptions_json ?? null;
 
   const fetchSession = async () => {
     if (!sessionId) return;
@@ -328,9 +329,14 @@ export default function TryQuizTake() {
                         }`}>
                           {key.toUpperCase()}
                         </span>
-                        <span className={`text-base font-medium leading-relaxed ${isSelected && !isWrong ? 'text-brand-50' : ''}`}>
-                          {text !== key ? text : key}
-                        </span>
+                        <div className="flex flex-col gap-1">
+                          <span className={`text-base font-medium leading-relaxed ${isSelected && !isWrong ? 'text-brand-50' : ''}`}>
+                            {text !== key ? text : key}
+                          </span>
+                          {result && optionDescriptions?.[key] && (
+                            <span className="text-sm text-content-muted leading-snug">{optionDescriptions[key]}</span>
+                          )}
+                        </div>
                       </button>
                     );
                   })}

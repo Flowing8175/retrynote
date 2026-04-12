@@ -348,6 +348,7 @@ export default function QuizTake() {
     ? ((currentItem?.options as Record<string, string> | null) ??
       (currentQuestionType === 'ox' ? DEFAULT_OX_OPTIONS : null))
     : null;
+  const optionDescriptions = currentItem?.option_descriptions as Record<string, string> | null;
 
   const handleOptionSelect = (optionKey: string) => {
     if (isSubmitted && !isExamMode) return;
@@ -630,7 +631,12 @@ export default function QuizTake() {
                       }`}>
                         {key.toUpperCase()}
                       </span>
-                      <span className={`text-base font-medium leading-relaxed ${isSelected && !isWrong ? 'text-brand-50' : ''}`}>{text}</span>
+                      <div className="flex flex-col gap-1">
+                        <span className={`text-base font-medium leading-relaxed ${isSelected && !isWrong ? 'text-brand-50' : ''}`}>{text}</span>
+                        {isSubmitted && !isExamMode && optionDescriptions?.[key] && (
+                          <span className="text-sm text-content-muted leading-snug">{optionDescriptions[key]}</span>
+                        )}
+                      </div>
                     </button>
                   );
                 })}

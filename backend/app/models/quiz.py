@@ -143,6 +143,7 @@ class QuizItem(CommonMixin, Base):
     )
     question_text: Mapped[str] = mapped_column(Text, nullable=False)
     options_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    option_descriptions_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     correct_answer_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     explanation_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     tips_text: Mapped[str | None] = mapped_column(Text, nullable=True)

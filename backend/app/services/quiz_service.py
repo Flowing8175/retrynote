@@ -695,6 +695,7 @@ async def generate_quiz(job_id: str):
                         difficulty=quiz_item.difficulty or "medium",
                         source_refs_json=None,
                         options_json=ai_result.get("options"),
+                        option_descriptions_json=ai_result.get("option_descriptions"),
                     )
                     db.add(new_item)
                     items_created += 1
@@ -786,7 +787,8 @@ async def generate_quiz(job_id: str):
                 session.status = QuizSessionStatus.generation_failed
                 job.status = "failed"
                 job.error_message = "INVALID_INPUT:" + ai_result.get(
-                    "rejection_reason", "퀴즈를 만들기 어려운 입력입니다. 학습하고 싶은 주제나 자료를 입력해 주세요."
+                    "rejection_reason",
+                    "퀴즈를 만들기 어려운 입력입니다. 학습하고 싶은 주제나 자료를 입력해 주세요.",
                 )
                 await db.commit()
                 return
@@ -816,6 +818,7 @@ async def generate_quiz(job_id: str):
                     ),
                     question_text=q.get("question_text", ""),
                     options_json=q.get("options"),
+                    option_descriptions_json=q.get("option_descriptions"),
                     correct_answer_json=q.get("correct_answer"),
                     explanation_text=q.get("explanation", ""),
                     source_refs_json={"refs": q.get("source_refs", [])},

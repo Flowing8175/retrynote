@@ -225,6 +225,7 @@ async def get_public_quiz_items(
             question_type=i.question_type.value,
             question_text=i.question_text,
             options_json=i.options_json,
+            option_descriptions_json=i.option_descriptions_json,
             difficulty=i.difficulty,
         )
         for i in items

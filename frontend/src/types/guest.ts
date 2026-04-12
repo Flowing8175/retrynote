@@ -14,6 +14,7 @@ export interface GuestQuizItem {
   question_type: 'multiple_choice' | 'ox' | 'short_answer' | 'fill_blank' | 'essay';
   question_text: string;
   options_json: Record<string, string> | null;
+  option_descriptions_json: Record<string, string> | null;
   difficulty: string | null;
 }
 

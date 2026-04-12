@@ -373,6 +373,7 @@ async def get_quiz_items(
             question_type=i.question_type.value,
             question_text=i.question_text,
             options=i.options_json,
+            option_descriptions=i.option_descriptions_json,
             difficulty=i.difficulty,
             concept_label=i.concept_label,
             category_tag=i.category_tag,
@@ -713,7 +714,9 @@ async def get_draft_answers(
     )
     drafts = drafts_result.scalars().all()
     return [
-        DraftAnswerEntry(item_id=d.quiz_item_id, user_answer=d.user_answer, saved_at=d.saved_at)
+        DraftAnswerEntry(
+            item_id=d.quiz_item_id, user_answer=d.user_answer, saved_at=d.saved_at
+        )
         for d in drafts
     ]
 

@@ -28,6 +28,7 @@ class PublicQuizItemResponse(BaseModel):
     question_type: str
     question_text: str
     options_json: dict | None = None
+    option_descriptions_json: dict | None = None
     difficulty: str | None = None
 
 
