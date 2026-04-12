@@ -1,38 +1,39 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
-import React, { Suspense } from 'react';
+import { type ReactNode, Suspense } from 'react';
 import AppErrorBoundary from '@/components/AppErrorBoundary';
 import GuestErrorBoundary from '@/components/GuestErrorBoundary';
 import { useAuthStore } from '@/stores';
 import { Layout } from '@/components';
 import UpgradeModal from '@/components/UpgradeModal';
+import lazyWithRetry from '@/utils/lazyWithRetry';
 
-const Landing = React.lazy(() => import('@/pages/Landing'));
-const Login = React.lazy(() => import('@/pages/Login'));
-const Signup = React.lazy(() => import('@/pages/Signup'));
-const PasswordReset = React.lazy(() => import('@/pages/PasswordReset'));
-const VerifyEmail = React.lazy(() => import('@/pages/VerifyEmail'));
-const Dashboard = React.lazy(() => import('@/pages/Dashboard'));
-const Files = React.lazy(() => import('@/pages/Files'));
-const QuizNew = React.lazy(() => import('@/pages/QuizNew'));
-const QuizHistory = React.lazy(() => import('@/pages/QuizHistory'));
-const QuizTake = React.lazy(() => import('@/pages/QuizTake'));
-const QuizResults = React.lazy(() => import('@/pages/QuizResults'));
-const WrongNotes = React.lazy(() => import('@/pages/WrongNotes'));
-const Retry = React.lazy(() => import('@/pages/Retry'));
-const Search = React.lazy(() => import('@/pages/Search'));
-const Admin = React.lazy(() => import('@/pages/Admin'));
-const Settings = React.lazy(() => import('@/pages/Settings'));
-const NotFound = React.lazy(() => import('@/pages/NotFound'));
-const PricingPage = React.lazy(() => import('@/pages/PricingPage'));
-const BillingPage = React.lazy(() => import('@/pages/BillingPage'));
-const Terms = React.lazy(() => import('@/pages/Terms'));
-const Privacy = React.lazy(() => import('@/pages/Privacy'));
-const Refund = React.lazy(() => import('@/pages/Refund'));
-const DiagramPage = React.lazy(() => import('@/pages/DiagramPage'));
-const TryQuiz = React.lazy(() => import('@/pages/TryQuiz'));
-const TryQuizTake = React.lazy(() => import('@/pages/TryQuizTake'));
-const TryQuizResults = React.lazy(() => import('@/pages/TryQuizResults'));
+const Landing = lazyWithRetry(() => import('@/pages/Landing'));
+const Login = lazyWithRetry(() => import('@/pages/Login'));
+const Signup = lazyWithRetry(() => import('@/pages/Signup'));
+const PasswordReset = lazyWithRetry(() => import('@/pages/PasswordReset'));
+const VerifyEmail = lazyWithRetry(() => import('@/pages/VerifyEmail'));
+const Dashboard = lazyWithRetry(() => import('@/pages/Dashboard'));
+const Files = lazyWithRetry(() => import('@/pages/Files'));
+const QuizNew = lazyWithRetry(() => import('@/pages/QuizNew'));
+const QuizHistory = lazyWithRetry(() => import('@/pages/QuizHistory'));
+const QuizTake = lazyWithRetry(() => import('@/pages/QuizTake'));
+const QuizResults = lazyWithRetry(() => import('@/pages/QuizResults'));
+const WrongNotes = lazyWithRetry(() => import('@/pages/WrongNotes'));
+const Retry = lazyWithRetry(() => import('@/pages/Retry'));
+const Search = lazyWithRetry(() => import('@/pages/Search'));
+const Admin = lazyWithRetry(() => import('@/pages/Admin'));
+const Settings = lazyWithRetry(() => import('@/pages/Settings'));
+const NotFound = lazyWithRetry(() => import('@/pages/NotFound'));
+const PricingPage = lazyWithRetry(() => import('@/pages/PricingPage'));
+const BillingPage = lazyWithRetry(() => import('@/pages/BillingPage'));
+const Terms = lazyWithRetry(() => import('@/pages/Terms'));
+const Privacy = lazyWithRetry(() => import('@/pages/Privacy'));
+const Refund = lazyWithRetry(() => import('@/pages/Refund'));
+const DiagramPage = lazyWithRetry(() => import('@/pages/DiagramPage'));
+const TryQuiz = lazyWithRetry(() => import('@/pages/TryQuiz'));
+const TryQuizTake = lazyWithRetry(() => import('@/pages/TryQuizTake'));
+const TryQuizResults = lazyWithRetry(() => import('@/pages/TryQuizResults'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,17 +44,17 @@ const queryClient = new QueryClient({
   },
 });
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
-function PublicRoute({ children }: { children: React.ReactNode }) {
+function PublicRoute({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   return !isAuthenticated ? <>{children}</> : <Navigate to="/dashboard" replace />;
 }
 
-function SmartHomeRoute({ children }: { children: React.ReactNode }) {
+function SmartHomeRoute({ children }: { children: ReactNode }) {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const [searchParams] = useSearchParams();
   if (isAuthenticated) return <Navigate to="/dashboard" replace />;
@@ -63,13 +64,13 @@ function SmartHomeRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function AdminRoute({ children }: { children: React.ReactNode }) {
+function AdminRoute({ children }: { children: ReactNode }) {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   return isAdmin ? <>{children}</> : <Navigate to="/dashboard" replace />;
 }
 
-function LazyRoute({ children }: { children: React.ReactNode }) {
+function LazyRoute({ children }: { children: ReactNode }) {
   return <Suspense fallback={null}>{children}</Suspense>;
 }
 
