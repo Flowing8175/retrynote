@@ -39,7 +39,6 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     steps: getTourSteps(navigate),
     tooltipComponent: TourTooltip,
     continuous: true,
-    disableOverlayClose: true,
     options: {
       blockTargetInteraction: true,
       targetWaitTimeout: 3000,
