@@ -4,6 +4,7 @@ import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, Refres
 import AnnouncementBanner from './AnnouncementBanner';
 import Navbar from './Navbar';
 import UsageBar from './UsageBar';
+import { TourProvider } from '@/components/OnboardingTour';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -34,6 +35,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
   const activeNavItem = navItems.find((item) => location.pathname === item.path);
 
   return (
+    <TourProvider>
     <div className="min-h-screen bg-background text-foreground font-sans pt-16">
       <Navbar />
       <div className="mx-auto flex w-full max-w-[1600px] items-start">
@@ -131,5 +133,6 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
         </main>
       </div>
     </div>
+    </TourProvider>
   );
 }
