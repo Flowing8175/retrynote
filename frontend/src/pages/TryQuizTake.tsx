@@ -21,7 +21,13 @@ const QUESTION_TYPE_LABELS: Record<string, string> = {
   essay: '서술형',
 };
 
-const OPTION_KEYS = ['A', 'B', 'C', 'D', 'E'];
+const DEFAULT_OX_OPTIONS: Record<string, string> = { O: 'O', X: 'X' };
+const AUTO_SUBMIT_QUESTION_TYPES = new Set(['multiple_choice', 'ox']);
+const FREE_TEXT_QUESTION_TYPES = new Set(['short_answer', 'essay', 'fill_blank']);
+
+function normalizeOxValue(value: string | null | undefined) {
+  return typeof value === 'string' ? value.trim().toLowerCase() : '';
+}
 
 function TryQuizGeneratingScreen() {
   const [phraseIndex, setPhraseIndex] = useState(0);
@@ -69,6 +75,13 @@ export default function TryQuizTake() {
   const [submitError, setSubmitError] = useState('');
   const [notFound, setNotFound] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const currentItem = items[currentIndex];
+  const currentQuestionType = currentItem?.question_type ?? null;
+  const isChoiceQuestion = currentQuestionType === 'multiple_choice' || currentQuestionType === 'ox';
+  const choiceOptions: Record<string, string> | null = isChoiceQuestion
+    ? (currentItem?.options_json ?? (currentQuestionType === 'ox' ? DEFAULT_OX_OPTIONS : null))
+    : null;
 
   const fetchSession = async () => {
     if (!sessionId) return;
@@ -142,18 +155,30 @@ export default function TryQuizTake() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session?.status]);
 
-  const handleSubmit = async () => {
-    if (!sessionId || !items[currentIndex] || !answer.trim()) return;
+  const handleSubmitWithAnswer = async (answerValue: string) => {
+    if (!sessionId || !currentItem || !answerValue.trim()) return;
     setSubmitting(true);
     setSubmitError('');
     try {
-      const res = await guestApi.submitAnswer(sessionId, items[currentIndex].id, { user_answer: answer });
+      const res = await guestApi.submitAnswer(sessionId, currentItem.id, { user_answer: answerValue });
       setResult(res);
     } catch {
       setSubmitError('답변 제출 중 오류가 발생했습니다. 다시 시도해주세요.');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleOptionSelect = (key: string) => {
+    if (result || submitting) return;
+    setAnswer(key);
+    if (currentItem && AUTO_SUBMIT_QUESTION_TYPES.has(currentItem.question_type)) {
+      void handleSubmitWithAnswer(key);
+    }
+  };
+
+  const handleSubmit = () => {
+    void handleSubmitWithAnswer(answer);
   };
 
   const handleNext = () => {
@@ -167,7 +192,6 @@ export default function TryQuizTake() {
     }
   };
 
-  const currentItem = items[currentIndex];
   const total = items.length;
   const progress = total > 0 ? ((currentIndex + 1) / total) * 100 : 0;
   const isLastQuestion = currentIndex + 1 >= total;
@@ -264,62 +288,52 @@ export default function TryQuizTake() {
             {/* Answer input — only if not yet submitted */}
             {!result && (
               <>
-                {currentItem.question_type === 'multiple_choice' && currentItem.options_json && (
+                {choiceOptions && (
                   <div className="grid gap-3" role="radiogroup" aria-label="답변 선택">
-                    {OPTION_KEYS.filter((k) => currentItem.options_json![k]).map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        role="radio"
-                        aria-checked={answer === key}
-                        tabIndex={0}
-                        onClick={() => setAnswer(key)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setAnswer(key); } }}
-                        className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
-                          answer === key
-                            ? 'border-brand-500 bg-brand-500/10 text-content-primary'
-                            : 'border-white/[0.08] bg-surface-deep/50 text-content-secondary hover:border-white/[0.15] hover:text-content-primary'
-                        }`}
-                      >
-                        <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                          answer === key ? 'bg-brand-500 text-brand-900' : 'bg-white/[0.06] text-content-secondary'
-                        }`}>
-                          {key}
-                        </span>
-                        {currentItem.options_json![key]}
-                      </button>
-                    ))}
+                    {Object.entries(choiceOptions).map(([key, text]) => {
+                      const isOxQuestion = currentQuestionType === 'ox';
+                      const isSelected = isOxQuestion
+                        ? normalizeOxValue(answer) === normalizeOxValue(key)
+                        : answer === key;
+
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          role="radio"
+                          aria-checked={isSelected}
+                          onClick={() => handleOptionSelect(key)}
+                          disabled={submitting}
+                          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
+                            isSelected
+                              ? 'border-brand-500 bg-brand-500/10 text-content-primary'
+                              : 'border-white/[0.08] bg-surface-deep/50 text-content-secondary hover:border-white/[0.15] hover:text-content-primary'
+                          }`}
+                        >
+                          <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                            isSelected ? 'bg-brand-500 text-brand-900' : 'bg-white/[0.06] text-content-secondary'
+                          }`}>
+                            {key.toUpperCase()}
+                          </span>
+                          {text !== key ? text : null}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
 
-                {currentItem.question_type === 'ox' && (
-                  <div className="flex gap-4">
-                    {['O', 'X'].map((val) => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => setAnswer(val)}
-                        className={`flex-1 rounded-2xl border py-6 text-4xl font-bold transition-colors duration-150 ${
-                          answer === val
-                            ? val === 'O'
-                              ? 'border-brand-500 bg-brand-500/10 text-brand-300'
-                              : 'border-semantic-error bg-semantic-error-bg text-semantic-error'
-                            : 'border-white/[0.08] bg-surface-deep/50 text-content-secondary hover:border-white/[0.15]'
-                        }`}
-                      >
-                        {val}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {(currentItem.question_type === 'short_answer' ||
-                  currentItem.question_type === 'fill_blank' ||
-                  currentItem.question_type === 'essay') && (
+                {currentQuestionType !== null && FREE_TEXT_QUESTION_TYPES.has(currentQuestionType) && (
                   <textarea
-                    rows={currentItem.question_type === 'essay' ? 5 : 2}
+                    rows={currentQuestionType === 'essay' ? 5 : 2}
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!answer.trim() || submitting) return;
+                        handleSubmit();
+                      }
+                    }}
                     placeholder="답변을 입력하세요..."
                     className="w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-3 text-base text-content-primary placeholder:text-content-secondary resize-none transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none"
                   />
@@ -329,20 +343,64 @@ export default function TryQuizTake() {
                   <p className="mt-3 text-sm text-semantic-error">{submitError}</p>
                 )}
 
-                <button
-                  type="button"
-                  disabled={!answer.trim() || submitting}
-                  onClick={handleSubmit}
-                  className="mt-5 w-full rounded-2xl bg-brand-500 px-4 py-[0.95rem] text-[0.98rem] font-bold text-brand-900 transition-[transform,background-color] duration-150 hover:-translate-y-px hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submitting ? '제출 중…' : '답변 제출'}
-                </button>
+                {!AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType ?? '') && (
+                  <button
+                    type="button"
+                    disabled={!answer.trim() || submitting}
+                    onClick={handleSubmit}
+                    className="mt-5 w-full rounded-2xl bg-brand-500 px-4 py-[0.95rem] text-[0.98rem] font-bold text-brand-900 transition-[transform,background-color] duration-150 hover:-translate-y-px hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {submitting ? '제출 중…' : '답변 제출'}
+                  </button>
+                )}
               </>
             )}
 
-            {/* Result card */}
             {result && (
               <div className="mt-2">
+                {choiceOptions && (
+                  <div className="grid gap-3 mb-4">
+                    {Object.entries(choiceOptions).map(([key, text]) => {
+                      const isOxQuestion = currentQuestionType === 'ox';
+                      const isSelected = isOxQuestion
+                        ? normalizeOxValue(answer) === normalizeOxValue(key)
+                        : answer === key;
+                      const isCorrectAnswer = isOxQuestion
+                        ? normalizeOxValue(result.correct_answer) === normalizeOxValue(key)
+                        : result.correct_answer === key;
+                      const isWrong = isSelected && result.judgement !== 'correct';
+
+                      return (
+                        <div
+                          key={key}
+                          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium ${
+                            isWrong
+                              ? 'border-semantic-error/40 bg-semantic-error/10 text-semantic-error'
+                              : isCorrectAnswer
+                                ? 'border-semantic-success/40 bg-semantic-success/10 text-semantic-success'
+                                : isSelected
+                                  ? 'border-brand-500 bg-brand-500/10 text-content-primary'
+                                  : 'border-white/[0.08] bg-surface-deep/50 text-content-secondary'
+                          }`}
+                        >
+                          <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
+                            isWrong
+                              ? 'bg-semantic-error/20 text-semantic-error'
+                              : isCorrectAnswer
+                                ? 'bg-semantic-success/20 text-semantic-success'
+                                : isSelected
+                                  ? 'bg-brand-500 text-brand-900'
+                                  : 'bg-white/[0.06] text-content-secondary'
+                          }`}>
+                            {key.toUpperCase()}
+                          </span>
+                          {text !== key ? text : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div className={`rounded-2xl border px-5 py-4 mb-4 ${
                   result.judgement === 'correct'
                     ? 'border-semantic-success/30 bg-semantic-success/10'
@@ -359,10 +417,12 @@ export default function TryQuizTake() {
                   }`}>
                     {result.judgement === 'correct' ? '✓ 정답' : result.judgement === 'partial' ? '△ 부분 정답' : '✗ 오답'}
                   </p>
-                  <p className="text-sm text-content-secondary">
-                    <span className="font-semibold text-content-primary">정답: </span>
-                    {result.correct_answer}
-                  </p>
+                  {!choiceOptions && (
+                    <p className="text-sm text-content-secondary">
+                      <span className="font-semibold text-content-primary">정답: </span>
+                      {result.correct_answer}
+                    </p>
+                  )}
                   {result.explanation && (
                     <p className="mt-2 text-sm text-content-secondary leading-relaxed">{result.explanation}</p>
                   )}
