@@ -7,7 +7,6 @@ import { useQuizStore } from '@/stores';
 import { PillShimmer } from '@/components';
 import type { AnswerLogEntry, AnswerResponse } from '@/types';
 import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle } from 'lucide-react';
-import DiagramModal from '@/components/DiagramModal';
 import { getErrorMessage } from '@/utils/errorMessages';
 
 const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded', 'closed']);
@@ -146,7 +145,6 @@ export default function QuizTake() {
   const [furthestAvailableIndex, setFurthestAvailableIndex] = useState(0);
   const suggestedFeedbackRef = useRef<Record<string, string>>({});
   const justCompletedRef = useRef(false);
-  const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
 
   const { data: sessionData, isLoading: sessionLoading, isError: sessionIsError, error: sessionError } = useQuery({
     queryKey: ['quizSession', sessionId],
@@ -577,17 +575,6 @@ export default function QuizTake() {
               <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2.5 py-1 rounded-md border border-brand-500/20">
                 {currentQuestionType ? (QUESTION_TYPE_LABELS[currentQuestionType] ?? currentQuestionType.replace('_', ' ')) : '문항'}
               </span>
-              <span className="text-xs font-medium text-content-muted">
-                {currentItem.concept_label || '개념'}
-              </span>
-              {currentItem.concept_key && (
-                <button
-                  onClick={() => setDiagramModal({ conceptKey: currentItem.concept_key!, conceptLabel: currentItem.concept_label || currentItem.concept_key! })}
-                  className="text-xs font-medium text-brand-300/60 hover:text-brand-300 transition-colors"
-                >
-                  개념 확인하기
-                </button>
-              )}
             </div>
             <h2 className="text-3xl font-semibold leading-relaxed text-white">
               {currentItem.question_text}
@@ -764,12 +751,6 @@ export default function QuizTake() {
           )}
         </div>
       </footer>
-      <DiagramModal
-        isOpen={diagramModal !== null}
-        onClose={() => setDiagramModal(null)}
-        conceptKey={diagramModal?.conceptKey ?? ''}
-        conceptLabel={diagramModal?.conceptLabel ?? ''}
-      />
     </div>
   );
 }
