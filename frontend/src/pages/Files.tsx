@@ -134,16 +134,45 @@ export default function Files() {
   });
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => filesApi.uploadFile(file, null, null, null),
-    onSuccess: () => {
-      setUploadError(null);
-      queryClient.invalidateQueries({ queryKey: ['files'] });
+    mutationFn: async (files: File[]) => {
+      const results = await Promise.allSettled(
+        files.map((file) => filesApi.uploadFile(file, null, null, null)),
+      );
+      const successes = results.filter((r) => r.status === 'fulfilled').length;
+      const failures = results
+        .map((r, i) => ({ result: r, file: files[i] }))
+        .filter(
+          (item): item is { result: PromiseRejectedResult; file: File } =>
+            item.result.status === 'rejected',
+        );
+      return { successes, failures };
     },
-    onError: (error: AxiosError<{ detail: string }>) => {
-      const status = error.response?.status;
-      if (status === 413) setUploadError('파일 용량 초과 (최대 5MB)');
-      else if (status === 415) setUploadError('지원하지 않는 파일 형식입니다');
-      else setUploadError(error.response?.data?.detail ?? '업로드에 실패했습니다');
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+
+      if (data.failures.length === 0) {
+        setUploadError(null);
+        return;
+      }
+
+      const lines = data.failures.map(({ result, file }) => {
+        const axiosError = result.reason as AxiosError<{ detail: string }>;
+        const detail = axiosError.response?.data?.detail;
+        if (detail) return `${file.name}: ${detail}`;
+        const status = axiosError.response?.status;
+        if (status === 413) return `${file.name}: 파일 용량 초과`;
+        if (status === 415) return `${file.name}: 지원하지 않는 형식`;
+        return `${file.name}: 업로드 실패`;
+      });
+
+      if (data.successes > 0) {
+        setUploadError(`${data.successes}개 업로드 완료. 일부 파일 건너뜀:\n${lines.join('\n')}`);
+      } else {
+        setUploadError(lines.join('\n'));
+      }
+    },
+    onError: () => {
+      setUploadError('업로드에 실패했습니다');
     },
   });
 
@@ -223,7 +252,8 @@ export default function Files() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files?.[0]) uploadMutation.mutate(e.dataTransfer.files[0]);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) uploadMutation.mutate(files);
   };
 
   const toggleFileSelection = (fileId: string) => {
@@ -365,10 +395,12 @@ export default function Files() {
             <input
               type="file"
               id="file-upload"
+              multiple
               className="hidden"
               onChange={(e) => {
-                if (e.target.files?.[0]) {
-                  uploadMutation.mutate(e.target.files[0]);
+                const files = Array.from(e.target.files ?? []);
+                if (files.length > 0) {
+                  uploadMutation.mutate(files);
                   e.target.value = '';
                 }
               }}
@@ -399,9 +431,9 @@ export default function Files() {
           </div>
 
           {uploadError && (
-            <div className="bg-semantic-error/10 border border-semantic-error/20 rounded-2xl p-4 flex items-center justify-between">
-              <span className="text-sm font-medium text-semantic-error">{uploadError}</span>
-              <button onClick={() => setUploadError(null)} className="text-semantic-error/70 hover:text-semantic-error">✕</button>
+            <div className="bg-semantic-error/10 border border-semantic-error/20 rounded-2xl p-4 flex items-start justify-between gap-3">
+              <span className="text-sm font-medium text-semantic-error whitespace-pre-line">{uploadError}</span>
+              <button onClick={() => setUploadError(null)} className="text-semantic-error/70 hover:text-semantic-error shrink-0 mt-0.5">✕</button>
             </div>
           )}
 
