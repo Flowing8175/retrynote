@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { guestApi } from '@/api/guestClient';
 import type { GuestQuizSession, GuestQuizItem, GuestAnswerResult } from '@/types/guest';
 import { PillShimmer } from '@/components';
@@ -247,202 +248,176 @@ export default function TryQuizTake() {
 
   return (
     <div className="min-h-screen bg-surface-deep flex flex-col">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
+      <header className="flex items-center px-6 py-4 border-b border-white/[0.08] flex-shrink-0">
         <span className="text-lg font-bold text-content-primary">RetryNote</span>
-        <span className="text-sm font-semibold text-content-secondary">
-          {currentIndex + 1}/{total} 문제
-        </span>
       </header>
 
-      {/* Progress bar */}
-      <div
-        className="h-1 bg-white/[0.06] w-full"
-        role="progressbar"
-        aria-valuenow={currentIndex + 1}
-        aria-valuemin={1}
-        aria-valuemax={total}
-        aria-label={`${total}문제 중 ${currentIndex + 1}번째`}
-      >
-        <div
-          className="h-full bg-brand-500 transition-all duration-300"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto py-8 space-y-12 px-4 sm:px-6">
 
-      {/* Main */}
-      <main className="flex-1 flex items-start justify-center px-4 py-10">
-        <div className="w-full max-w-2xl">
-          {/* Question card */}
-          <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 sm:p-8">
-            {/* Type label */}
-            <span className="inline-block rounded-full bg-brand-500/10 px-3 py-1 text-xs font-bold text-brand-300 mb-4">
-              {QUESTION_TYPE_LABELS[currentItem.question_type] ?? currentItem.question_type}
-            </span>
+          <header
+            className="space-y-4"
+            role="progressbar"
+            aria-valuenow={currentIndex + 1}
+            aria-valuemin={1}
+            aria-valuemax={total}
+          >
+            <div className="flex items-end justify-between">
+              <div className="space-y-1">
+                <div className="text-xs font-medium text-content-muted">진행 상황</div>
+                <div className="text-3xl font-semibold tabular-nums text-white">
+                  <span className="text-white font-semibold">{currentIndex + 1}</span>
+                  <span className="text-content-secondary text-2xl font-normal"> / {total}</span>
+                </div>
+              </div>
+            </div>
+            <div className="h-2 bg-surface rounded-full overflow-hidden border border-white/[0.05]">
+              <div
+                className="h-full bg-brand-500 transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </header>
 
-            {/* Question text */}
-            <p className="text-lg sm:text-xl font-semibold text-content-primary leading-relaxed mb-6">
-              {currentItem.question_text}
-            </p>
+          <section className="animate-fade-in-up space-y-10">
+            <div className="space-y-6">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2.5 py-1 rounded-md border border-brand-500/20">
+                  {QUESTION_TYPE_LABELS[currentItem.question_type] ?? currentItem.question_type}
+                </span>
+              </div>
+              <h2 className="text-3xl font-semibold leading-relaxed text-white">
+                {currentItem.question_text}
+              </h2>
+            </div>
 
-            {/* Answer input — only if not yet submitted */}
-            {!result && (
-              <>
-                {choiceOptions && (
-                  <div className="grid gap-3" role="radiogroup" aria-label="답변 선택">
-                    {Object.entries(choiceOptions).map(([key, text]) => {
-                      const isOxQuestion = currentQuestionType === 'ox';
-                      const isSelected = isOxQuestion
-                        ? normalizeOxValue(answer) === normalizeOxValue(key)
-                        : answer === key;
+            <div className="space-y-4">
+              {choiceOptions && (
+                <div className="grid gap-3">
+                  {Object.entries(choiceOptions).map(([key, text]) => {
+                    const isOxQuestion = currentQuestionType === 'ox';
+                    const isSelected = isOxQuestion
+                      ? normalizeOxValue(answer) === normalizeOxValue(key)
+                      : answer === key;
+                    const isCorrectAnswer = result
+                      ? isOxQuestion
+                        ? normalizeOxValue(result.correct_answer) === normalizeOxValue(key)
+                        : result.correct_answer === key
+                      : false;
+                    const isWrong = result !== null && isSelected && result.judgement !== 'correct';
+                    const shouldShowCorrect = result !== null && isCorrectAnswer;
 
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          role="radio"
-                          aria-checked={isSelected}
-                          onClick={() => handleOptionSelect(key)}
-                          disabled={submitting}
-                          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left text-sm font-medium transition-colors duration-150 ${
-                            isSelected
-                              ? 'border-brand-500 bg-brand-500/10 text-content-primary'
-                              : 'border-white/[0.08] bg-surface-deep/50 text-content-secondary hover:border-white/[0.15] hover:text-content-primary'
-                          }`}
-                        >
-                          <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                            isSelected ? 'bg-brand-500 text-brand-900' : 'bg-white/[0.06] text-content-secondary'
-                          }`}>
-                            {key.toUpperCase()}
-                          </span>
-                          {text !== key ? text : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => !result && handleOptionSelect(key)}
+                        disabled={result !== null || submitting}
+                        className={`relative group flex items-start gap-4 p-5 rounded-2xl text-left transition-all border ${
+                          isWrong
+                            ? 'bg-semantic-error/10 text-semantic-error border-semantic-error/40 ring-1 ring-inset ring-semantic-error/30'
+                            : shouldShowCorrect
+                              ? 'bg-semantic-success/10 text-semantic-success border-semantic-success/40 ring-1 ring-inset ring-semantic-success/30'
+                              : isSelected
+                                ? 'bg-brand-500/15 text-brand-200 border-brand-500/30 ring-1 ring-inset ring-brand-500/30 shadow-sm shadow-brand-900/20'
+                                : 'bg-surface text-content-primary border-white/[0.05] hover:bg-surface-hover'
+                        }`}
+                      >
+                        <span className={`text-base font-semibold tabular-nums mt-0.5 ${
+                          isWrong ? 'text-semantic-error' : shouldShowCorrect ? 'text-semantic-success' : isSelected ? 'text-brand-100' : 'text-content-muted'
+                        }`}>
+                          {key.toUpperCase()}
+                        </span>
+                        <span className={`text-base font-medium leading-relaxed ${isSelected && !isWrong ? 'text-brand-50' : ''}`}>
+                          {text !== key ? text : key}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
 
-                {currentQuestionType !== null && FREE_TEXT_QUESTION_TYPES.has(currentQuestionType) && (
-                  <textarea
-                    rows={currentQuestionType === 'essay' ? 5 : 2}
-                    value={answer}
-                    onChange={(e) => setAnswer(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (!answer.trim() || submitting) return;
-                        handleSubmit();
-                      }
-                    }}
-                    placeholder="답변을 입력하세요..."
-                    className="w-full rounded-2xl border border-white/[0.10] bg-surface-deep/90 px-4 py-3 text-base text-content-primary placeholder:text-content-secondary resize-none transition-[border-color,box-shadow] duration-150 hover:border-white/[0.15] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none"
-                  />
-                )}
-
-                {submitError && (
-                  <p className="mt-3 text-sm text-semantic-error">{submitError}</p>
-                )}
-
-                {!AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType ?? '') && (
-                  <button
-                    type="button"
-                    disabled={!answer.trim() || submitting}
-                    onClick={handleSubmit}
-                    className="mt-5 w-full rounded-2xl bg-brand-500 px-4 py-[0.95rem] text-[0.98rem] font-bold text-brand-900 transition-[transform,background-color] duration-150 hover:-translate-y-px hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {submitting ? '제출 중…' : '답변 제출'}
-                  </button>
-                )}
-              </>
-            )}
+              {currentQuestionType !== null && FREE_TEXT_QUESTION_TYPES.has(currentQuestionType) && (
+                <textarea
+                  value={answer}
+                  onChange={(e) => setAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      if (!answer.trim() || submitting || result) return;
+                      handleSubmit();
+                    }
+                  }}
+                  disabled={result !== null || submitting}
+                  placeholder="답변을 입력하세요... (Enter로 제출, Shift+Enter로 줄바꿈)"
+                  className="w-full bg-surface border border-white/[0.05] rounded-2xl text-base px-6 py-6 placeholder:text-content-muted focus:ring-2 focus:ring-brand-500 transition-shadow min-h-[200px] resize-y"
+                />
+              )}
+            </div>
 
             {result && (
-              <div className="mt-2">
-                {choiceOptions && (
-                  <div className="grid gap-3 mb-4">
-                    {Object.entries(choiceOptions).map(([key, text]) => {
-                      const isOxQuestion = currentQuestionType === 'ox';
-                      const isSelected = isOxQuestion
-                        ? normalizeOxValue(answer) === normalizeOxValue(key)
-                        : answer === key;
-                      const isCorrectAnswer = isOxQuestion
-                        ? normalizeOxValue(result.correct_answer) === normalizeOxValue(key)
-                        : result.correct_answer === key;
-                      const isWrong = isSelected && result.judgement !== 'correct';
-
-                      return (
-                        <div
-                          key={key}
-                          className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium ${
-                            isWrong
-                              ? 'border-semantic-error/40 bg-semantic-error/10 text-semantic-error'
-                              : isCorrectAnswer
-                                ? 'border-semantic-success/40 bg-semantic-success/10 text-semantic-success'
-                                : isSelected
-                                  ? 'border-brand-500 bg-brand-500/10 text-content-primary'
-                                  : 'border-white/[0.08] bg-surface-deep/50 text-content-secondary'
-                          }`}
-                        >
-                          <span className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${
-                            isWrong
-                              ? 'bg-semantic-error/20 text-semantic-error'
-                              : isCorrectAnswer
-                                ? 'bg-semantic-success/20 text-semantic-success'
-                                : isSelected
-                                  ? 'bg-brand-500 text-brand-900'
-                                  : 'bg-white/[0.06] text-content-secondary'
-                          }`}>
-                            {key.toUpperCase()}
-                          </span>
-                          {text !== key ? text : null}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <div className={`rounded-2xl border px-5 py-4 mb-4 ${
-                  result.judgement === 'correct'
-                    ? 'border-semantic-success/30 bg-semantic-success/10'
-                    : result.judgement === 'partial'
-                    ? 'border-semantic-warning/30 bg-semantic-warning/10'
-                    : 'border-semantic-error-border bg-semantic-error-bg'
-                }`}>
-                  <p className={`text-base font-bold mb-1 ${
-                    result.judgement === 'correct'
-                      ? 'text-semantic-success'
-                      : result.judgement === 'partial'
-                      ? 'text-semantic-warning'
-                      : 'text-semantic-error'
+              <div className={`animate-fade-in-up p-6 rounded-2xl border ${
+                result.judgement === 'correct'
+                  ? 'bg-brand-500/5 border-brand-500/30'
+                  : result.judgement === 'partial'
+                  ? 'bg-semantic-warning/5 border-semantic-warning/30'
+                  : 'bg-semantic-error/5 border-semantic-error/30'
+              }`}>
+                <div className="flex items-center gap-4 mb-4">
+                  {result.judgement === 'correct' ? (
+                    <CheckCircle2 size={24} className="text-brand-300" />
+                  ) : (
+                    <AlertCircle size={24} className={result.judgement === 'partial' ? 'text-semantic-warning' : 'text-semantic-error'} />
+                  )}
+                  <h3 className={`text-lg font-semibold ${
+                    result.judgement === 'correct' ? 'text-brand-300' : result.judgement === 'partial' ? 'text-semantic-warning' : 'text-semantic-error'
                   }`}>
-                    {result.judgement === 'correct' ? '✓ 정답' : result.judgement === 'partial' ? '△ 부분 정답' : '✗ 오답'}
-                  </p>
-                  {!choiceOptions && (
-                    <p className="text-sm text-content-secondary">
-                      <span className="font-semibold text-content-primary">정답: </span>
-                      {result.correct_answer}
-                    </p>
-                  )}
-                  {result.explanation && (
-                    <p className="mt-2 text-sm text-content-secondary leading-relaxed">{result.explanation}</p>
-                  )}
-                  {result.rationale && !result.explanation && (
-                    <p className="mt-2 text-sm text-content-secondary leading-relaxed">{result.rationale}</p>
-                  )}
+                    {result.judgement === 'correct' ? '정답입니다' : result.judgement === 'partial' ? '부분 정답입니다' : '틀렸습니다'}
+                  </h3>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={handleNext}
-                  className="w-full rounded-2xl bg-brand-500 px-4 py-[0.95rem] text-[0.98rem] font-bold text-brand-900 transition-[transform,background-color] duration-150 hover:-translate-y-px hover:bg-brand-600"
-                >
-                  {isLastQuestion ? '결과 보기' : '다음 문제'}
-                </button>
+                {!choiceOptions && result.correct_answer && (
+                  <p className="text-base text-content-secondary mb-2">
+                    <span className="font-semibold text-white">정답: </span>
+                    {result.correct_answer}
+                  </p>
+                )}
+                {(result.explanation || result.rationale) && (
+                  <p className="text-base text-content-secondary leading-relaxed">
+                    {result.explanation || result.rationale}
+                  </p>
+                )}
               </div>
             )}
-          </div>
+          </section>
+
+          {submitError && (
+            <p className="text-sm text-semantic-error">{submitError}</p>
+          )}
+
+          <footer className="pt-8 flex items-center justify-end gap-3">
+            {!result && !AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType ?? '') && (
+              <button
+                type="button"
+                disabled={!answer.trim() || submitting}
+                onClick={handleSubmit}
+                className="w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0"
+              >
+                {submitting ? '제출 중…' : '정답 제출'}
+              </button>
+            )}
+            {result && (
+              <button
+                type="button"
+                onClick={handleNext}
+                className="w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5"
+              >
+                {isLastQuestion ? '결과 보기' : '다음 문제'}
+              </button>
+            )}
+          </footer>
+
         </div>
-      </main>
+      </div>
     </div>
   );
 }
