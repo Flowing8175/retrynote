@@ -261,6 +261,7 @@ export function seedTourMockData(queryClient: QueryClient): void {
   };
 
   queryClient.setQueryData(['wrongNotes', 1, 'concept', []], wrongNotesMockData);
+  queryClient.setQueryData(['wrongNotes-manual-options'], wrongNotesMockData);
 }
 
 /**
@@ -272,5 +273,6 @@ export function cleanupTourMockData(queryClient: QueryClient): void {
   queryClient.removeQueries({ queryKey: ['files'] });
   queryClient.removeQueries({ queryKey: ['quiz-config'] });
   queryClient.removeQueries({ queryKey: ['wrongNotes'] });
+  queryClient.removeQueries({ queryKey: ['wrongNotes-manual-options'] });
   queryClient.invalidateQueries();
 }
