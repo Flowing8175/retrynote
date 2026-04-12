@@ -6,10 +6,10 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 export function getTourSteps(navigate: NavigateFunction): Step[] {
   return [
     {
-      target: '[data-tour="dashboard-welcome"]',
+      target: 'body',
       title: 'RetryNote에 오신 것을 환영합니다',
       content: '학습 자료를 업로드하면 AI가 퀴즈를 자동으로 만들고, 오답을 분석해 약점을 보완해드립니다.',
-      placement: 'bottom',
+      placement: 'center',
       skipBeacon: true,
     },
     {
