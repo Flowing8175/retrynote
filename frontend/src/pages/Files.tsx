@@ -472,14 +472,7 @@ export default function Files() {
                             <span className="text-xs text-content-muted">
                               {formatFileSize(file.file_size_bytes)} · {formatDateTime(file.created_at)}
                             </span>
-                            <div className="flex flex-col gap-0.5">
-                              <StatusBadge status={file.status} />
-                              {getStatusHint(file.status) && (
-                                <span className="text-xs text-content-muted">
-                                  {getStatusHint(file.status)}
-                                </span>
-                              )}
-                            </div>
+                            <StatusBadge status={file.status} />
                           </div>
 
                           {isEditing ? (
@@ -495,9 +488,16 @@ export default function Files() {
                               <button onClick={() => setEditingFileId(null)} className="bg-surface-deep text-content-secondary border border-white/[0.05] rounded-xl px-4 py-2 text-xs font-medium">취소</button>
                             </div>
                           ) : (
-                            <h2 className="text-lg font-medium text-white truncate group-hover:text-brand-300 transition-colors">
-                              {file.original_filename || '제목 없는 자료'}
-                            </h2>
+                            <div>
+                              <h2 className="text-lg font-medium text-white truncate group-hover:text-brand-300 transition-colors">
+                                {file.original_filename || '제목 없는 자료'}
+                              </h2>
+                              {getStatusHint(file.status) && (
+                                <p className="text-xs text-content-muted mt-0.5">
+                                  {getStatusHint(file.status)}
+                                </p>
+                              )}
+                            </div>
                           )}
 
                           <div className="flex flex-wrap gap-2 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -61,7 +61,7 @@ export default function OptionGroup<T extends string>({
             type="button"
             onClick={() => handleClick(opt.value)}
             disabled={isDisabled}
-            className={buttonClass(size, isActive, isDisabled, opt.description != null || opt.icon != null)}
+            className={buttonClass(size, isActive, isDisabled, opt.description != null || opt.icon != null || opt.badge != null)}
           >
             {multiple && (
               <span
@@ -120,12 +120,16 @@ function buttonClass(
 ): string {
   const base = 'transition-colors border';
 
-  const sizeClass =
-    size === 'sm'
-      ? 'rounded-xl px-3 py-1.5 text-xs font-medium'
-      : size === 'lg'
-        ? `rounded-xl p-4 text-sm font-medium ${hasContent ? 'flex items-start gap-3' : 'flex items-center justify-center gap-2'}`
-        : 'rounded-xl h-10 px-4 text-sm font-semibold flex items-center justify-center gap-2';
+  let sizeClass: string;
+  if (size === 'sm') {
+    sizeClass = 'rounded-xl px-3 py-1.5 text-xs font-medium';
+  } else if (size === 'lg') {
+    sizeClass = `rounded-2xl p-5 text-sm font-medium ${hasContent ? 'flex items-start gap-3 text-left' : 'flex items-center justify-center gap-2'}`;
+  } else {
+    sizeClass = hasContent
+      ? 'rounded-xl px-4 py-2.5 text-sm font-medium flex items-start gap-2 text-left'
+      : 'rounded-xl h-10 px-4 text-sm font-semibold flex items-center justify-center gap-2';
+  }
 
   const stateClass = isActive
     ? 'bg-brand-500/10 text-brand-300 border-brand-500/30'
