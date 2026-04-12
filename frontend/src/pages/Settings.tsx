@@ -4,12 +4,14 @@ import { useMutation } from '@tanstack/react-query';
 import type { AxiosError } from 'axios';
 import { authApi } from '@/api';
 import { Modal } from '@/components';
+import { useTour } from '@/components/OnboardingTour';
 import { useAuthStore } from '@/stores';
 import { useUsageStatus } from '@/lib/useUsageStatus';
 
 export default function Settings() {
   const { user, logout } = useAuthStore();
   const { data: usageStatus } = useUsageStatus();
+  const { restartTour } = useTour();
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -61,17 +63,25 @@ export default function Settings() {
             <span className="text-sm text-content-muted">현재 요금제</span>
             <span className="text-sm font-medium text-brand-300">{(usageStatus?.tier ?? 'free').charAt(0).toUpperCase() + (usageStatus?.tier ?? 'free').slice(1)}</span>
           </div>
-          {user?.created_at && (
-            <>
-              <div className="border-t border-white/[0.05]" />
-              <div className="flex items-center justify-between py-2">
-                <span className="text-sm text-content-muted">가입일</span>
-                <span className="text-sm text-content-primary">{new Date(user.created_at).toLocaleDateString('ko-KR')}</span>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
+           {user?.created_at && (
+             <>
+               <div className="border-t border-white/[0.05]" />
+               <div className="flex items-center justify-between py-2">
+                 <span className="text-sm text-content-muted">가입일</span>
+                 <span className="text-sm text-content-primary">{new Date(user.created_at).toLocaleDateString('ko-KR')}</span>
+               </div>
+             </>
+           )}
+         </div>
+         <div className="border-t border-white/[0.05]" />
+         <button
+           type="button"
+           onClick={restartTour}
+           className="mt-4 inline-flex items-center rounded-xl border border-white/[0.07] px-4 py-2.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-hover"
+         >
+           투어 다시 보기
+         </button>
+       </div>
 
       {/* Password */}
       <div className="rounded-2xl border border-white/[0.08] bg-surface p-6 space-y-4">
