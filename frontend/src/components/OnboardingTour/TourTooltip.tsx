@@ -3,8 +3,8 @@ import type { TooltipRenderProps } from 'react-joyride';
 
 export default function TourTooltip({
   backProps,
-  closeProps,
   primaryProps,
+  skipProps,
   tooltipProps,
   step,
   index,
@@ -44,10 +44,10 @@ export default function TourTooltip({
             {index + 1} / {size}
           </span>
           <button
-            aria-label={closeProps['aria-label']}
-            data-action={closeProps['data-action']}
-            onClick={closeProps.onClick}
-            title={closeProps.title}
+            aria-label={skipProps['aria-label']}
+            data-action={skipProps['data-action']}
+            onClick={skipProps.onClick}
+            title={skipProps.title}
             type="button"
             className="text-xs text-content-muted transition-colors hover:text-content-secondary"
           >

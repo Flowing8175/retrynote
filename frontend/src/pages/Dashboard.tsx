@@ -216,8 +216,9 @@ export default function Dashboard() {
 
   return (
     <SkeletonTransition loading={isLoading} skeleton={<DashboardSkeleton />}>
-      {!hasData ? (
-        <div className="max-w-3xl mx-auto py-12 md:py-20" data-tour="dashboard-welcome">
+      <div data-tour="dashboard-welcome">
+        {!hasData ? (
+          <div className="max-w-3xl mx-auto py-12 md:py-20">
           {/* Eyebrow */}
           <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-brand-300/60 mb-10 animate-fade-in-up">
             RetryNote 시작하기
@@ -509,6 +510,7 @@ export default function Dashboard() {
     />
     </>
       )}
+      </div>
     </SkeletonTransition>
   );
 }
