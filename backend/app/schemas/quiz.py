@@ -115,9 +115,6 @@ class QuizItemResponse(BaseModel):
 
 
 class QuizItemDetail(QuizItemResponse):
-    correct_answer: dict | None = None
-    explanation: str | None = None
-    tips: str | None = None
     source_refs: dict | None = None
 
 

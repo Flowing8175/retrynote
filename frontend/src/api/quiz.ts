@@ -15,6 +15,8 @@ import type {
   ExamSubmit,
   ExamSubmitResponse,
   SessionCompleteResponse,
+  BatchAnswerSubmit,
+  BatchAnswerResponse,
 } from '@/types';
 
 export const quizApi = {
@@ -98,6 +100,18 @@ export const quizApi = {
 
   getQuizConfig: async (): Promise<QuizConfig> => {
     const response = await apiClient.get<QuizConfig>('/quiz-sessions/config');
+    return response.data;
+  },
+
+  submitBatchAnswers: async (
+    sessionId: string,
+    data: BatchAnswerSubmit,
+  ): Promise<BatchAnswerResponse> => {
+    const response = await apiClient.post<BatchAnswerResponse>(
+      `/quiz-sessions/${sessionId}/batch-answer`,
+      data,
+      { _skipUpgradeModal: true } as object,
+    );
     return response.data;
   },
 };

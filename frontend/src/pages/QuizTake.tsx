@@ -4,7 +4,9 @@ import { isAxiosError } from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
-import type { AnswerLogEntry, AnswerResponse } from '@/types';
+import { gradeLocally } from '@/utils/gradeLocally';
+import type { AnswerResponse, BatchAnswerSubmit } from '@/types';
+import type { LocalGradeResult } from '@/utils/gradeLocally';
 import { ChevronLeft, ChevronRight, AlertCircle, Waypoints } from 'lucide-react';
 import DiagramModal from '@/components/DiagramModal';
 import { getErrorMessage } from '@/utils/errorMessages';
@@ -19,30 +21,25 @@ import {
 } from '@/utils/quizConstants';
 
 const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded', 'closed']);
-
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
 
-function formatCorrectAnswerLabel(
-  correctAnswer: Record<string, unknown> | null | undefined,
-  options: Record<string, string> | null,
-) {
-  if (!correctAnswer) return null;
-
-  const rawAnswer = correctAnswer['answer'];
-  if (typeof rawAnswer === 'string') {
-    const normalizedAnswer = rawAnswer.trim();
-    if (!normalizedAnswer) return null;
-    if (!options) return normalizedAnswer;
-
-    const resolved = options[normalizedAnswer];
-    return typeof resolved === 'string' && resolved.trim() ? resolved : normalizedAnswer;
-  }
-
-  if (typeof rawAnswer === 'number' || typeof rawAnswer === 'boolean') {
-    return String(rawAnswer);
-  }
-
-  return null;
+function buildSyntheticResult(localResult: LocalGradeResult, userAnswer: string): AnswerResponse {
+  return {
+    answer_log_id: '',
+    judgement: localResult.judgement,
+    score_awarded: localResult.score_awarded,
+    max_score: localResult.max_score,
+    grading_confidence: localResult.judgement === 'pending_ai' ? null : 1.0,
+    grading_rationale: null,
+    explanation: localResult.explanation,
+    tips: null,
+    missing_points: null,
+    error_type: localResult.error_type,
+    normalized_user_answer: userAnswer.trim().toLowerCase(),
+    suggested_feedback: null,
+    next_item_id: null,
+    correct_answer: localResult.judgement !== 'correct' ? localResult.correct_answer : null,
+  };
 }
 
 function QuizTakeSkeleton() {
@@ -97,7 +94,6 @@ export default function QuizTake() {
   const currentAnswerMapRef = useRef(currentAnswerMap);
   const headerRef = useRef<HTMLElement>(null);
 
-
   useEffect(() => {
     currentAnswerMapRef.current = currentAnswerMap;
   }, [currentAnswerMap]);
@@ -111,8 +107,6 @@ export default function QuizTake() {
   const [creditError, setCreditError] = useState(false);
   const [answerResultsByItemId, setAnswerResultsByItemId] = useState<Record<string, AnswerResponse>>({});
   const [furthestAvailableIndex, setFurthestAvailableIndex] = useState(0);
-  const suggestedFeedbackRef = useRef<Record<string, string>>({});
-  const justCompletedRef = useRef(false);
   const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
 
   const { data: sessionData, isLoading: sessionLoading, isError: sessionIsError, error: sessionError } = useQuery({
@@ -145,18 +139,9 @@ export default function QuizTake() {
     queryFn: () => quizApi.getQuizItems(sessionId || ''),
     enabled: !!sessionId,
     refetchInterval: (query) => {
-      if (!sessionData) {
-        return false;
-      }
-
-      if (sessionData.status === 'draft' || sessionData.status === 'generating') {
-        return QUIZ_REFRESH_INTERVAL_MS;
-      }
-
-      if (sessionData.status === 'ready' && (query.state.data?.length ?? 0) === 0) {
-        return QUIZ_REFRESH_INTERVAL_MS;
-      }
-
+      if (!sessionData) return false;
+      if (sessionData.status === 'draft' || sessionData.status === 'generating') return QUIZ_REFRESH_INTERVAL_MS;
+      if (sessionData.status === 'ready' && (query.state.data?.length ?? 0) === 0) return QUIZ_REFRESH_INTERVAL_MS;
       return false;
     },
   });
@@ -171,12 +156,6 @@ export default function QuizTake() {
     enabled: !!sessionId && (isCompleted || (isInProgress && !isExamSession)),
   });
 
-  const { data: draftAnswersData } = useQuery({
-    queryKey: ['draftAnswers', sessionId],
-    queryFn: () => quizApi.getDraftAnswers(sessionId || ''),
-    enabled: !!sessionId && isInProgress && isExamSession,
-  });
-
   useEffect(() => {
     if (sessionData) setCurrentSession(sessionData);
     if (itemsData) setCurrentItems(itemsData);
@@ -188,26 +167,17 @@ export default function QuizTake() {
     const results: Record<string, AnswerResponse> = {};
     for (const log of answerLogsData) {
       submitted[log.item_id] = log.user_answer;
-      const savedFeedback = suggestedFeedbackRef.current[log.item_id];
       results[log.item_id] = {
-        ...(log as AnswerLogEntry),
+        ...(log as unknown as AnswerResponse),
         next_item_id: null,
-        ...(savedFeedback ? { suggested_feedback: savedFeedback } : {}),
-      } as AnswerResponse;
+      };
     }
     setSubmittedAnswers(submitted);
     setDraftAnswers(submitted);
     setAnswerResultsByItemId(results);
 
     if (isCompleted) {
-      // Completed: allow free navigation
       setFurthestAvailableIndex(itemsData.length - 1);
-      // If the session just completed in this interaction, stay on the current
-      // question — don't reset to the first one and clobber the displayed result.
-      if (justCompletedRef.current) {
-        justCompletedRef.current = false;
-        return;
-      }
       const firstItem = itemsData[0];
       if (submitted[firstItem.id]) {
         setUserAnswer(submitted[firstItem.id]);
@@ -215,7 +185,6 @@ export default function QuizTake() {
         setAnswerResult(results[firstItem.id] ?? null);
       }
     } else {
-      // In-progress (normal mode): resume at the next unanswered question
       const answeredCount = Object.keys(submitted).length;
       const nextIndex = Math.min(answeredCount, itemsData.length - 1);
       setFurthestAvailableIndex(nextIndex);
@@ -234,74 +203,38 @@ export default function QuizTake() {
   }, [answerLogsData, itemsData, isCompleted]);
 
   useEffect(() => {
-    if (!draftAnswersData || !itemsData?.length) return;
-    const drafts: Record<string, string> = {};
-    for (const d of draftAnswersData) {
-      drafts[d.item_id] = d.user_answer;
-    }
+    if (!isExamSession || !itemsData?.length || isCompleted) return;
+    const mapCopy = currentAnswerMapRef.current;
+    if (Object.keys(mapCopy).length === 0) return;
+    const drafts = { ...mapCopy };
     setDraftAnswers(drafts);
     setSubmittedAnswers(drafts);
     const answeredCount = Object.keys(drafts).length;
     const nextIndex = Math.min(answeredCount, itemsData.length - 1);
     setFurthestAvailableIndex(nextIndex);
     setCurrentItemIndex(nextIndex);
-    const nextItem = itemsData[nextIndex];
-    setUserAnswer(drafts[nextItem.id] || '');
+    setUserAnswer(drafts[itemsData[nextIndex].id] || '');
     setIsSubmitted(false);
-  }, [draftAnswersData, itemsData]);
+    setAnswerResult(null);
+  }, [isExamSession, itemsData, isCompleted]);
 
-  const submitAnswerMutation = useMutation({
-    mutationFn: (data: { itemId: string; answer: string }) =>
-      quizApi.submitAnswer(sessionId || '', data.itemId, { user_answer: data.answer }),
-    onError: (err) => {
-      if (isAxiosError(err) && err.response?.status === 402) {
-        setCreditError(true);
-      }
-    },
-    onSuccess: (result, variables) => {
-      if (result.suggested_feedback) {
-        suggestedFeedbackRef.current[variables.itemId] = result.suggested_feedback;
-      }
-      setAnswerResult(result);
-      setIsSubmitted(true);
-      setCurrentAnswer(variables.itemId, variables.answer);
-      setDraftAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
-      setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
-      setAnswerResultsByItemId((prev) => ({ ...prev, [variables.itemId]: result }));
-      setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
-      setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
-
-      if (!result.next_item_id && sessionData?.mode === 'normal' && sessionId) {
-        completeQuizMutation.mutate();
-      }
-    },
-  });
-
-  const completeQuizMutation = useMutation({
-    mutationFn: () => quizApi.completeQuizSession(sessionId || ''),
+  const submitBatchMutation = useMutation({
+    mutationFn: (data: BatchAnswerSubmit) =>
+      quizApi.submitBatchAnswers(sessionId || '', data),
     onSuccess: async () => {
-      justCompletedRef.current = true;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] }),
         queryClient.invalidateQueries({ queryKey: ['quiz-history'] }),
         queryClient.invalidateQueries({ queryKey: ['quiz-history-full'] }),
         queryClient.invalidateQueries({ queryKey: ['wrongNotes'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['answerLogs', sessionId] }),
       ]);
+      navigate(`/quiz/${sessionId}/results`);
     },
-  });
-
-  const saveDraftAnswerMutation = useMutation({
-    mutationFn: (data: { itemId: string; answer: string }) =>
-      quizApi.saveDraftAnswer(sessionId || '', { item_id: data.itemId, user_answer: data.answer }),
-    onSuccess: (_, variables) => {
-      setCurrentAnswer(variables.itemId, variables.answer);
-      setDraftAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
-      setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
-      setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
-      if (itemsData && currentItemIndex < itemsData.length - 1) {
-        setCurrentItemIndex((prev) => prev + 1);
-        setUserAnswer(draftAnswers[itemsData[currentItemIndex + 1].id] || '');
+    onError: (err) => {
+      if (isAxiosError(err) && err.response?.status === 402) {
+        setCreditError(true);
       }
     },
   });
@@ -316,16 +249,42 @@ export default function QuizTake() {
       (currentQuestionType === 'ox' ? DEFAULT_OX_OPTIONS : null))
     : null;
   const optionDescriptions = currentItem?.option_descriptions as Record<string, string> | null;
-  const isSkippedAnswer =
-    !isExamMode &&
-    isSubmitted &&
-    !!answerResult &&
-    answerResult.judgement !== 'correct' &&
-    (answerResult.normalized_user_answer ?? '').trim() === '';
+
+  const applyLocalGrade = (itemId: string, answer: string, localResult: LocalGradeResult) => {
+    const syntheticResult = buildSyntheticResult(localResult, answer);
+    setAnswerResult(syntheticResult);
+    setIsSubmitted(true);
+    setCurrentAnswer(itemId, answer);
+    setDraftAnswers((prev) => ({ ...prev, [itemId]: answer }));
+    setSubmittedAnswers((prev) => ({ ...prev, [itemId]: answer }));
+    setAnswerResultsByItemId((prev) => ({ ...prev, [itemId]: syntheticResult }));
+    setFurthestAvailableIndex((prev) =>
+      Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1))
+    );
+    setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
+  };
+
+  const applyExamLocalSave = (itemId: string, answer: string) => {
+    setCurrentAnswer(itemId, answer);
+    setDraftAnswers((prev) => ({ ...prev, [itemId]: answer }));
+    setSubmittedAnswers((prev) => ({ ...prev, [itemId]: answer }));
+    setFurthestAvailableIndex((prev) =>
+      Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1))
+    );
+    if (itemsData && currentItemIndex < itemsData.length - 1) {
+      slideQuestion(() => {
+        const nextIndex = currentItemIndex + 1;
+        setCurrentItemIndex(nextIndex);
+        setUserAnswer(draftAnswers[itemsData[nextIndex].id] || '');
+        setIsSubmitted(false);
+        setAnswerResult(null);
+      });
+    }
+  };
 
   const handleOptionSelect = (optionKey: string) => {
     if (isSubmitted && !isExamMode) return;
-    if (submitAnswerMutation.isPending) return;
+    if (submitBatchMutation.isPending) return;
     setUserAnswer(optionKey);
 
     if (
@@ -334,7 +293,7 @@ export default function QuizTake() {
       currentQuestionType &&
       AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType)
     ) {
-      submitAnswerMutation.mutate({ itemId: currentItem.id, answer: optionKey });
+      applyLocalGrade(currentItem.id, optionKey, gradeLocally(currentItem, optionKey));
     }
   };
 
@@ -379,24 +338,16 @@ export default function QuizTake() {
   };
 
   const handleSkip = () => {
-    if (!itemsData || currentItemIndex >= itemsData.length - 1 || !currentItem) return;
-    if (submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending) return;
-
-    if (isExamMode) {
-      slideQuestion(() => {
-        const nextIndex = currentItemIndex + 1;
-        setFurthestAvailableIndex((prev) => Math.max(prev, nextIndex));
-        setCurrentItemIndex(nextIndex);
-        setIsSubmitted(!!submittedAnswers[itemsData[nextIndex].id]);
-        setAnswerResult(answerResultsByItemId[itemsData[nextIndex].id] || null);
-        setUserAnswer(submittedAnswers[itemsData[nextIndex].id] || draftAnswers[itemsData[nextIndex].id] || '');
-        scrollToHeader();
-      });
-      return;
-    }
-
-    setUserAnswer('');
-    submitAnswerMutation.mutate({ itemId: currentItem.id, answer: '' });
+    if (!itemsData || currentItemIndex >= itemsData.length - 1) return;
+    slideQuestion(() => {
+      const nextIndex = currentItemIndex + 1;
+      setFurthestAvailableIndex((prev) => Math.max(prev, nextIndex));
+      setCurrentItemIndex(nextIndex);
+      setIsSubmitted(!!submittedAnswers[itemsData[nextIndex].id]);
+      setAnswerResult(answerResultsByItemId[itemsData[nextIndex].id] || null);
+      setUserAnswer(submittedAnswers[itemsData[nextIndex].id] || draftAnswers[itemsData[nextIndex].id] || '');
+      scrollToHeader();
+    });
   };
 
   const handlePrev = () => {
@@ -410,22 +361,15 @@ export default function QuizTake() {
     });
   };
 
-  const handleViewResults = async () => {
-    if (!sessionId) {
-      return;
-    }
-
-    const shouldFinalizeNormalSession =
-      sessionData?.mode === 'normal' &&
-      sessionData.status !== 'graded' &&
-      sessionData.status !== 'regraded' &&
-      sessionData.status !== 'closed';
-
-    if (shouldFinalizeNormalSession) {
-      await completeQuizMutation.mutateAsync();
-    }
-
-    navigate(`/quiz/${sessionId}/results`);
+  const handleViewResults = () => {
+    if (!sessionId || !itemsData) return;
+    const answers: BatchAnswerSubmit = {
+      answers: itemsData.map((item) => ({
+        item_id: item.id,
+        user_answer: submittedAnswers[item.id] || '',
+      })),
+    };
+    submitBatchMutation.mutate(answers);
   };
 
   if (sessionLoading || (!sessionData && !sessionIsError)) {
@@ -548,7 +492,6 @@ export default function QuizTake() {
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-12">
-      {/* Progress Header */}
       <header ref={headerRef} className="space-y-4">
         <div className="flex items-end justify-between">
           <div className="space-y-1">
@@ -566,14 +509,13 @@ export default function QuizTake() {
           </button>
         </div>
         <div className="h-2 bg-surface rounded-full overflow-hidden border border-white/[0.05]">
-          <div 
+          <div
             className="h-full bg-brand-500 transition-all duration-500 ease-out"
             style={{ width: `${progress}%` }}
           />
         </div>
       </header>
 
-      {/* Main Question Area */}
       {currentItem && (
         <section className={`space-y-10 transition-opacity duration-150 ease-out ${questionFading ? 'opacity-0' : 'opacity-100'}`}>
           <div className="space-y-6">
@@ -599,7 +541,6 @@ export default function QuizTake() {
             </h2>
           </div>
 
-          {/* Answer Options */}
           <div className="space-y-4">
             {choiceOptions && (
               <QuizChoiceOptions
@@ -625,15 +566,14 @@ export default function QuizTake() {
                       e.preventDefault();
                       if (
                         !userAnswer.trim() ||
-                        submitAnswerMutation.isPending ||
-                        saveDraftAnswerMutation.isPending ||
+                        submitBatchMutation.isPending ||
                         (isSubmitted && !isExamMode) ||
                         isCompleted
                       ) return;
                       if (isExamMode) {
-                        saveDraftAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                        applyExamLocalSave(currentItem.id, userAnswer);
                       } else {
-                        submitAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                        applyLocalGrade(currentItem.id, userAnswer, gradeLocally(currentItem, userAnswer));
                       }
                     }
                   }}
@@ -646,21 +586,22 @@ export default function QuizTake() {
           </div>
 
           {isSubmitted && !isExamMode && answerResult && (
-            <QuizAnswerFeedback
-              judgement={answerResult.judgement}
-              headline={isSkippedAnswer ? '건너뛰었습니다' : undefined}
-              correctAnswerLabel={formatCorrectAnswerLabel(answerResult.correct_answer, choiceOptions)}
-              feedbackText={
-                isSkippedAnswer
-                  ? answerResult.explanation || answerResult.suggested_feedback
-                  : answerResult.suggested_feedback || answerResult.explanation
-              }
-            />
+            answerResult.judgement === 'pending_ai' ? (
+              <div className="animate-fade-in-up p-6 rounded-2xl border border-brand-500/20 bg-brand-500/5">
+                <p className="text-sm text-content-secondary">
+                  ✓ 답변이 저장되었습니다. AI 채점 결과는 결과 화면에서 확인할 수 있습니다.
+                </p>
+              </div>
+            ) : (
+              <QuizAnswerFeedback
+                judgement={answerResult.judgement}
+                feedbackText={answerResult.suggested_feedback || answerResult.explanation}
+              />
+            )
           )}
         </section>
       )}
 
-      {/* Navigation Controls */}
       {creditError && (
         <p className="text-sm text-content-secondary">
           채점을 위한 크레딧이 부족합니다.{' '}
@@ -689,31 +630,32 @@ export default function QuizTake() {
         </div>
 
         <div className="w-full sm:w-auto">
-           {(!isSubmitted || isExamMode) && !isCompleted ? (
-             <div className="flex items-center gap-3 w-full sm:w-auto">
-               {currentItemIndex < (itemsData?.length || 1) - 1 && !isSubmitted && (
-                 <button
-                   onClick={handleSkip}
-                   disabled={submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending}
-                   className="flex-1 sm:flex-none h-12 px-6 bg-surface border border-white/[0.08] rounded-xl text-sm font-medium text-content-secondary hover:bg-surface-hover hover:text-white transition-colors disabled:opacity-30 group relative"
-                 >
-                   <span className="inline-block opacity-100 group-hover:opacity-0 transition-opacity duration-200">모르겠어요</span>
-                   <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">건너뛰기</span>
-                 </button>
-               )}
+          {(!isSubmitted || isExamMode) && !isCompleted ? (
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              {currentItemIndex < (itemsData?.length || 1) - 1 && !isSubmitted && (
+                <button
+                  onClick={handleSkip}
+                  disabled={submitBatchMutation.isPending}
+                  className="flex-1 sm:flex-none h-12 px-6 bg-surface border border-white/[0.08] rounded-xl text-sm font-medium text-content-secondary hover:bg-surface-hover hover:text-white transition-colors disabled:opacity-30 group relative"
+                >
+                  <span className="inline-block opacity-100 group-hover:opacity-0 transition-opacity duration-200">모르겠어요</span>
+                  <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">건너뛰기</span>
+                </button>
+              )}
               <button
                 onClick={() => {
+                  if (!currentItem) return;
                   if (isExamMode) {
-                    saveDraftAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                    applyExamLocalSave(currentItem.id, userAnswer);
                   } else {
-                    submitAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                    applyLocalGrade(currentItem.id, userAnswer, gradeLocally(currentItem, userAnswer));
                   }
                 }}
                 hidden={!isExamMode && !!currentQuestionType && AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType)}
-                disabled={!userAnswer.trim() || submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending}
+                disabled={!userAnswer.trim() || submitBatchMutation.isPending}
                 className="flex-1 sm:flex-none w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0"
               >
-                {isExamMode ? '저장 후 다음' : '정답 제출'}
+                {isExamMode ? '다음' : '정답 제출'}
               </button>
             </div>
           ) : (
@@ -726,13 +668,11 @@ export default function QuizTake() {
               </button>
             ) : (
               <button
-                onClick={() => {
-                  void handleViewResults();
-                }}
-                disabled={completeQuizMutation.isPending}
+                onClick={handleViewResults}
+                disabled={submitBatchMutation.isPending}
                 className="w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5"
               >
-                {completeQuizMutation.isPending ? '결과 정리 중...' : '결과 보기'}
+                {submitBatchMutation.isPending ? '채점 중...' : '결과 보기'}
               </button>
             )
           )}

@@ -72,12 +72,12 @@ export interface QuizItemResponse {
   concept_key: string | null;
   concept_label: string | null;
   category_tag: string | null;
-}
-
-export interface QuizItemDetail extends QuizItemResponse {
   correct_answer: Record<string, unknown> | null;
   explanation: string | null;
   tips: string | null;
+}
+
+export interface QuizItemDetail extends QuizItemResponse {
   source_refs: Record<string, unknown> | null;
 }
 
@@ -148,4 +148,34 @@ export interface AnswerLogEntry {
   normalized_user_answer: string | null;
   suggested_feedback: string | null;
   correct_answer: Record<string, unknown> | null;
+}
+
+export interface BatchAnswerItem {
+  item_id: string;
+  user_answer: string;
+}
+
+export interface BatchAnswerSubmit {
+  answers: BatchAnswerItem[];
+}
+
+export interface BatchItemResult {
+  item_id: string;
+  answer_log_id: string;
+  judgement: string;
+  score_awarded: number;
+  max_score: number;
+  grading_confidence: number | null;
+  grading_rationale: string | null;
+  missing_points: string[] | null;
+  error_type: string | null;
+  suggested_feedback: string | null;
+  correct_answer: Record<string, unknown> | null;
+  explanation: string | null;
+}
+
+export interface BatchAnswerResponse {
+  results: BatchItemResult[];
+  total_score: number;
+  max_score: number;
 }
