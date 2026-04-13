@@ -16,6 +16,7 @@ from app.models.quiz import (
     AnswerLog,
     Judgement,
     QuizSessionFile,
+    ErrorType,
 )
 from app.models.user import User
 from app.models.file import File, FileStatus
@@ -36,6 +37,9 @@ from app.schemas.quiz import (
     ExamSubmit,
     ExamSubmitResponse,
     SessionCompleteResponse,
+    BatchAnswerSubmit,
+    BatchAnswerResponse,
+    BatchItemResult,
 )
 from app.models.objection import Objection, ObjectionStatus
 from app.schemas.objection import ObjectionCreate, ObjectionResponse
@@ -49,6 +53,7 @@ from app.services.quiz_service import (
     _update_weak_point,
     _grade_single_answer,
     _recalculate_session_totals,
+    GradingResult,
 )
 from app.utils.db_helpers import get_owned_or_raise
 
@@ -380,6 +385,10 @@ async def get_quiz_items(
             difficulty=i.difficulty,
             concept_label=i.concept_label,
             category_tag=i.category_tag,
+            concept_key=i.concept_key,
+            correct_answer=i.correct_answer_json,
+            explanation=i.explanation_text,
+            tips=i.tips_text,
         )
         for i in items
     ]
@@ -602,6 +611,173 @@ async def complete_quiz_session(
         status=session.status.value,
         total_score=session.total_score,
         max_score=session.max_score,
+    )
+
+
+@router.post("/{session_id}/batch-answer", response_model=BatchAnswerResponse)
+async def submit_batch_answers(
+    session_id: str,
+    req: BatchAnswerSubmit,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    import asyncio
+
+    session = await get_owned_or_raise(
+        db,
+        QuizSession,
+        session_id,
+        user.id,
+        not_found_detail="Session not found",
+        forbidden_detail="Access denied",
+    )
+    if session.status not in (QuizSessionStatus.ready, QuizSessionStatus.in_progress):
+        raise HTTPException(
+            status_code=400, detail="Session is not in a gradeable state"
+        )
+
+    items_result = await db.execute(
+        select(QuizItem)
+        .where(QuizItem.quiz_session_id == session_id)
+        .order_by(QuizItem.item_order)
+    )
+    items = items_result.scalars().all()
+    items_map = {i.id: i for i in items}
+
+    for a in req.answers:
+        if a.item_id not in items_map:
+            raise HTTPException(
+                status_code=404, detail=f"Item {a.item_id} not found in session"
+            )
+
+    answer_map = {a.item_id: a.user_answer for a in req.answers}
+
+    essay_count = sum(
+        1
+        for i in items
+        if i.question_type == QuestionType.essay
+        and (answer_map.get(i.id) or "").strip()
+    )
+    if essay_count > 0:
+        usage_svc = UsageService()
+        tier = UserTier(user.tier)
+        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", essay_count)
+        if not allowed:
+            raise HTTPException(
+                status_code=402,
+                detail=LimitExceededError(
+                    detail="AI 채점 크레딧이 부족합니다.",
+                    limit_type="quiz",
+                    current_usage=TIER_LIMITS[tier].quiz_per_window,
+                    limit=TIER_LIMITS[tier].quiz_per_window,
+                    upgrade_url="/pricing",
+                ).model_dump(),
+            )
+
+    if session.status == QuizSessionStatus.ready:
+        session.status = QuizSessionStatus.in_progress
+        session.started_at = datetime.now(timezone.utc)
+        await db.flush()
+
+    async def _grade_one(item: QuizItem) -> GradingResult:
+        user_answer = answer_map.get(item.id) or ""
+        if not user_answer.strip():
+            return GradingResult(
+                judgement=Judgement.skipped,
+                score_awarded=0.0,
+                error_type=ErrorType.no_response,
+            )
+        return await _grade_single_answer(
+            item=item,
+            user_answer=user_answer,
+            model_name=session.generation_model_name,
+            include_essay=True,
+        )
+
+    grading_results: list[GradingResult] = list(
+        await asyncio.gather(*[_grade_one(item) for item in items])
+    )
+
+    existing_active = await db.execute(
+        select(AnswerLog).where(
+            AnswerLog.quiz_session_id == session_id,
+            AnswerLog.user_id == user.id,
+            AnswerLog.is_active_result.is_(True),
+        )
+    )
+    for old_log in existing_active.scalars().all():
+        old_log.is_active_result = False
+
+    from app.utils.normalize import normalize_answer
+
+    now = datetime.now(timezone.utc)
+    batch_results: list[BatchItemResult] = []
+
+    for item, grading in zip(items, grading_results):
+        user_answer = answer_map.get(item.id) or ""
+        normalized = normalize_answer(user_answer) if user_answer else ""
+
+        answer_log = AnswerLog(
+            quiz_item_id=item.id,
+            quiz_session_id=session_id,
+            user_id=user.id,
+            user_answer_raw=user_answer,
+            user_answer_normalized=normalized,
+            judgement=grading.judgement,
+            score_awarded=grading.score_awarded,
+            max_score=grading.max_score,
+            grading_confidence=grading.grading_confidence,
+            grading_rationale=grading.grading_rationale,
+            missing_points_json=grading.missing_points,
+            error_type=grading.error_type,
+            is_active_result=True,
+            graded_at=now,
+        )
+        db.add(answer_log)
+        await db.flush()
+
+        await _update_weak_point(db, user.id, item, grading.judgement)
+
+        raw_correct = item.correct_answer_json
+        if isinstance(raw_correct, dict):
+            correct_answer_data: dict | None = raw_correct
+        elif isinstance(raw_correct, str):
+            correct_answer_data = {"answer": raw_correct}
+        else:
+            correct_answer_data = None
+
+        batch_results.append(
+            BatchItemResult(
+                item_id=item.id,
+                answer_log_id=answer_log.id,
+                judgement=grading.judgement.value,
+                score_awarded=grading.score_awarded,
+                max_score=grading.max_score,
+                grading_confidence=grading.grading_confidence,
+                grading_rationale=grading.grading_rationale,
+                missing_points=grading.missing_points,
+                error_type=grading.error_type.value if grading.error_type else None,
+                suggested_feedback=grading.suggested_feedback or None,
+                correct_answer=correct_answer_data
+                if grading.judgement != Judgement.correct
+                else None,
+                explanation=item.explanation_text,
+            )
+        )
+
+    session.total_score, session.max_score = await _recalculate_session_totals(
+        db, session_id, user.id
+    )
+    session.submitted_at = now
+    session.graded_at = now
+    session.status = QuizSessionStatus.graded
+
+    await db.commit()
+
+    return BatchAnswerResponse(
+        results=batch_results,
+        total_score=session.total_score or 0.0,
+        max_score=session.max_score or 0.0,
     )
 
 

@@ -104,6 +104,9 @@ class QuizItemResponse(BaseModel):
     concept_key: str | None = None
     concept_label: str | None = None
     category_tag: str | None = None
+    correct_answer: dict | None = None
+    explanation: str | None = None
+    tips: str | None = None
 
     @field_validator("options", mode="before")
     @classmethod
@@ -185,3 +188,33 @@ class AnswerLogEntry(BaseModel):
     normalized_user_answer: str | None = None
     suggested_feedback: str | None = None
     correct_answer: dict | None = None
+
+
+class BatchAnswerItem(BaseModel):
+    item_id: str = Field(max_length=36)
+    user_answer: str = Field(max_length=10000)
+
+
+class BatchAnswerSubmit(BaseModel):
+    answers: list[BatchAnswerItem] = Field(max_length=200)
+
+
+class BatchItemResult(BaseModel):
+    item_id: str
+    answer_log_id: str
+    judgement: str
+    score_awarded: float
+    max_score: float
+    grading_confidence: float | None = None
+    grading_rationale: str | None = None
+    missing_points: list[str] | None = None
+    error_type: str | None = None
+    suggested_feedback: str | None = None
+    correct_answer: dict | None = None
+    explanation: str | None = None
+
+
+class BatchAnswerResponse(BaseModel):
+    results: list[BatchItemResult]
+    total_score: float
+    max_score: float
