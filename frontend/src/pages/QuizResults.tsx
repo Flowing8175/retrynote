@@ -11,6 +11,25 @@ function resolveOptionText(answer: string, options: Record<string, unknown> | un
   return resolved ? String(resolved) : answer;
 }
 
+function resolveCorrectAnswerText(
+  correctAnswer: Record<string, unknown> | null | undefined,
+  options: Record<string, unknown> | unknown[] | null,
+): string {
+  if (!correctAnswer) return '알 수 없음';
+
+  const answerValue = correctAnswer.answer;
+  if (typeof answerValue === 'string' || typeof answerValue === 'number' || typeof answerValue === 'boolean') {
+    return resolveOptionText(String(answerValue), options);
+  }
+
+  const fallbackValue = Object.values(correctAnswer).find(
+    (value): value is string | number | boolean =>
+      typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean',
+  );
+
+  return fallbackValue ? resolveOptionText(String(fallbackValue), options) : '알 수 없음';
+}
+
 function formatMode(mode: string) {
   return mode === 'exam' ? '시험 모드' : '일반 모드';
 }
@@ -368,7 +387,7 @@ export default function QuizResults() {
                         <div className="space-y-2">
                           <div className="text-xs font-medium text-brand-300">정답</div>
                           <div className="p-4 bg-brand-500/15 border border-brand-500/40 text-brand-200 rounded-xl text-sm font-medium">
-                            {resolveOptionText(String(item.correct_answer?.answer || '알 수 없음'), item.options)}
+                            {resolveCorrectAnswerText(log?.correct_answer, item.options)}
                           </div>
                         </div>
                       )}
