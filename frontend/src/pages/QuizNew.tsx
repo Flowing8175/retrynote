@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFlip } from '@/hooks/useFlip';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide-react';
@@ -139,6 +140,11 @@ export default function QuizNew() {
   }, []);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const { ref: section2Ref, capture: captureSection2 } = useFlip<HTMLElement>();
+  const handleSourceModeChange = (v: 'document_based' | 'no_source') => {
+    captureSection2();
+    setSourceMode(v);
+  };
 
   const { data: quizConfig } = useQuery({
     queryKey: ['quiz-config'],
@@ -324,13 +330,14 @@ export default function QuizNew() {
             { value: 'no_source' as const, label: 'AI 배경지식 출제', description: '자료 없이 AI가 가진 지식만으로 주제를 선택해 퀴즈를 냅니다.', icon: <Sparkles size={20} /> },
           ]}
           value={sourceMode}
-          onChange={(v) => setSourceMode(v as 'document_based' | 'no_source')}
+          onChange={(v) => handleSourceModeChange(v as 'document_based' | 'no_source')}
           size="lg"
           layout="grid-2"
         />
 
+        <div key={sourceMode} className="animate-mode-switch">
         {sourceMode === 'document_based' ? (
-          <div className={`space-y-6 animate-fade-in-up bg-surface rounded-3xl p-6 md:p-8 ${fileError ? 'border border-semantic-error' : 'border border-white/[0.05]'}`}>
+          <div className={`space-y-6 bg-surface rounded-3xl p-6 md:p-8 ${fileError ? 'border border-semantic-error' : 'border border-white/[0.05]'}`}>
             {fileError && (
               <p className="text-xs text-semantic-error -mb-2">{fileError}</p>
             )}
@@ -406,7 +413,7 @@ export default function QuizNew() {
             </div>
           </div>
         ) : (
-          <div className="space-y-4 animate-fade-in-up bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
+          <div className="space-y-4 bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
             <label htmlFor="topic-input" className="block text-sm font-medium text-content-primary">
               학습하고 싶은 주제를 입력하세요
             </label>
@@ -425,10 +432,11 @@ export default function QuizNew() {
             )}
           </div>
         )}
+        </div>
       </section>
 
        {/* Configuration Section */}
-       <section className="animate-fade-in-up stagger-2 space-y-8" data-tour="quiz-options">
+       <section ref={section2Ref} className="animate-fade-in-up stagger-2 space-y-8" data-tour="quiz-options">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 font-semibold text-sm">
             2
