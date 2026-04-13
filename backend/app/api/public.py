@@ -42,6 +42,7 @@ from app.schemas.public import (
     PublicQuizSessionResponse,
 )
 from app.services.guest_session_service import GuestSessionService
+from app.utils.errors import SESSION_NOT_FOUND, ITEM_NOT_FOUND
 from app.workers.celery_app import dispatch_task
 
 router = APIRouter()
@@ -76,7 +77,20 @@ def _validate_guest_owns_session(
     quiz_session: QuizSession, guest: GuestSession
 ) -> None:
     if quiz_session.guest_session_id != guest.id:
-        raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=404, detail=SESSION_NOT_FOUND)
+
+
+async def _get_guest_quiz_session(
+    db: AsyncSession,
+    session_id: str,
+    guest: GuestSession,
+) -> QuizSession:
+    result = await db.execute(select(QuizSession).where(QuizSession.id == session_id))
+    session = result.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=404, detail=SESSION_NOT_FOUND)
+    _validate_guest_owns_session(session, guest)
+    return session
 
 
 @router.post(
@@ -173,11 +187,7 @@ async def get_public_quiz_session(
     db: AsyncSession = Depends(get_db),
     guest: GuestSession = Depends(get_guest_session),
 ):
-    result = await db.execute(select(QuizSession).where(QuizSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    _validate_guest_owns_session(session, guest)
+    session = await _get_guest_quiz_session(db, session_id, guest)
 
     return PublicQuizSessionDetail(
         session_id=session.id,
@@ -196,13 +206,7 @@ async def get_public_quiz_items(
     db: AsyncSession = Depends(get_db),
     guest: GuestSession = Depends(get_guest_session),
 ):
-    session_result = await db.execute(
-        select(QuizSession).where(QuizSession.id == session_id)
-    )
-    session = session_result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    _validate_guest_owns_session(session, guest)
+    session = await _get_guest_quiz_session(db, session_id, guest)
 
     if session.status not in (
         QuizSessionStatus.ready,
@@ -243,13 +247,7 @@ async def submit_public_answer(
     db: AsyncSession = Depends(get_db),
     guest: GuestSession = Depends(get_guest_session),
 ):
-    session_result = await db.execute(
-        select(QuizSession).where(QuizSession.id == session_id)
-    )
-    session = session_result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    _validate_guest_owns_session(session, guest)
+    session = await _get_guest_quiz_session(db, session_id, guest)
 
     if session.status not in (
         QuizSessionStatus.ready,
@@ -265,7 +263,7 @@ async def submit_public_answer(
     )
     item = item_result.scalar_one_or_none()
     if not item:
-        raise HTTPException(status_code=404, detail="Item not found")
+        raise HTTPException(status_code=404, detail=ITEM_NOT_FOUND)
 
     if session.status == QuizSessionStatus.ready:
         session.status = QuizSessionStatus.in_progress
@@ -330,13 +328,7 @@ async def get_public_quiz_results(
     db: AsyncSession = Depends(get_db),
     guest: GuestSession = Depends(get_guest_session),
 ):
-    session_result = await db.execute(
-        select(QuizSession).where(QuizSession.id == session_id)
-    )
-    session = session_result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    _validate_guest_owns_session(session, guest)
+    session = await _get_guest_quiz_session(db, session_id, guest)
 
     items_result = await db.execute(
         select(QuizItem)

@@ -52,6 +52,14 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+async def _flush_or_conflict(db: AsyncSession, detail: str) -> None:
+    try:
+        await db.flush()
+    except Exception:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail=detail)
+
+
 async def _handle_existing_user_conflict(
     db: AsyncSession,
     existing_user: "User",
@@ -159,14 +167,7 @@ async def signup(
         signup_ip=client_ip,
     )
     db.add(user)
-    try:
-        await db.flush()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(
-            status_code=409,
-            detail="이미 가입되어 있는 계정입니다. 다시 시도해주세요.",
-        )
+    await _flush_or_conflict(db, "이미 가입되어 있는 계정입니다. 다시 시도해주세요.")
 
     token: str | None = None
     if smtp_configured:
@@ -231,11 +232,7 @@ async def convert_guest(
         signup_ip=client_ip,
     )
     db.add(user)
-    try:
-        await db.flush()
-    except Exception:
-        await db.rollback()
-        raise HTTPException(status_code=409, detail="계정 생성에 실패했습니다.")
+    await _flush_or_conflict(db, "계정 생성에 실패했습니다.")
 
     await GuestConversionService.convert_guest_to_user(db, guest.id, user.id)
     await GuestSessionService.mark_converted(db, req.guest_session_id, user.id)
