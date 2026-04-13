@@ -155,18 +155,14 @@ export default function Retry() {
                         <p className="text-xs font-medium text-content-muted">선택된 오답노트 {selectedCount}건</p>
                       ) : null}
                     </div>
-                    <div className="mt-4 max-w-xs">
-                      <select
+                    <div className="mt-4">
+                      <OptionGroup
+                        options={manualConceptOptions.map((option) => ({ value: option.key, label: option.label }))}
                         value={selectedManualConceptKey}
-                        onChange={(e) => setSelectedManualConceptKey(e.target.value)}
-                        className="w-full rounded-xl border border-white/[0.05] bg-surface px-4 py-2.5 text-sm font-medium text-content-primary focus:ring-2 focus:ring-brand-500 focus:outline-none"
-                      >
-                        {manualConceptOptions.map((option) => (
-                          <option key={option.key} value={option.key}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(v) => setSelectedManualConceptKey(v as string)}
+                        size="md"
+                        layout="wrap"
+                      />
                     </div>
                   </div>
                 ) : (
