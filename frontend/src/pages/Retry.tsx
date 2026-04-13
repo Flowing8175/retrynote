@@ -313,7 +313,7 @@ export default function Retry() {
         </div>
       </section>
 
-      <section className="animate-fade-in-up stagger-2 space-y-8" data-tour="retry-options">
+      <section key={`opts-${conceptMode}`} className="animate-mode-switch space-y-8" data-tour="retry-options">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 font-semibold text-sm">
             2
