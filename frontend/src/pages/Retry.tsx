@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { BookOpen, Sparkles, ChevronRight, AlertTriangle } from 'lucide-react';
+import { BookOpen, Sparkles, ChevronRight, AlertTriangle, NotebookPen } from 'lucide-react';
 import { retryApi, wrongNotesApi } from '@/api';
 import { OptionGroup } from '@/components/ui';
 import DiagramModal from '@/components/DiagramModal';
@@ -166,7 +166,7 @@ export default function Retry() {
   });
 
   return (
-    <div className="max-w-4xl mx-auto space-y-16 py-8 animate-fade-in">
+    <div className="max-w-4xl mx-auto space-y-10 py-8 animate-fade-in">
       <section className="animate-fade-in-up space-y-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
           <div className="space-y-2">
@@ -179,6 +179,7 @@ export default function Retry() {
             to="/wrong-notes"
             className="group flex items-center gap-2 bg-surface-deep border border-white/[0.05] px-4 py-2.5 rounded-xl text-sm font-medium text-white hover:bg-surface-hover transition-colors"
           >
+            <NotebookPen size={16} className="text-brand-300" />
             오답노트 보기
           </Link>
         </div>
@@ -296,11 +297,16 @@ export default function Retry() {
             </div>
           </div>
         ) : (
-          <div className="animate-fade-in-up bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
-            <p className="text-base font-medium text-content-primary">AI가 개념을 선택합니다</p>
-            <p className="mt-2 text-sm leading-6 text-content-secondary">
-              반복 오답 패턴을 분석해 지금 가장 취약한 개념 위주로 문제를 구성합니다.
-            </p>
+          <div className="animate-fade-in-up flex items-start gap-4 px-2">
+            <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-500/10">
+              <Sparkles size={16} className="text-brand-300" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-content-primary">AI가 개념을 자동으로 선택합니다</p>
+              <p className="mt-1 text-sm leading-6 text-content-muted">
+                반복 오답 패턴을 분석해 지금 가장 취약한 개념 위주로 문제를 구성합니다.
+              </p>
+            </div>
           </div>
         )}
       </section>
