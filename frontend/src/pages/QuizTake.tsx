@@ -22,6 +22,29 @@ const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded'
 
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
 
+function formatCorrectAnswerLabel(
+  correctAnswer: Record<string, unknown> | null | undefined,
+  options: Record<string, string> | null,
+) {
+  if (!correctAnswer) return null;
+
+  const rawAnswer = correctAnswer['answer'];
+  if (typeof rawAnswer === 'string') {
+    const normalizedAnswer = rawAnswer.trim();
+    if (!normalizedAnswer) return null;
+    if (!options) return normalizedAnswer;
+
+    const resolved = options[normalizedAnswer];
+    return typeof resolved === 'string' && resolved.trim() ? resolved : normalizedAnswer;
+  }
+
+  if (typeof rawAnswer === 'number' || typeof rawAnswer === 'boolean') {
+    return String(rawAnswer);
+  }
+
+  return null;
+}
+
 function QuizTakeSkeleton() {
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-12 animate-pulse" aria-hidden="true">
@@ -293,6 +316,12 @@ export default function QuizTake() {
       (currentQuestionType === 'ox' ? DEFAULT_OX_OPTIONS : null))
     : null;
   const optionDescriptions = currentItem?.option_descriptions as Record<string, string> | null;
+  const isSkippedAnswer =
+    !isExamMode &&
+    isSubmitted &&
+    !!answerResult &&
+    answerResult.judgement !== 'correct' &&
+    (answerResult.normalized_user_answer ?? '').trim() === '';
 
   const handleOptionSelect = (optionKey: string) => {
     if (isSubmitted && !isExamMode) return;
@@ -350,16 +379,24 @@ export default function QuizTake() {
   };
 
   const handleSkip = () => {
-    if (!itemsData || currentItemIndex >= itemsData.length - 1) return;
-    slideQuestion(() => {
-      const nextIndex = currentItemIndex + 1;
-      setFurthestAvailableIndex((prev) => Math.max(prev, nextIndex));
-      setCurrentItemIndex(nextIndex);
-      setIsSubmitted(!!submittedAnswers[itemsData[nextIndex].id]);
-      setAnswerResult(answerResultsByItemId[itemsData[nextIndex].id] || null);
-      setUserAnswer(submittedAnswers[itemsData[nextIndex].id] || draftAnswers[itemsData[nextIndex].id] || '');
-      scrollToHeader();
-    });
+    if (!itemsData || currentItemIndex >= itemsData.length - 1 || !currentItem) return;
+    if (submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending) return;
+
+    if (isExamMode) {
+      slideQuestion(() => {
+        const nextIndex = currentItemIndex + 1;
+        setFurthestAvailableIndex((prev) => Math.max(prev, nextIndex));
+        setCurrentItemIndex(nextIndex);
+        setIsSubmitted(!!submittedAnswers[itemsData[nextIndex].id]);
+        setAnswerResult(answerResultsByItemId[itemsData[nextIndex].id] || null);
+        setUserAnswer(submittedAnswers[itemsData[nextIndex].id] || draftAnswers[itemsData[nextIndex].id] || '');
+        scrollToHeader();
+      });
+      return;
+    }
+
+    setUserAnswer('');
+    submitAnswerMutation.mutate({ itemId: currentItem.id, answer: '' });
   };
 
   const handlePrev = () => {
@@ -611,7 +648,13 @@ export default function QuizTake() {
           {isSubmitted && !isExamMode && answerResult && (
             <QuizAnswerFeedback
               judgement={answerResult.judgement}
-              feedbackText={answerResult.suggested_feedback || answerResult.explanation}
+              headline={isSkippedAnswer ? '건너뛰었습니다' : undefined}
+              correctAnswerLabel={formatCorrectAnswerLabel(answerResult.correct_answer, choiceOptions)}
+              feedbackText={
+                isSkippedAnswer
+                  ? answerResult.explanation || answerResult.suggested_feedback
+                  : answerResult.suggested_feedback || answerResult.explanation
+              }
             />
           )}
         </section>
@@ -704,4 +747,3 @@ export default function QuizTake() {
     </div>
   );
 }
-
