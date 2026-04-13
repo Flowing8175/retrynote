@@ -8,6 +8,7 @@ import { OptionGroup } from '@/components/ui';
 import DiagramModal from '@/components/DiagramModal';
 import type { RetryLocationState } from '@/types';
 import { getDetailMessage } from '@/utils/errorMessages';
+import { useFlip } from '@/hooks/useFlip';
 
 const QUESTION_COUNT_PRESETS = [5, 10, 15];
 
@@ -39,6 +40,13 @@ export default function Retry() {
   const [selectedManualConceptKey, setSelectedManualConceptKey] = useState('');
   const [selectedFileGroup, setSelectedFileGroup] = useState<string | null>(null);
   const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
+
+  const { ref: section2Ref, capture: captureSection2 } = useFlip<HTMLElement>();
+
+  const handleConceptModeChange = (mode: 'manual' | 'ai') => {
+    captureSection2();
+    setConceptMode(mode);
+  };
 
   const { data: wrongNotesData } = useQuery({
     queryKey: ['wrongNotes-manual-options'],
