@@ -220,6 +220,21 @@ textarea:focus-visible,
   animation: fade-in-up 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+.animate-mode-switch {
+  animation: mode-switch 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes mode-switch {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .animate-fade-in-down {
   animation: fade-in-down 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
@@ -276,6 +291,7 @@ textarea:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .animate-mode-switch,
   .animate-fade-in-up,
   .animate-fade-in,
   .animate-scale-in,

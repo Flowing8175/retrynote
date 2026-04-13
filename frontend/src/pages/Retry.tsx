@@ -214,8 +214,9 @@ export default function Retry() {
           layout="grid-2"
         />
 
+        <div key={conceptMode} className="animate-mode-switch">
         {conceptMode === 'manual' ? (
-          <div className="space-y-6 animate-fade-in-up bg-surface rounded-3xl p-6 md:p-8 border border-white/[0.05]">
+          <div className="space-y-6 bg-surface rounded-3xl p-6 md:p-8 border border-white/[0.05]">
             {hasSelectedConcepts ? (
               <p className="text-sm text-content-secondary">
                 선택된 오답노트 {selectedCount}건에서 재도전할 개념을 골라 주세요.
@@ -282,7 +283,7 @@ export default function Retry() {
                         }}
                         className="shrink-0 text-xs font-medium text-content-muted hover:text-brand-300 transition-colors px-2 py-1 rounded-lg hover:bg-brand-500/10"
                       >
-                        개념 설명
+                        개념 설명 보기
                       </button>
                     </div>
                   );
@@ -297,7 +298,7 @@ export default function Retry() {
             </div>
           </div>
         ) : (
-          <div className="animate-fade-in-up flex items-start gap-4 px-2">
+          <div className="flex items-start gap-4 px-2">
             <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-500/10">
               <Sparkles size={16} className="text-brand-300" />
             </div>
@@ -309,6 +310,7 @@ export default function Retry() {
             </div>
           </div>
         )}
+        </div>
       </section>
 
       <section className="animate-fade-in-up stagger-2 space-y-8" data-tour="retry-options">
