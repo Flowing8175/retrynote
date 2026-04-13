@@ -5,12 +5,11 @@ import { isAxiosError } from 'axios';
 import { BookOpen, Sparkles, ChevronRight, AlertTriangle, NotebookPen } from 'lucide-react';
 import { retryApi, wrongNotesApi } from '@/api';
 import { OptionGroup } from '@/components/ui';
+import { QuestionCountPicker } from '@/components/quiz/QuestionCountPicker';
 import DiagramModal from '@/components/DiagramModal';
 import type { RetryLocationState } from '@/types';
 import { getDetailMessage } from '@/utils/errorMessages';
 import { useFlip } from '@/hooks/useFlip';
-
-const QUESTION_COUNT_PRESETS = [5, 10, 15];
 
 export default function Retry() {
   const navigate = useNavigate();
@@ -329,22 +328,17 @@ export default function Retry() {
           <h2 className="text-xl font-semibold text-white">문제 수 설정</h2>
         </div>
         <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-4">
-          <OptionGroup
-            options={[
-              ...QUESTION_COUNT_PRESETS.map((p) => ({ value: String(p), label: String(p) })),
-              { value: 'auto', label: 'AI 결정', description: 'AI가 분량에 맞게 자동 선택' },
-            ]}
-            value={autoCount ? 'auto' : String(questionCount)}
+          <QuestionCountPicker
+            questionCount={questionCount}
+            autoCount={autoCount}
             onChange={(v) => {
               if (v === 'auto') {
                 setAutoCount(true);
               } else {
                 setAutoCount(false);
-                setQuestionCount(Number(v));
+                setQuestionCount(v);
               }
             }}
-            size="md"
-            layout="wrap"
           />
           {autoCount && (
             <p className="text-sm leading-relaxed text-content-muted">

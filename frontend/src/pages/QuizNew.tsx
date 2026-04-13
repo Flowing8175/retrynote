@@ -7,6 +7,7 @@ import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide
 import { filesApi, quizApi } from '@/api';
 import { Modal, StatusBadge, SkeletonTransition } from '@/components';
 import { OptionGroup } from '@/components/ui';
+import { QuestionCountPicker } from '@/components/quiz/QuestionCountPicker';
 import { isFileProcessingStatus } from '@/types/file';
 import { getDetailMessage } from '@/utils/errorMessages';
 import { formatFileSize, formatFileSource } from '@/utils/formatters';
@@ -18,8 +19,6 @@ const QUESTION_TYPES = [
   { value: 'fill_blank', label: '빈칸형' },
   { value: 'essay', label: '서술형' },
 ] as const;
-
-const QUESTION_COUNT_PRESETS = [5, 10, 15];
 
 const MODEL_TIER_LABELS: Record<string, string> = {
   ECO: 'ECO',
@@ -484,22 +483,18 @@ export default function QuizNew() {
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium text-content-primary">문제 수</div>
               </div>
-              <OptionGroup
-                options={[
-                  ...QUESTION_COUNT_PRESETS.map((p) => ({ value: String(p), label: String(p) })),
-                  { value: 'auto', label: '자동 조절', description: 'AI가 분량에 맞게 자동 선택' },
-                ]}
-                value={autoCount ? 'auto' : String(questionCount)}
+              <QuestionCountPicker
+                questionCount={questionCount}
+                autoCount={autoCount}
+                autoLabel="자동 조절"
                 onChange={(v) => {
                   if (v === 'auto') {
                     setAutoCount(true);
                   } else {
                     setAutoCount(false);
-                    setQuestionCount(Number(v));
+                    setQuestionCount(v);
                   }
                 }}
-                size="md"
-                layout="wrap"
               />
             </div>
           </div>

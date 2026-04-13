@@ -27,3 +27,5 @@ export const generatingPhrases = [
 export function normalizeOxValue(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : '';
 }
+
+export const QUESTION_COUNT_PRESETS = [5, 10, 15] as const;
