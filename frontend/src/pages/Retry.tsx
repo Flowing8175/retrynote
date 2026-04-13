@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
+import { BookOpen, Sparkles, ChevronRight, AlertTriangle } from 'lucide-react';
 import { retryApi, wrongNotesApi } from '@/api';
-import { SegmentedControl, OptionGroup } from '@/components/ui';
+import { OptionGroup } from '@/components/ui';
+import DiagramModal from '@/components/DiagramModal';
 import type { RetryLocationState } from '@/types';
 import { getDetailMessage } from '@/utils/errorMessages';
 
@@ -35,6 +37,8 @@ export default function Retry() {
   const [error, setError] = useState<string | null>(null);
   const [creditError, setCreditError] = useState(false);
   const [selectedManualConceptKey, setSelectedManualConceptKey] = useState('');
+  const [selectedFileGroup, setSelectedFileGroup] = useState<string | null>(null);
+  const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
 
   const { data: wrongNotesData } = useQuery({
     queryKey: ['wrongNotes-manual-options'],
@@ -42,6 +46,7 @@ export default function Retry() {
   });
 
   const wrongNotesTotal = wrongNotesData?.total;
+
   const manualConceptOptions = useMemo(() => {
     if (hasSelectedConcepts) {
       return selectedConceptKeys.map((key) => ({
@@ -60,20 +65,77 @@ export default function Retry() {
     return Array.from(conceptMap.entries()).map(([key, label]) => ({ key, label }));
   }, [hasSelectedConcepts, selectedConceptKeys, selectedConceptLabels, wrongNotesData?.items]);
 
+  const fileGroupsForConcepts = useMemo(() => {
+    const items = wrongNotesData?.items ?? [];
+    const groups = new Map<string, {
+      fileId: string | null;
+      fileName: string;
+      concepts: Map<string, { key: string; label: string; count: number }>;
+    }>();
+
+    for (const item of items) {
+      if (!item.concept_key) continue;
+      const groupKey = item.file_id ?? '__ai__';
+      if (!groups.has(groupKey)) {
+        groups.set(groupKey, {
+          fileId: item.file_id,
+          fileName: item.original_filename ?? 'AI 출제 퀴즈',
+          concepts: new Map(),
+        });
+      }
+      const group = groups.get(groupKey)!;
+      const existing = group.concepts.get(item.concept_key);
+      if (existing) {
+        existing.count++;
+      } else {
+        group.concepts.set(item.concept_key, {
+          key: item.concept_key,
+          label: item.concept_label ?? item.concept_key,
+          count: 1,
+        });
+      }
+    }
+
+    return Array.from(groups.values()).map((g) => ({
+      ...g,
+      mainConcept: [...g.concepts.values()].sort((a, b) => b.count - a.count)[0]?.label ?? '',
+      conceptList: [...g.concepts.values()].sort((a, b) => b.count - a.count),
+    }));
+  }, [wrongNotesData?.items]);
+
   useEffect(() => {
-    if (manualConceptOptions.length === 0) {
+    if (fileGroupsForConcepts.length === 0) {
+      setSelectedFileGroup(null);
+      return;
+    }
+    const stillValid = fileGroupsForConcepts.some(
+      (g) => (g.fileId ?? '__ai__') === selectedFileGroup
+    );
+    if (!stillValid) {
+      setSelectedFileGroup(fileGroupsForConcepts[0].fileId ?? '__ai__');
+    }
+  }, [fileGroupsForConcepts, selectedFileGroup]);
+
+  const fileGroupConcepts = useMemo(() => {
+    if (hasSelectedConcepts) return manualConceptOptions;
+    const group = fileGroupsForConcepts.find((g) => (g.fileId ?? '__ai__') === selectedFileGroup);
+    return group?.conceptList.map(({ key, label }) => ({ key, label })) ?? [];
+  }, [fileGroupsForConcepts, selectedFileGroup, hasSelectedConcepts, manualConceptOptions]);
+
+  useEffect(() => {
+    if (fileGroupConcepts.length === 0) {
       if (selectedManualConceptKey !== '') {
         setSelectedManualConceptKey('');
       }
       return;
     }
 
-    const hasSelectedOption = manualConceptOptions.some(({ key }) => key === selectedManualConceptKey);
+    const hasSelectedOption = fileGroupConcepts.some(({ key }) => key === selectedManualConceptKey);
 
     if (!hasSelectedOption) {
-      setSelectedManualConceptKey(manualConceptOptions[0].key);
+      setSelectedManualConceptKey(fileGroupConcepts[0].key);
     }
-  }, [manualConceptOptions, selectedManualConceptKey]);
+  }, [fileGroupConcepts, selectedManualConceptKey]);
 
   const createRetryMutation = useMutation({
     mutationFn: () => {
@@ -103,172 +165,229 @@ export default function Retry() {
     },
   });
 
-  const handleQuestionCountChange = (value: string) => {
-    const parsed = Number.parseInt(value, 10);
-    setQuestionCount(Number.isNaN(parsed) ? 1 : parsed);
-  };
-
   return (
-    <div className="space-y-8">
-      <section className="animate-fade-in-up px-1 py-2">
-        <h1 className="text-3xl font-semibold tracking-tight text-content-primary md:text-4xl">
-          재도전
-        </h1>
-        <p className="mt-3 text-base leading-7 text-content-secondary">
-          틀린 개념을 바탕으로 유사 문제를 다시 풀어볼 수 있습니다.
-        </p>
+    <div className="max-w-4xl mx-auto space-y-16 py-8 animate-fade-in">
+      <section className="animate-fade-in-up space-y-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">재도전 문제 만들기</h1>
+            <p className="text-base text-content-secondary max-w-xl leading-relaxed">
+              틀린 개념을 바탕으로 유사 문제를 다시 풀어볼 수 있습니다.
+            </p>
+          </div>
+          <Link
+            to="/wrong-notes"
+            className="group flex items-center gap-2 bg-surface-deep border border-white/[0.05] px-4 py-2.5 rounded-xl text-sm font-medium text-white hover:bg-surface-hover transition-colors"
+          >
+            오답노트
+          </Link>
+        </div>
       </section>
 
-       <section className="rounded-3xl border border-white/[0.07] bg-surface px-6 py-8 md:px-8" data-tour="retry-form">
-        <div className="space-y-10">
+      <section className="animate-fade-in-up stagger-1 space-y-8" data-tour="retry-source">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 font-semibold text-sm">
+            1
+          </div>
+          <h2 className="text-xl font-semibold text-white">개념 선택</h2>
+        </div>
 
-          {/* 개념 선택 모드 토글 */}
-          <div>
-            <SegmentedControl
-              options={[
-                { value: 'manual' as const, label: '내가 고른 개념' },
-                { value: 'ai' as const, label: 'AI 추천 개념' },
-              ]}
-              value={conceptMode}
-              onChange={setConceptMode}
-            />
-            {conceptMode === 'ai' && (
-              <p className="mt-2 text-xs text-content-muted">
-                최근 오답에서 반복된 약점 개념을 자동 선택
+        <OptionGroup
+          options={[
+            {
+              value: 'manual' as const,
+              label: '내가 고른 개념',
+              description: '오답노트에서 직접 개념을 선택하여 재도전합니다',
+              icon: <BookOpen size={20} />,
+            },
+            {
+              value: 'ai' as const,
+              label: 'AI 추천 개념',
+              description: '반복 오답 패턴을 분석해 취약한 개념을 자동으로 선택합니다',
+              icon: <Sparkles size={20} />,
+            },
+          ]}
+          value={conceptMode}
+          onChange={(v) => setConceptMode(v as 'manual' | 'ai')}
+          size="lg"
+          layout="grid-2"
+        />
+
+        {conceptMode === 'manual' ? (
+          <div className="space-y-6 animate-fade-in-up bg-surface rounded-3xl p-6 md:p-8 border border-white/[0.05]">
+            {hasSelectedConcepts ? (
+              <p className="text-sm text-content-secondary">
+                선택된 오답노트 {selectedCount}건에서 재도전할 개념을 골라 주세요.
               </p>
+            ) : (
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <OptionGroup
+                  options={[
+                    { value: '__all__', label: '전체' },
+                    ...fileGroupsForConcepts.map((g) => ({
+                      value: g.fileId ?? '__ai__',
+                      label: g.fileName,
+                    })),
+                  ]}
+                  value={selectedFileGroup ?? '__all__'}
+                  onChange={(v) => {
+                    const sv = v as string;
+                    setSelectedFileGroup(
+                      sv === '__all__' ? (fileGroupsForConcepts[0]?.fileId ?? '__ai__') : sv
+                    );
+                    setSelectedManualConceptKey('');
+                  }}
+                  size="sm"
+                  layout="wrap"
+                />
+                <Link
+                  to="/wrong-notes"
+                  className="inline-flex items-center py-2 px-2 text-xs font-medium text-brand-300 hover:text-white transition-colors"
+                >
+                  오답노트 →
+                </Link>
+              </div>
             )}
 
-            <div className="mt-6">
-              {conceptMode === 'manual' ? (
-                manualConceptOptions.length > 0 ? (
-                  <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-content-primary">키워드 선택</p>
-                        <p className="mt-2 text-sm leading-6 text-content-secondary">
-                          {hasSelectedConcepts
-                            ? `${selectedCount}건의 선택된 오답노트에서 재도전할 개념을 골라 주세요.`
-                            : '오답노트에서 재도전할 개념 키워드를 직접 선택할 수 있습니다.'}
-                        </p>
+            <div className="space-y-2">
+              {fileGroupConcepts.length > 0 ? (
+                fileGroupConcepts.map((concept) => {
+                  const isSelected = selectedManualConceptKey === concept.key;
+                  return (
+                    <div
+                      key={concept.key}
+                      className={`group flex items-center gap-4 px-5 py-4 rounded-2xl transition-colors border cursor-pointer ${
+                        isSelected
+                          ? 'bg-brand-500/5 border-brand-500/30'
+                          : 'bg-surface-deep border-white/[0.05] hover:bg-surface-hover'
+                      }`}
+                      onClick={() => setSelectedManualConceptKey(concept.key)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className={`text-sm font-medium truncate transition-colors ${
+                            isSelected ? 'text-brand-300' : 'text-white group-hover:text-brand-300'
+                          }`}
+                        >
+                          {concept.label}
+                        </div>
                       </div>
-                      {hasSelectedConcepts ? (
-                        <p className="text-xs font-medium text-content-muted">선택된 오답노트 {selectedCount}건</p>
-                      ) : null}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDiagramModal({ conceptKey: concept.key, conceptLabel: concept.label });
+                        }}
+                        className="shrink-0 text-xs font-medium text-content-muted hover:text-brand-300 transition-colors px-2 py-1 rounded-lg hover:bg-brand-500/10"
+                      >
+                        개념 설명
+                      </button>
                     </div>
-                    <div className="mt-4">
-                      <OptionGroup
-                        options={manualConceptOptions.map((option) => ({ value: option.key, label: option.label }))}
-                        value={selectedManualConceptKey}
-                        onChange={(v) => setSelectedManualConceptKey(v as string)}
-                        size="md"
-                        layout="wrap"
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
-                    <p className="text-sm font-medium text-content-primary">선택 가능한 개념이 없습니다</p>
-                    <p className="mt-2 text-sm leading-6 text-content-secondary">
-                      {wrongNotesTotal !== undefined && wrongNotesTotal > 0
-                        ? '개념 정보가 있는 오답노트를 찾지 못했습니다.'
-                        : '오답노트를 먼저 만든 뒤 내가 고른 개념으로 재도전할 수 있습니다.'}
-                    </p>
-                  </div>
-                )
+                  );
+                })
               ) : (
-                <div className="rounded-2xl border border-white/[0.07] bg-surface-deep px-5 py-5">
-                  <p className="text-base font-medium text-content-primary">AI가 개념을 선택합니다</p>
-                  <p className="mt-2 text-sm leading-6 text-content-secondary">
-                    반복 오답 패턴을 분석해 지금 가장 취약한 개념 위주로 문제를 구성합니다.
-                  </p>
+                <div className="text-center py-10 text-sm text-content-muted bg-surface-deep rounded-2xl border border-white/[0.05]">
+                  {wrongNotesTotal !== undefined && wrongNotesTotal > 0
+                    ? '개념 정보가 있는 오답노트를 찾지 못했습니다.'
+                    : '오답노트를 먼저 만든 뒤 내가 고른 개념으로 재도전할 수 있습니다.'}
                 </div>
               )}
             </div>
           </div>
-
-          {/* 문제 수 정하기 */}
-          <div className="border-t border-white/[0.07] pt-8">
-            <p className="text-lg font-semibold text-content-primary">문제 수 정하기</p>
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              <input
-                id="retry-question-count"
-                type="number"
-                min={1}
-                max={20}
-                value={questionCount}
-                disabled={autoCount}
-                onChange={(e) => handleQuestionCountChange(e.target.value)}
-                className={`w-24 rounded-xl border border-white/[0.10] bg-surface-deep px-4 py-2.5 text-xl font-semibold text-content-primary focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 focus:outline-none transition-opacity ${autoCount ? 'opacity-30 cursor-not-allowed' : ''}`}
-              />
-              <span className={`text-base text-content-secondary transition-opacity ${autoCount ? 'opacity-30' : ''}`}>문항</span>
-            </div>
-            <div className="mt-4">
-              <OptionGroup
-                options={[
-                  ...QUESTION_COUNT_PRESETS.map((preset) => ({ value: String(preset), label: `${preset}문제` })),
-                  { value: 'auto', label: 'AI 결정' },
-                ]}
-                value={autoCount ? 'auto' : String(questionCount)}
-                onChange={(v) => {
-                  if (v === 'auto') {
-                    if (autoCount) {
-                      setAutoCount(false);
-                    } else {
-                      setAutoCount(true);
-                    }
-                  } else {
-                    setAutoCount(false);
-                    setQuestionCount(Number(v));
-                  }
-                }}
-                size="md"
-                layout="wrap"
-              />
-            </div>
-            {autoCount && (
-              <p className="mt-3 text-sm leading-relaxed text-content-muted">
-                틀린 개념의 수와 오답 패턴을 고려해 AI가 적합한 문제 수를 결정합니다.
-              </p>
-            )}
+        ) : (
+          <div className="animate-fade-in-up bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
+            <p className="text-base font-medium text-content-primary">AI가 개념을 선택합니다</p>
+            <p className="mt-2 text-sm leading-6 text-content-secondary">
+              반복 오답 패턴을 분석해 지금 가장 취약한 개념 위주로 문제를 구성합니다.
+            </p>
           </div>
+        )}
+      </section>
 
-          {creditError && (
-            <p className="text-sm text-content-secondary">
+      <section className="animate-fade-in-up stagger-2 space-y-8" data-tour="retry-options">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 font-semibold text-sm">
+            2
+          </div>
+          <h2 className="text-xl font-semibold text-white">문제 수 설정</h2>
+        </div>
+        <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-4">
+          <OptionGroup
+            options={[
+              ...QUESTION_COUNT_PRESETS.map((p) => ({ value: String(p), label: String(p) })),
+              { value: 'auto', label: 'AI 결정', description: 'AI가 분량에 맞게 자동 선택' },
+            ]}
+            value={autoCount ? 'auto' : String(questionCount)}
+            onChange={(v) => {
+              if (v === 'auto') {
+                setAutoCount(true);
+              } else {
+                setAutoCount(false);
+                setQuestionCount(Number(v));
+              }
+            }}
+            size="md"
+            layout="wrap"
+          />
+          {autoCount && (
+            <p className="text-sm leading-relaxed text-content-muted">
+              틀린 개념의 수와 오답 패턴을 고려해 AI가 적합한 문제 수를 결정합니다.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="animate-fade-in-up stagger-3 pt-8">
+        {creditError && (
+          <div className="mb-8 bg-semantic-error/10 border border-semantic-error/20 p-4 rounded-2xl flex items-center gap-3">
+            <AlertTriangle size={20} className="text-semantic-error shrink-0" />
+            <p className="text-sm font-medium text-white">
               재도전을 위한 크레딧이 부족합니다.{' '}
               <Link to="/pricing" className="underline underline-offset-2 hover:text-white transition-colors">
                 플랜 업그레이드
               </Link>
             </p>
-          )}
-
-          {error && (
-            <div className="rounded-2xl border border-semantic-error-border bg-semantic-error-bg px-4 py-3 text-sm leading-6 text-semantic-error">
-              {error}
-            </div>
-          )}
-
-          <div className="flex flex-col gap-3 border-t border-white/[0.07] pt-6 sm:flex-row sm:items-center">
-            <button
-              type="button"
-              onClick={() => {
-                setError(null);
-                createRetryMutation.mutate();
-              }}
-              disabled={createRetryMutation.isPending}
-              className="inline-flex items-center justify-center rounded-2xl bg-brand-500 px-5 py-3 text-sm font-semibold text-brand-900 transition-colors hover:bg-brand-600 hover:-translate-y-px disabled:opacity-50"
-            >
-              {createRetryMutation.isPending ? '재도전 세트 준비 중…' : '재도전 세트 만들기'}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/wrong-notes')}
-              className="inline-flex items-center justify-center rounded-xl border border-white/[0.07] bg-surface-deep px-5 py-3 text-sm font-medium text-content-primary transition-colors hover:bg-surface-hover"
-            >
-              오답노트 다시 보기
-            </button>
           </div>
+        )}
+        {error && (
+          <div className="mb-8 bg-semantic-error/10 border border-semantic-error/20 p-4 rounded-2xl flex items-center gap-3">
+            <AlertTriangle size={20} className="text-semantic-error shrink-0" />
+            <p className="text-sm font-medium text-white">{error}</p>
+          </div>
+        )}
+        <div className="flex flex-col sm:flex-row items-center gap-4 justify-end">
+          <button
+            onClick={() => navigate('/wrong-notes')}
+            className="text-sm font-medium text-content-secondary hover:text-white px-6 py-4 transition-colors"
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setCreditError(false);
+              createRetryMutation.mutate();
+            }}
+            disabled={createRetryMutation.isPending}
+            className="group relative w-full sm:w-auto bg-brand-500 text-brand-900 px-10 py-4 rounded-2xl text-base font-semibold transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+          >
+            <div className="flex items-center justify-center gap-2">
+              {createRetryMutation.isPending ? '재도전 세트 준비 중…' : '재도전 세트 만들기'}
+              {!createRetryMutation.isPending && (
+                <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
+              )}
+            </div>
+          </button>
         </div>
       </section>
+
+      <DiagramModal
+        isOpen={!!diagramModal}
+        onClose={() => setDiagramModal(null)}
+        conceptKey={diagramModal?.conceptKey ?? ''}
+        conceptLabel={diagramModal?.conceptLabel ?? ''}
+      />
     </div>
   );
 }
