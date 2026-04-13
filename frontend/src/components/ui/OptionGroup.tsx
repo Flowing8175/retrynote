@@ -56,13 +56,12 @@ export default function OptionGroup<T extends string>({
         const isActive = selected.includes(opt.value);
         const isDisabled = opt.disabled ?? false;
 
-        return (
+        const btn = (
           <button
             key={opt.value}
             type="button"
             onClick={() => handleClick(opt.value)}
             disabled={isDisabled}
-            title={opt.title}
             className={buttonClass(size, isActive, isDisabled, opt.description != null || opt.icon != null || opt.badge != null)}
           >
             {multiple && (
@@ -109,6 +108,15 @@ export default function OptionGroup<T extends string>({
             )}
           </button>
         );
+
+        return opt.title ? (
+          <span key={opt.value} className="relative group/tooltip inline-block">
+            {btn}
+            <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 whitespace-nowrap rounded-lg bg-gray-900 px-2.5 py-1.5 text-xs text-white opacity-0 transition-opacity group-hover/tooltip:opacity-100 z-50">
+              {opt.title}
+            </span>
+          </span>
+        ) : btn;
       })}
     </div>
   );
