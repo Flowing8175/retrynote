@@ -1,9 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { quizApi } from '@/api';
 import { Modal, StatusBadge, SkeletonTransition } from '@/components';
 import { useModalState } from '@/hooks/useModalState';
+import { useMutationWithInvalidation } from '@/hooks/useMutationWithInvalidation';
 
 function formatHistoryDate(value: string) {
   return new Intl.DateTimeFormat('ko-KR', {
@@ -86,7 +87,6 @@ function QuizHistorySkeleton() {
 }
 
 export default function QuizHistory() {
-  const queryClient = useQueryClient();
   const deleteModal = useModalState<string>();
 
   const { data: historyData, isLoading } = useQuery({
@@ -94,14 +94,11 @@ export default function QuizHistory() {
     queryFn: () => quizApi.listQuizSessions(20),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (sessionId: string) => quizApi.deleteQuizSession(sessionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['quiz-history-full'] });
-      queryClient.invalidateQueries({ queryKey: ['quiz-history'] });
-      deleteModal.close();
-    },
-  });
+  const deleteMutation = useMutationWithInvalidation(
+    [['quiz-history-full'], ['quiz-history']],
+    (sessionId: string) => quizApi.deleteQuizSession(sessionId),
+    { onSuccess: () => deleteModal.close() },
+  );
 
   return (
     <SkeletonTransition loading={isLoading} skeleton={<QuizHistorySkeleton />}>

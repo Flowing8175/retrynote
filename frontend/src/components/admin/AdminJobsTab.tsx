@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/api';
 import type { AdminJobItem, AdminTabProps } from '@/types';
 import { formatDateTime } from './adminUtils';
+import { useMutationWithInvalidation } from '@/hooks/useMutationWithInvalidation';
 
 const STATUS_OPTIONS = [
   { value: '', label: '전체' },
@@ -46,7 +47,6 @@ function SpinnerIcon() {
 }
 
 export default function AdminJobsTab({ isVerified, activeTab }: AdminTabProps) {
-  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('');
   const [jobTypeFilter, setJobTypeFilter] = useState('');
 
@@ -57,15 +57,15 @@ export default function AdminJobsTab({ isVerified, activeTab }: AdminTabProps) {
     refetchInterval: 10_000,
   });
 
-  const retryMutation = useMutation({
-    mutationFn: (id: string) => adminApi.retryJob(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-jobs'] }),
-  });
+  const retryMutation = useMutationWithInvalidation(
+    ['admin-jobs'],
+    (id: string) => adminApi.retryJob(id),
+  );
 
-  const cancelMutation = useMutation({
-    mutationFn: (id: string) => adminApi.cancelJob(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-jobs'] }),
-  });
+  const cancelMutation = useMutationWithInvalidation(
+    ['admin-jobs'],
+    (id: string) => adminApi.cancelJob(id),
+  );
 
   const jobs = data?.jobs ?? [];
   const total = data?.total ?? 0;

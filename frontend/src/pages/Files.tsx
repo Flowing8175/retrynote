@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutationWithInvalidation } from '@/hooks/useMutationWithInvalidation';
 import { Link } from 'react-router-dom';
 import { Upload, Trash2, Download, Edit3, RotateCw, Plus, X } from 'lucide-react';
 import type { AxiosError } from 'axios';
@@ -238,10 +239,10 @@ export default function Files() {
     },
   });
 
-  const retryMutation = useMutation({
-    mutationFn: (fileId: string) => filesApi.retryFile(fileId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['files'] }),
-  });
+  const retryMutation = useMutationWithInvalidation(
+    ['files'],
+    (fileId: string) => filesApi.retryFile(fileId),
+  );
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
