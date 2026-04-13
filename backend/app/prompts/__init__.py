@@ -9,7 +9,14 @@ This module separates system prompts by function to enable:
 - A/B testing variants via config
 """
 
-from .generation import SYSTEM_PROMPT_QUIZ_GENERATION
+from .generation import (
+    SYSTEM_PROMPT_QUIZ_GENERATION,
+    SYSTEM_PROMPT_QUIZ_GENERATION_EASY,
+    SYSTEM_PROMPT_QUIZ_GENERATION_MEDIUM,
+    SYSTEM_PROMPT_QUIZ_GENERATION_HARD,
+    SYSTEM_PROMPT_DIFFICULTY_SELECTION,
+    get_generation_system_prompt,
+)
 from .grading_short import SYSTEM_PROMPT_GRADING_SHORT
 from .grading_essay import SYSTEM_PROMPT_GRADING_ESSAY
 from .objection import SYSTEM_PROMPT_OBJECTION_REVIEW
@@ -17,6 +24,11 @@ from .retry_generation import SYSTEM_PROMPT_RETRY_GENERATION, build_batch_retry_
 
 __all__ = [
     "SYSTEM_PROMPT_QUIZ_GENERATION",
+    "SYSTEM_PROMPT_QUIZ_GENERATION_EASY",
+    "SYSTEM_PROMPT_QUIZ_GENERATION_MEDIUM",
+    "SYSTEM_PROMPT_QUIZ_GENERATION_HARD",
+    "SYSTEM_PROMPT_DIFFICULTY_SELECTION",
+    "get_generation_system_prompt",
     "SYSTEM_PROMPT_GRADING_SHORT",
     "SYSTEM_PROMPT_GRADING_ESSAY",
     "SYSTEM_PROMPT_OBJECTION_REVIEW",

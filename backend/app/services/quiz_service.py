@@ -24,7 +24,9 @@ from app.models.search import Job, DraftAnswer
 from app.utils.normalize import normalize_answer, normalize_concept_key
 from app.prompts import (
     SYSTEM_PROMPT_QUIZ_GENERATION,
+    SYSTEM_PROMPT_DIFFICULTY_SELECTION,
     SYSTEM_PROMPT_OBJECTION_REVIEW,
+    get_generation_system_prompt,
 )
 from app.prompts.generation import build_generation_prompt
 from app.prompts.retry_generation import (
@@ -728,10 +730,29 @@ async def generate_quiz(job_id: str):
 
                 is_no_source = session.source_mode.value == "no_source"
                 topic = payload.get("topic") or None
+
+                resolved_difficulty = difficulty
+                if difficulty == "auto" and not is_no_source:
+                    from app.utils.ai_client import (
+                        call_ai_structured,
+                        DIFFICULTY_SELECTION_SCHEMA,
+                    )
+
+                    det_result = await call_ai_structured(
+                        prompt=source_context[:4000],
+                        schema=DIFFICULTY_SELECTION_SCHEMA,
+                        system_message=SYSTEM_PROMPT_DIFFICULTY_SELECTION,
+                        model=cfg.eco_generation_model or cfg.balanced_generation_model,
+                        max_tokens=100,
+                    )
+                    resolved_difficulty = det_result.get("difficulty", "medium")
+                    if resolved_difficulty not in ("easy", "medium", "hard"):
+                        resolved_difficulty = "medium"
+
                 prompt = build_generation_prompt(
                     source_context=source_context,
                     question_count=question_count,
-                    difficulty=difficulty,
+                    difficulty=resolved_difficulty,
                     question_types=question_types,
                     concept_counts=concept_counts,
                     is_no_source=is_no_source,
@@ -744,8 +765,8 @@ async def generate_quiz(job_id: str):
                     primary_model=session.generation_model_name
                     or cfg.balanced_generation_model,
                     fallback_model=cfg.eco_generation_model,
-                    system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
-                    cache_key="quiz_gen_v1",
+                    system_message=get_generation_system_prompt(resolved_difficulty),
+                    cache_key=f"quiz_gen_{resolved_difficulty}_v1",
                 )
 
                 if ai_result.get("rejected"):

@@ -21,6 +21,7 @@ __all__ = [
     "BATCH_RETRY_GENERATION_SCHEMA",
     "GRADING_SCHEMA",
     "OBJECTION_REVIEW_SCHEMA",
+    "DIFFICULTY_SELECTION_SCHEMA",
     "call_ai_structured",
     "call_ai_with_fallback",
     "stream_ai_text",
@@ -103,9 +104,7 @@ class _GeminiCacheRegistry:
     def evict(self, model: str, system_instruction: str) -> None:
         self._entries.pop(self._key(model, system_instruction), None)
 
-    async def get_or_create(
-        self, model: str, system_instruction: str
-    ) -> str | None:
+    async def get_or_create(self, model: str, system_instruction: str) -> str | None:
         if not settings.gemini_context_cache_enabled:
             return None
         if len(system_instruction) < _GEMINI_CACHE_MIN_CHARS:
@@ -210,7 +209,7 @@ GENERATION_SCHEMA = {
                 },
                 "additionalProperties": False,
             },
-        }
+        },
     },
     "additionalProperties": False,
 }
@@ -283,6 +282,16 @@ BATCH_RETRY_GENERATION_SCHEMA = {
                 "additionalProperties": False,
             },
         }
+    },
+    "additionalProperties": False,
+}
+
+DIFFICULTY_SELECTION_SCHEMA = {
+    "type": "object",
+    "required": ["difficulty", "reason"],
+    "properties": {
+        "difficulty": {"type": "string", "enum": ["easy", "medium", "hard"]},
+        "reason": {"type": "string"},
     },
     "additionalProperties": False,
 }
@@ -362,7 +371,9 @@ OBJECTION_REVIEW_SCHEMA = {
 
 def _is_cache_not_found_error(exc: Exception) -> bool:
     msg = str(exc).lower()
-    return "cached" in msg and ("not found" in msg or "expired" in msg or "invalid" in msg)
+    return "cached" in msg and (
+        "not found" in msg or "expired" in msg or "invalid" in msg
+    )
 
 
 async def _call_gemini_structured(

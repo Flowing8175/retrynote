@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.prompts.generation import (
-    SYSTEM_PROMPT_QUIZ_GENERATION,
+    SYSTEM_PROMPT_QUIZ_GENERATION_MEDIUM,
     build_generation_prompt,
 )
 from app.rate_limit import limiter
@@ -62,7 +62,7 @@ async def generate_guest_quiz(
         result = await call_ai_structured(
             prompt=prompt,
             schema=GENERATION_SCHEMA,
-            system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
+            system_message=SYSTEM_PROMPT_QUIZ_GENERATION_MEDIUM,
             model=model,
             temperature=0.5,
             max_tokens=3000,
