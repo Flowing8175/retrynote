@@ -10,6 +10,7 @@ import type {
   RefreshTokenRequest,
   UserProfile,
   DeleteAccountRequest,
+  ApiStatusResponse,
 } from '@/types';
 
 export const authApi = {
@@ -35,8 +36,8 @@ export const authApi = {
     return response.data;
   },
 
-  passwordResetConfirm: async (data: PasswordResetConfirm): Promise<{ status: string }> => {
-    const response = await apiClient.post<{ status: string }>('/auth/password/reset/confirm', data);
+  passwordResetConfirm: async (data: PasswordResetConfirm): Promise<ApiStatusResponse> => {
+    const response = await apiClient.post<ApiStatusResponse>('/auth/password/reset/confirm', data);
     return response.data;
   },
 
@@ -50,18 +51,18 @@ export const authApi = {
     return response.data;
   },
 
-  deleteAccount: async (data: DeleteAccountRequest): Promise<{ status: string }> => {
-    const response = await apiClient.delete<{ status: string }>('/auth/me', { data });
+  deleteAccount: async (data: DeleteAccountRequest): Promise<ApiStatusResponse> => {
+    const response = await apiClient.delete<ApiStatusResponse>('/auth/me', { data });
     return response.data;
   },
 
-  verifyEmail: async (token: string): Promise<{ status: string }> => {
-    const response = await apiClient.post<{ status: string }>('/auth/verify-email', { token });
+  verifyEmail: async (token: string): Promise<ApiStatusResponse> => {
+    const response = await apiClient.post<ApiStatusResponse>('/auth/verify-email', { token });
     return response.data;
   },
 
-  resendVerification: async (email: string): Promise<{ status: string }> => {
-    const response = await apiClient.post<{ status: string }>('/auth/resend-verification', { email });
+  resendVerification: async (email: string): Promise<ApiStatusResponse> => {
+    const response = await apiClient.post<ApiStatusResponse>('/auth/resend-verification', { email });
     return response.data;
   },
 

@@ -5,6 +5,7 @@ import type {
   FileListResponse,
   FileRetryResponse,
   FileFolder,
+  ApiStatusResponse,
 } from '@/types';
 
 const decodeDownloadName = (value: string): string => {
@@ -64,8 +65,8 @@ export const filesApi = {
     return response.data;
   },
 
-  deleteFile: async (fileId: string): Promise<{ status: string }> => {
-    const response = await apiClient.delete<{ status: string }>(`/files/${fileId}`);
+  deleteFile: async (fileId: string): Promise<ApiStatusResponse> => {
+    const response = await apiClient.delete<ApiStatusResponse>(`/files/${fileId}`);
     return response.data;
   },
 
@@ -111,8 +112,8 @@ export const filesApi = {
     return response.data;
   },
 
-  deleteFolder: async (folderId: string): Promise<{ status: string }> => {
-    const response = await apiClient.delete<{ status: string }>(`/files/folders/${folderId}`);
+  deleteFolder: async (folderId: string): Promise<ApiStatusResponse> => {
+    const response = await apiClient.delete<ApiStatusResponse>(`/files/folders/${folderId}`);
     return response.data;
   },
 };

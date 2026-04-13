@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { useGuestStore } from '@/stores/guestStore';
 import type {
   GuestQuizSession,
@@ -7,12 +6,9 @@ import type {
   GuestQuizResults,
   GuestFileUpload,
 } from '@/types/guest';
+import { createApiClient } from './createApiClient';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-const guestClient = axios.create({
-  baseURL: API_BASE_URL,
-});
+const guestClient = createApiClient();
 
 let _turnstileToken = '';
 export const setGuestTurnstileToken = (token: string) => {

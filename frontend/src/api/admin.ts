@@ -20,6 +20,7 @@ import type {
   AdminRateLimitResponse,
   AdminUserStatusUpdate,
   AdminUserRoleUpdate,
+  ApiStatusResponse,
 } from '@/types';
 
 export const adminApi = {
@@ -62,8 +63,8 @@ export const adminApi = {
     return response.data;
   },
 
-  endImpersonation: async (impersonationId: string): Promise<{ status: string }> => {
-    const response = await apiClient.post<{ status: string }>(`/admin/impersonation/${impersonationId}/end`);
+  endImpersonation: async (impersonationId: string): Promise<ApiStatusResponse> => {
+    const response = await apiClient.post<ApiStatusResponse>(`/admin/impersonation/${impersonationId}/end`);
     return response.data;
   },
 
@@ -139,13 +140,13 @@ export const adminApi = {
     return response.data;
   },
 
-  retryJob: async (jobId: string): Promise<{ status: string }> => {
-    const response = await apiClient.post<{ status: string }>(`/admin/jobs/${jobId}/retry`);
+  retryJob: async (jobId: string): Promise<ApiStatusResponse> => {
+    const response = await apiClient.post<ApiStatusResponse>(`/admin/jobs/${jobId}/retry`);
     return response.data;
   },
 
-  cancelJob: async (jobId: string): Promise<{ status: string }> => {
-    const response = await apiClient.post<{ status: string }>(`/admin/jobs/${jobId}/cancel`);
+  cancelJob: async (jobId: string): Promise<ApiStatusResponse> => {
+    const response = await apiClient.post<ApiStatusResponse>(`/admin/jobs/${jobId}/cancel`);
     return response.data;
   },
 
@@ -159,13 +160,13 @@ export const adminApi = {
     return response.data;
   },
 
-  toggleUserStatus: async (userId: string, data: AdminUserStatusUpdate): Promise<{ status: string }> => {
-    const response = await apiClient.patch<{ status: string }>(`/admin/users/${userId}/status`, data);
+  toggleUserStatus: async (userId: string, data: AdminUserStatusUpdate): Promise<ApiStatusResponse> => {
+    const response = await apiClient.patch<ApiStatusResponse>(`/admin/users/${userId}/status`, data);
     return response.data;
   },
 
-  changeUserRole: async (userId: string, data: AdminUserRoleUpdate): Promise<{ status: string }> => {
-    const response = await apiClient.patch<{ status: string }>(`/admin/users/${userId}/role`, data);
+  changeUserRole: async (userId: string, data: AdminUserRoleUpdate): Promise<ApiStatusResponse> => {
+    const response = await apiClient.patch<ApiStatusResponse>(`/admin/users/${userId}/role`, data);
     return response.data;
   },
 

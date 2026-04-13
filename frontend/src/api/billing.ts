@@ -4,6 +4,7 @@ import type {
   CheckoutSessionResponse,
   ManageUrlsResponse,
 } from '../types/billing';
+import type { ApiStatusResponse } from '../types';
 import apiClient from './client';
 
 export const billingApi = {
@@ -38,6 +39,6 @@ export const billingApi = {
   getManageUrls: (): Promise<ManageUrlsResponse> =>
     apiClient.get<ManageUrlsResponse>('/billing/manage-urls').then((r) => r.data),
 
-  cancelSubscription: (): Promise<{ status: string }> =>
-    apiClient.post<{ status: string }>('/billing/cancel').then((r) => r.data),
+  cancelSubscription: (): Promise<ApiStatusResponse> =>
+    apiClient.post<ApiStatusResponse>('/billing/cancel').then((r) => r.data),
 };

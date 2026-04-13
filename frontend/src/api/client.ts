@@ -1,8 +1,7 @@
 import axios, { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
 import type { ResourceType, UpgradePromptPayload } from '@/types/billing';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { createApiClient, API_BASE_URL } from './createApiClient';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -58,9 +57,7 @@ function normalizeUpgradePayload(payload: unknown): UpgradePromptPayload | null 
   };
 }
 
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-});
+const apiClient = createApiClient();
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {

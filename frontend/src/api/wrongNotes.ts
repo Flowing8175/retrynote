@@ -2,6 +2,7 @@ import apiClient from './client';
 import type {
   WrongNoteListResponse,
   WrongNoteErrorTypeUpdate,
+  ApiStatusResponse,
 } from '@/types';
 
 export const wrongNotesApi = {
@@ -36,8 +37,8 @@ export const wrongNotesApi = {
   updateErrorType: async (
     answerLogId: string,
     data: WrongNoteErrorTypeUpdate
-  ): Promise<{ status: string }> => {
-    const response = await apiClient.patch<{ status: string }>(
+  ): Promise<ApiStatusResponse> => {
+    const response = await apiClient.patch<ApiStatusResponse>(
       `/wrong-notes/${answerLogId}/error-type`,
       data
     );
