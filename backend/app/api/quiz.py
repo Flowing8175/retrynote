@@ -50,6 +50,7 @@ from app.services.quiz_service import (
     _grade_single_answer,
     _recalculate_session_totals,
 )
+from app.utils.db_helpers import get_owned_or_raise
 
 router = APIRouter()
 
@@ -304,12 +305,14 @@ async def get_quiz_session(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(select(QuizSession).where(QuizSession.id == session_id))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if session.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    session = await get_owned_or_raise(
+        db,
+        QuizSession,
+        session_id,
+        user.id,
+        not_found_detail="Session not found",
+        forbidden_detail="Access denied",
+    )
 
     items_count = await db.execute(
         select(func.count())
@@ -350,14 +353,14 @@ async def get_quiz_items(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    session_result = await db.execute(
-        select(QuizSession).where(QuizSession.id == session_id)
+    await get_owned_or_raise(
+        db,
+        QuizSession,
+        session_id,
+        user.id,
+        not_found_detail="Session not found",
+        forbidden_detail="Access denied",
     )
-    session = session_result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if session.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
 
     result = await db.execute(
         select(QuizItem)
@@ -422,14 +425,14 @@ async def submit_answer(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    session_result = await db.execute(
-        select(QuizSession).where(QuizSession.id == session_id)
+    session = await get_owned_or_raise(
+        db,
+        QuizSession,
+        session_id,
+        user.id,
+        not_found_detail="Session not found",
+        forbidden_detail="Access denied",
     )
-    session = session_result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if session.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
     if session.mode != QuizMode.normal:
         raise HTTPException(status_code=400, detail="Use exam submit for exam mode")
     if session.status not in (QuizSessionStatus.ready, QuizSessionStatus.in_progress):
@@ -802,14 +805,14 @@ async def get_answer_logs(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    session_result = await db.execute(
-        select(QuizSession).where(QuizSession.id == session_id)
+    await get_owned_or_raise(
+        db,
+        QuizSession,
+        session_id,
+        user.id,
+        not_found_detail="Session not found",
+        forbidden_detail="Access denied",
     )
-    session = session_result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=404, detail="Session not found")
-    if session.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
 
     items_result = await db.execute(
         select(QuizItem).where(QuizItem.quiz_session_id == session_id)

@@ -3,6 +3,7 @@ from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.utils.db_helpers import paginate
 from app.models.quiz import AnswerLog, QuizItem, QuizSession
 from app.models.file import File
 from app.models.user import User
@@ -31,11 +32,8 @@ async def _search_files(
     if folder_id:
         file_query = file_query.where(File.folder_id == folder_id)
 
-    file_result = await db.execute(
-        file_query.order_by(File.created_at.desc())
-        .offset((page - 1) * size)
-        .limit(size)
-    )
+    file_query = file_query.order_by(File.created_at.desc())
+    files, total = await paginate(db, file_query, page, size)
     items = [
         SearchResultItem(
             result_type="file",
@@ -47,12 +45,9 @@ async def _search_files(
                 "status": f.status.value,
             },
         )
-        for f in file_result.scalars().all()
+        for f in files
     ]
-    count_result = await db.execute(
-        select(func.count()).select_from(file_query.subquery())
-    )
-    return items, (count_result.scalar() or 0)
+    return items, total
 
 
 async def _search_wrong_notes(
@@ -136,11 +131,8 @@ async def _search_quiz_history(
             )
         ),
     )
-    quiz_result = await db.execute(
-        quiz_query.order_by(QuizSession.created_at.desc())
-        .offset((page - 1) * size)
-        .limit(size)
-    )
+    quiz_query = quiz_query.order_by(QuizSession.created_at.desc())
+    sessions, total = await paginate(db, quiz_query, page, size)
     items = [
         SearchResultItem(
             result_type="quiz_session",
@@ -153,12 +145,9 @@ async def _search_quiz_history(
                 "source_mode": s.source_mode.value,
             },
         )
-        for s in quiz_result.scalars().all()
+        for s in sessions
     ]
-    count_result = await db.execute(
-        select(func.count()).select_from(quiz_query.subquery())
-    )
-    return items, (count_result.scalar() or 0)
+    return items, total
 
 
 @router.get("", response_model=SearchResponse)

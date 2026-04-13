@@ -10,21 +10,14 @@ from app.schemas.billing import (
     CreditBalanceSchema,
 )
 from app.tier_config import TIER_LIMITS, WINDOW_DAYS, UserTier
+from app.utils.db_helpers import get_or_create_credit_balance
 
 
 class UsageService:
     async def _get_or_create_credit_balance(
         self, db: AsyncSession, user_id: str
     ) -> CreditBalance:
-        result = await db.execute(
-            select(CreditBalance).where(CreditBalance.user_id == user_id)
-        )
-        balance = result.scalar_one_or_none()
-        if balance is None:
-            balance = CreditBalance(user_id=user_id)
-            db.add(balance)
-            await db.flush()
-        return balance
+        return await get_or_create_credit_balance(db, user_id)
 
     async def _get_or_create_window(
         self, db: AsyncSession, user_id: str, resource_type: str

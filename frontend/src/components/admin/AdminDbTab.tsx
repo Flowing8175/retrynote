@@ -1,12 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/api';
-import type { AdminDbTableInfo } from '@/types';
-import type { TabKey } from './adminUtils';
-
-interface AdminDbTabProps {
-  isVerified: boolean;
-  activeTab: TabKey;
-}
+import type { AdminDbTableInfo, AdminTabProps } from '@/types';
 
 function isLargeTable(totalSize: string): boolean {
   return totalSize.trim().endsWith('GB');
@@ -30,7 +24,7 @@ function RefreshIcon({ spinning }: { spinning: boolean }) {
   );
 }
 
-export default function AdminDbTab({ isVerified, activeTab }: AdminDbTabProps) {
+export default function AdminDbTab({ isVerified, activeTab }: AdminTabProps) {
   const { data, isLoading, isFetching, error, refetch } = useQuery({
     queryKey: ['admin-db'],
     queryFn: adminApi.getDbDiagnostics,

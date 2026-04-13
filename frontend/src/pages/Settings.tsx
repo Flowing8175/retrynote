@@ -7,12 +7,13 @@ import { Modal } from '@/components';
 import { useTour } from '@/components/OnboardingTour';
 import { useAuthStore } from '@/stores';
 import { useUsageStatus } from '@/lib/useUsageStatus';
+import { useModalState } from '@/hooks/useModalState';
 
 export default function Settings() {
   const { user, logout } = useAuthStore();
   const { data: usageStatus } = useUsageStatus();
   const { restartTour } = useTour();
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const deleteModal = useModalState();
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -29,12 +30,12 @@ export default function Settings() {
   function openDeleteModal() {
     setPassword('');
     setErrorMessage(null);
-    setDeleteModalOpen(true);
+    deleteModal.open();
   }
 
   function closeDeleteModal() {
     if (deleteMutation.isPending) return;
-    setDeleteModalOpen(false);
+    deleteModal.close();
     setPassword('');
     setErrorMessage(null);
   }
@@ -109,7 +110,7 @@ export default function Settings() {
         </button>
       </div>
 
-      <Modal isOpen={deleteModalOpen} onClose={closeDeleteModal} title="계정을 삭제할까요?">
+      <Modal isOpen={deleteModal.isOpen} onClose={closeDeleteModal} title="계정을 삭제할까요?">
         <div className="space-y-5">
           <p className="text-sm leading-6 text-content-secondary">
             모든 자료, 퀴즈, 오답 데이터가 영구적으로 삭제됩니다. 계속하려면 비밀번호를 입력하세요.

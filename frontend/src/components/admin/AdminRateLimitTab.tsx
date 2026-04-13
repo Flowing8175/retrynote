@@ -1,14 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/api';
-import type { AdminRateLimitEvent } from '@/types';
+import type { AdminRateLimitEvent, AdminTabProps } from '@/types';
 import { formatDateTime } from './adminUtils';
 
-interface AdminRateLimitTabProps {
-  isVerified: boolean;
-  activeTab: string;
-}
-
-export default function AdminRateLimitTab({ isVerified, activeTab }: AdminRateLimitTabProps) {
+export default function AdminRateLimitTab({ isVerified, activeTab }: AdminTabProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['admin-rate-limits'],
     queryFn: adminApi.getRateLimits,

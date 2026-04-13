@@ -1,65 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { guestApi } from '@/api/guestClient';
 import type { GuestQuizSession, GuestQuizItem, GuestAnswerResult } from '@/types/guest';
-import { PillShimmer } from '@/components';
-
-const generatingPhrases = [
-  '학습 자료 분석 중...',
-  '핵심 개념 추출 중...',
-  '문항 설계 중...',
-  '정답 및 해설 작성 중...',
-  '마지막 검토 중...',
-  '거의 완성됐어요!',
-];
-
-const QUESTION_TYPE_LABELS: Record<string, string> = {
-  multiple_choice: '객관식',
-  ox: 'O/X',
-  short_answer: '단답형',
-  fill_blank: '빈칸 채우기',
-  essay: '서술형',
-};
-
-const DEFAULT_OX_OPTIONS: Record<string, string> = { O: 'O', X: 'X' };
-const AUTO_SUBMIT_QUESTION_TYPES = new Set(['multiple_choice', 'ox']);
-const FREE_TEXT_QUESTION_TYPES = new Set(['short_answer', 'essay', 'fill_blank']);
-
-function normalizeOxValue(value: string | null | undefined) {
-  return typeof value === 'string' ? value.trim().toLowerCase() : '';
-}
-
-function TryQuizGeneratingScreen() {
-  const [phraseIndex, setPhraseIndex] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => setPhraseIndex((i) => (i + 1) % generatingPhrases.length), 3000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <div className="min-h-screen bg-surface-deep flex flex-col">
-      <header className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
-        <span className="text-lg font-bold text-content-primary">RetryNote</span>
-      </header>
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-6 animate-fade-in">
-          <div className="flex flex-col items-center gap-2.5 animate-fade-in-up stagger-1">
-            <PillShimmer width={220} />
-            <PillShimmer width={160} delay={0.3} opacity={0.75} />
-            <PillShimmer width={200} delay={0.55} opacity={0.55} />
-            <PillShimmer width={120} delay={0.8} opacity={0.38} />
-            <PillShimmer width={80} delay={1.0} opacity={0.22} />
-          </div>
-          <p key={phraseIndex} className="text-content-secondary text-base animate-fade-in">
-            {generatingPhrases[phraseIndex]}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
+import QuizGeneratingScreen from '@/components/quiz/QuizGeneratingScreen';
+import QuizChoiceOptions from '@/components/quiz/QuizChoiceOptions';
+import QuizAnswerFeedback from '@/components/quiz/QuizAnswerFeedback';
+import {
+  QUESTION_TYPE_LABELS,
+  DEFAULT_OX_OPTIONS,
+  AUTO_SUBMIT_QUESTION_TYPES,
+  FREE_TEXT_QUESTION_TYPES,
+} from '@/utils/quizConstants';
 
 export default function TryQuizTake() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -244,7 +195,7 @@ export default function TryQuizTake() {
   const isPreparingOrLoading = loading || !session || session.status === 'draft' || session.status === 'generating' || items.length === 0;
 
   if (isPreparingOrLoading) {
-    return <TryQuizGeneratingScreen />;
+    return <QuizGeneratingScreen variant="fullscreen" />;
   }
 
   return (
@@ -294,53 +245,17 @@ export default function TryQuizTake() {
 
             <div className="space-y-4">
               {choiceOptions && (
-                <div className="grid gap-3">
-                  {Object.entries(choiceOptions).map(([key, text]) => {
-                    const isOxQuestion = currentQuestionType === 'ox';
-                    const isSelected = isOxQuestion
-                      ? normalizeOxValue(answer) === normalizeOxValue(key)
-                      : answer === key;
-                    const isCorrectAnswer = result
-                      ? isOxQuestion
-                        ? normalizeOxValue(result.correct_answer) === normalizeOxValue(key)
-                        : result.correct_answer === key
-                      : false;
-                    const isWrong = result !== null && isSelected && result.judgement !== 'correct';
-                    const shouldShowCorrect = result !== null && isCorrectAnswer;
-
-                    return (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => !result && handleOptionSelect(key)}
-                        disabled={result !== null || submitting}
-                        className={`relative group flex items-start gap-4 p-5 rounded-2xl text-left transition-all border ${
-                          isWrong
-                            ? 'bg-semantic-error/10 text-semantic-error border-semantic-error/40 ring-1 ring-inset ring-semantic-error/30'
-                            : shouldShowCorrect
-                              ? 'bg-semantic-success/10 text-semantic-success border-semantic-success/40 ring-1 ring-inset ring-semantic-success/30'
-                              : isSelected
-                                ? 'bg-brand-500/15 text-brand-200 border-brand-500/30 ring-1 ring-inset ring-brand-500/30 shadow-sm shadow-brand-900/20'
-                                : 'bg-surface text-content-primary border-white/[0.05] hover:bg-surface-hover'
-                        }`}
-                      >
-                        <span className={`text-base font-semibold tabular-nums mt-0.5 ${
-                          isWrong ? 'text-semantic-error' : shouldShowCorrect ? 'text-semantic-success' : isSelected ? 'text-brand-100' : 'text-content-muted'
-                        }`}>
-                          {key.toUpperCase()}
-                        </span>
-                        <div className="flex flex-col gap-1">
-                          <span className={`text-base font-medium leading-relaxed ${isSelected && !isWrong ? 'text-brand-50' : ''}`}>
-                            {text !== key ? text : key}
-                          </span>
-                          {result && optionDescriptions?.[key] && (
-                            <span className="text-sm text-content-muted leading-snug">{optionDescriptions[key]}</span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                <QuizChoiceOptions
+                  options={choiceOptions}
+                  optionDescriptions={optionDescriptions}
+                  selectedAnswer={answer}
+                  correctAnswer={result?.correct_answer}
+                  judgement={result?.judgement}
+                  questionType={currentQuestionType ?? ''}
+                  isResultShown={result !== null}
+                  isDisabled={result !== null || submitting}
+                  onSelect={handleOptionSelect}
+                />
               )}
 
               {currentQuestionType !== null && FREE_TEXT_QUESTION_TYPES.has(currentQuestionType) && (
@@ -362,37 +277,11 @@ export default function TryQuizTake() {
             </div>
 
             {result && (
-              <div className={`animate-fade-in-up p-6 rounded-2xl border ${
-                result.judgement === 'correct'
-                  ? 'bg-brand-500/5 border-brand-500/30'
-                  : result.judgement === 'partial'
-                  ? 'bg-semantic-warning/5 border-semantic-warning/30'
-                  : 'bg-semantic-error/5 border-semantic-error/30'
-              }`}>
-                <div className="flex items-center gap-4 mb-4">
-                  {result.judgement === 'correct' ? (
-                    <CheckCircle2 size={24} className="text-brand-300" />
-                  ) : (
-                    <AlertCircle size={24} className={result.judgement === 'partial' ? 'text-semantic-warning' : 'text-semantic-error'} />
-                  )}
-                  <h3 className={`text-lg font-semibold ${
-                    result.judgement === 'correct' ? 'text-brand-300' : result.judgement === 'partial' ? 'text-semantic-warning' : 'text-semantic-error'
-                  }`}>
-                    {result.judgement === 'correct' ? '정답입니다' : result.judgement === 'partial' ? '부분 정답입니다' : '틀렸습니다'}
-                  </h3>
-                </div>
-                {!choiceOptions && result.correct_answer && (
-                  <p className="text-base text-content-secondary mb-2">
-                    <span className="font-semibold text-white">정답: </span>
-                    {result.correct_answer}
-                  </p>
-                )}
-                {(result.explanation || result.rationale) && (
-                  <p className="text-base text-content-secondary leading-relaxed">
-                    {result.explanation || result.rationale}
-                  </p>
-                )}
-              </div>
+              <QuizAnswerFeedback
+                judgement={result.judgement}
+                feedbackText={result.explanation || result.rationale}
+                correctAnswerLabel={!choiceOptions && result.correct_answer ? result.correct_answer : undefined}
+              />
             )}
           </section>
 

@@ -217,7 +217,7 @@ export default function Retry() {
             },
           ]}
           value={conceptMode}
-          onChange={(v) => setConceptMode(v as 'manual' | 'ai')}
+          onChange={(v) => handleConceptModeChange(v as 'manual' | 'ai')}
           size="lg"
           layout="grid-2"
         />

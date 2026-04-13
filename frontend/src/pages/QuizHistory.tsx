@@ -1,9 +1,9 @@
-import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { Trash2 } from 'lucide-react';
 import { quizApi } from '@/api';
 import { Modal, StatusBadge, SkeletonTransition } from '@/components';
+import { useModalState } from '@/hooks/useModalState';
 
 function formatHistoryDate(value: string) {
   return new Intl.DateTimeFormat('ko-KR', {
@@ -87,7 +87,7 @@ function QuizHistorySkeleton() {
 
 export default function QuizHistory() {
   const queryClient = useQueryClient();
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const deleteModal = useModalState<string>();
 
   const { data: historyData, isLoading } = useQuery({
     queryKey: ['quiz-history-full'],
@@ -99,7 +99,7 @@ export default function QuizHistory() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['quiz-history-full'] });
       queryClient.invalidateQueries({ queryKey: ['quiz-history'] });
-      setDeletingId(null);
+      deleteModal.close();
     },
   });
 
@@ -177,7 +177,7 @@ export default function QuizHistory() {
                     </Link>
                     <button
                       type="button"
-                      onClick={() => setDeletingId(session.id)}
+                      onClick={() => deleteModal.open(session.id)}
                       className="inline-flex items-center gap-1.5 rounded-xl border border-white/[0.07] bg-surface px-3 py-2.5 text-xs font-medium text-content-secondary transition-colors hover:border-semantic-error/30 hover:bg-semantic-error-bg/60 hover:text-semantic-error"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -192,8 +192,8 @@ export default function QuizHistory() {
       </div>
 
       <Modal
-        isOpen={deletingId !== null}
-        onClose={() => setDeletingId(null)}
+        isOpen={deleteModal.isOpen}
+        onClose={deleteModal.close}
         title="퀴즈를 삭제할까요?"
       >
         <div className="space-y-5">
@@ -204,14 +204,14 @@ export default function QuizHistory() {
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={() => setDeletingId(null)}
+              onClick={deleteModal.close}
               className="inline-flex items-center justify-center rounded-xl border border-white/[0.07] bg-surface-deep px-4 py-3 text-sm font-medium text-content-primary transition-colors hover:bg-surface-hover"
             >
               취소
             </button>
             <button
               type="button"
-              onClick={() => deletingId && deleteMutation.mutate(deletingId)}
+              onClick={() => deleteModal.value && deleteMutation.mutate(deleteModal.value)}
               disabled={deleteMutation.isPending}
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-semantic-error px-4 py-3 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >

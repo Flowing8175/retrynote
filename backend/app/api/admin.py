@@ -62,6 +62,7 @@ from app.middleware.auth import (
     create_admin_token,
     get_client_ip,
 )
+from app.utils.db_helpers import paginate
 from app.workers.celery_app import celery_app, dispatch_task
 
 router = APIRouter()
@@ -142,19 +143,10 @@ async def list_users(
 ):
     await log_audit(db, admin.id, "list_users", request)
 
-    result = await db.execute(
-        select(User)
-        .where(User.deleted_at.is_(None))
-        .order_by(User.created_at.desc())
-        .offset((page - 1) * size)
-        .limit(size)
+    query = (
+        select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc())
     )
-    users = result.scalars().all()
-
-    total_result = await db.execute(
-        select(func.count()).select_from(User).where(User.deleted_at.is_(None))
-    )
-    total = total_result.scalar() or 0
+    users, total = await paginate(db, query, page, size)
 
     return AdminUserListResponse(
         users=[
@@ -300,11 +292,7 @@ async def list_logs(
     if event_type:
         query = query.where(SystemLog.event_type == event_type)
 
-    total_result = await db.execute(select(func.count()).select_from(query.subquery()))
-    total = total_result.scalar() or 0
-
-    result = await db.execute(query.offset((page - 1) * size).limit(size))
-    logs = result.scalars().all()
+    logs, total = await paginate(db, query, page, size)
 
     return AdminLogResponse(
         logs=[
@@ -590,11 +578,7 @@ async def list_audit_logs(
     admin: User = Depends(require_admin),
 ):
     query = select(AdminAuditLog).order_by(AdminAuditLog.created_at.desc())
-    total_result = await db.execute(select(func.count()).select_from(query.subquery()))
-    total = total_result.scalar() or 0
-
-    result = await db.execute(query.offset((page - 1) * size).limit(size))
-    logs = result.scalars().all()
+    logs, total = await paginate(db, query, page, size)
 
     return {
         "logs": [
@@ -849,11 +833,7 @@ async def list_jobs(
     if job_type:
         query = query.where(Job.job_type == job_type)
 
-    total_result = await db.execute(select(func.count()).select_from(query.subquery()))
-    total = total_result.scalar() or 0
-
-    result = await db.execute(query.offset((page - 1) * size).limit(size))
-    jobs = result.scalars().all()
+    jobs, total = await paginate(db, query, page, size)
 
     return AdminJobListResponse(
         jobs=[AdminJobItem.model_validate(j) for j in jobs],

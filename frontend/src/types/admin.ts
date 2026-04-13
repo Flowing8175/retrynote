@@ -244,6 +244,11 @@ export interface AdminRateLimitResponse {
   top_paths: Array<{ path: string; count: number }>;
 }
 
+export interface AdminTabProps {
+  isVerified: boolean;
+  activeTab: string;
+}
+
 export interface AdminUserStatusUpdate {
   is_active: boolean;
 }

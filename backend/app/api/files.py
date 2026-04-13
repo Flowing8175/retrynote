@@ -17,7 +17,7 @@ from fastapi import (
     Query,
 )
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -35,6 +35,7 @@ from app.schemas.file import (
 from app.middleware.auth import get_current_user, get_impersonation_context
 from app.middleware.rate_limit_pro import pro_rate_limit
 from app.workers.celery_app import dispatch_task
+from app.utils.db_helpers import paginate
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -322,12 +323,8 @@ async def list_files(
     if status_filter:
         query = query.where(File.status == status_filter)
 
-    total_result = await db.execute(select(func.count()).select_from(query.subquery()))
-    total = total_result.scalar() or 0
-
-    query = query.order_by(File.created_at.desc()).offset((page - 1) * size).limit(size)
-    result = await db.execute(query)
-    files = result.scalars().all()
+    query = query.order_by(File.created_at.desc())
+    files, total = await paginate(db, query, page, size)
 
     return FileListResponse(
         files=[FileDetail.model_validate(f) for f in files],
@@ -424,14 +421,7 @@ async def get_file(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(File).where(File.id == file_id, File.deleted_at.is_(None))
-    )
-    file = result.scalar_one_or_none()
-    if not file:
-        raise HTTPException(status_code=404, detail="File not found")
-    if file.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    file = await get_owned_file(file_id, db, user)
     return FileDetail.model_validate(file)
 
 
@@ -442,14 +432,7 @@ async def retry_file(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(File).where(File.id == file_id, File.deleted_at.is_(None))
-    )
-    file = result.scalar_one_or_none()
-    if not file:
-        raise HTTPException(status_code=404, detail="File not found")
-    if file.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    file = await get_owned_file(file_id, db, user)
     retryable = {
         FileStatus.failed_partial,
         FileStatus.failed_terminal,
@@ -485,14 +468,7 @@ async def delete_file(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(File).where(File.id == file_id, File.deleted_at.is_(None))
-    )
-    file = result.scalar_one_or_none()
-    if not file:
-        raise HTTPException(status_code=404, detail="File not found")
-    if file.user_id != user.id:
-        raise HTTPException(status_code=403, detail="Access denied")
+    file = await get_owned_file(file_id, db, user)
 
     from datetime import datetime, timezone
 

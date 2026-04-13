@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.billing import CreditBalance, CreditPurchase
 from app.config import settings
 from app.services.paddle_client import paddle
+from app.utils.db_helpers import get_or_create_credit_balance
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +27,7 @@ CREDIT_PACKS = {
 
 class CreditService:
     async def get_balance(self, db: AsyncSession, user_id: str) -> CreditBalance:
-        result = await db.execute(
-            select(CreditBalance).where(CreditBalance.user_id == user_id)
-        )
-        balance = result.scalar_one_or_none()
-        if balance is None:
-            balance = CreditBalance(user_id=user_id)
-            db.add(balance)
-            await db.flush()
-        return balance
+        return await get_or_create_credit_balance(db, user_id)
 
     async def add_credits(
         self,

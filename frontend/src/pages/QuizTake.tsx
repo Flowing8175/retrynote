@@ -4,79 +4,23 @@ import { isAxiosError } from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
-import { PillShimmer } from '@/components';
 import type { AnswerLogEntry, AnswerResponse } from '@/types';
-import { ChevronLeft, ChevronRight, CheckCircle2, AlertCircle, Waypoints } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertCircle, Waypoints } from 'lucide-react';
 import DiagramModal from '@/components/DiagramModal';
 import { getErrorMessage } from '@/utils/errorMessages';
+import QuizGeneratingScreen from '@/components/quiz/QuizGeneratingScreen';
+import QuizChoiceOptions from '@/components/quiz/QuizChoiceOptions';
+import QuizAnswerFeedback from '@/components/quiz/QuizAnswerFeedback';
+import {
+  QUESTION_TYPE_LABELS,
+  DEFAULT_OX_OPTIONS,
+  AUTO_SUBMIT_QUESTION_TYPES,
+  FREE_TEXT_QUESTION_TYPES,
+} from '@/utils/quizConstants';
 
 const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded', 'closed']);
-const AUTO_SUBMIT_QUESTION_TYPES = new Set(['multiple_choice', 'ox']);
-const FREE_TEXT_QUESTION_TYPES = new Set(['short_answer', 'essay', 'fill_blank']);
-const DEFAULT_OX_OPTIONS: Record<string, string> = {
-  O: 'O',
-  X: 'X',
-};
 
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
-
-
-const QUESTION_TYPE_LABELS: Record<string, string> = {
-  multiple_choice: '객관식',
-  fill_blank: '빈칸 채우기',
-  short_answer: '단답형',
-  essay: '서술형',
-  ox: 'O/X',
-};
-
-function normalizeOxValue(value: unknown) {
-  return typeof value === 'string' ? value.trim().toLowerCase() : '';
-}
-
-const generatingPhrases = [
-  '학습 자료 분석 중...',
-  '핵심 개념 추출 중...',
-  '문항 설계 중...',
-  '정답 및 해설 작성 중...',
-  '마지막 검토 중...',
-  '거의 완성됐어요!',
-];
-
-function QuizGeneratingScreen({ onCancel }: { onCancel: () => void }) {
-  const [phraseIndex, setPhraseIndex] = useState(0);
-
-  useEffect(() => {
-    const id = setInterval(() => setPhraseIndex((i) => (i + 1) % generatingPhrases.length), 3000);
-    return () => clearInterval(id);
-  }, []);
-
-  return (
-    <div className="max-w-3xl mx-auto py-32 text-center space-y-8 animate-fade-in">
-      <div className="flex flex-col items-center gap-2.5 mx-auto animate-fade-in-up stagger-1">
-        <PillShimmer width={220} />
-        <PillShimmer width={160} delay={0.3} opacity={0.75} />
-        <PillShimmer width={200} delay={0.55} opacity={0.55} />
-        <PillShimmer width={120} delay={0.8} opacity={0.38} />
-        <PillShimmer width={80} delay={1.0} opacity={0.22} />
-      </div>
-      <div className="space-y-4 animate-fade-in-up stagger-3">
-        <h1 key={phraseIndex} className="text-3xl font-semibold text-white animate-fade-in">
-          {generatingPhrases[phraseIndex]}
-        </h1>
-        <p className="text-base text-content-secondary leading-relaxed animate-fade-in-up stagger-4">
-          AI가 학습 자료를 분석하여 문항을 설계하고 있습니다.<br />잠시만 기다려 주세요.
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={onCancel}
-        className="mt-2 text-sm text-content-muted underline underline-offset-2 transition-colors hover:text-white animate-fade-in-up stagger-5"
-      >
-        취소하고 돌아가기
-      </button>
-    </div>
-  );
-}
 
 function QuizTakeSkeleton() {
   return (
@@ -365,46 +309,68 @@ export default function QuizTake() {
     }
   };
 
+  const [questionFading, setQuestionFading] = useState(false);
+
+  const slideQuestion = (fn: () => void) => {
+    setQuestionFading(true);
+    setTimeout(() => {
+      fn();
+      requestAnimationFrame(() => setQuestionFading(false));
+    }, 150);
+  };
+
+  const scrollToHeader = () => {
+    if (headerRef.current) {
+      const top = headerRef.current.getBoundingClientRect().top + window.scrollY - 32;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }
+  };
+
   const handleNext = () => {
-    if (itemsData && currentItemIndex < itemsData.length - 1) {
+    if (!itemsData || currentItemIndex >= itemsData.length - 1) return;
+    slideQuestion(() => {
       const nextIndex = currentItemIndex + 1;
       setCurrentItemIndex(nextIndex);
       setIsSubmitted(!!submittedAnswers[itemsData[nextIndex].id]);
       setAnswerResult(answerResultsByItemId[itemsData[nextIndex].id] || null);
       setUserAnswer(submittedAnswers[itemsData[nextIndex].id] || draftAnswers[itemsData[nextIndex].id] || '');
-    }
+    });
   };
 
   const handleNextWithScroll = () => {
-    handleNext();
-    if (headerRef.current) {
-      const top = headerRef.current.getBoundingClientRect().top + window.scrollY - 32;
-      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-    }
+    if (!itemsData || currentItemIndex >= itemsData.length - 1) return;
+    slideQuestion(() => {
+      const nextIndex = currentItemIndex + 1;
+      setCurrentItemIndex(nextIndex);
+      setIsSubmitted(!!submittedAnswers[itemsData[nextIndex].id]);
+      setAnswerResult(answerResultsByItemId[itemsData[nextIndex].id] || null);
+      setUserAnswer(submittedAnswers[itemsData[nextIndex].id] || draftAnswers[itemsData[nextIndex].id] || '');
+      scrollToHeader();
+    });
   };
 
   const handleSkip = () => {
     if (!itemsData || currentItemIndex >= itemsData.length - 1) return;
-    const nextIndex = currentItemIndex + 1;
-    setFurthestAvailableIndex((prev) => Math.max(prev, nextIndex));
-    setCurrentItemIndex(nextIndex);
-    setIsSubmitted(!!submittedAnswers[itemsData[nextIndex].id]);
-    setAnswerResult(answerResultsByItemId[itemsData[nextIndex].id] || null);
-    setUserAnswer(submittedAnswers[itemsData[nextIndex].id] || draftAnswers[itemsData[nextIndex].id] || '');
-    if (headerRef.current) {
-      const top = headerRef.current.getBoundingClientRect().top + window.scrollY - 32;
-      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
-    }
+    slideQuestion(() => {
+      const nextIndex = currentItemIndex + 1;
+      setFurthestAvailableIndex((prev) => Math.max(prev, nextIndex));
+      setCurrentItemIndex(nextIndex);
+      setIsSubmitted(!!submittedAnswers[itemsData[nextIndex].id]);
+      setAnswerResult(answerResultsByItemId[itemsData[nextIndex].id] || null);
+      setUserAnswer(submittedAnswers[itemsData[nextIndex].id] || draftAnswers[itemsData[nextIndex].id] || '');
+      scrollToHeader();
+    });
   };
 
   const handlePrev = () => {
-    if (currentItemIndex > 0 && itemsData) {
+    if (currentItemIndex <= 0 || !itemsData) return;
+    slideQuestion(() => {
       const prevIndex = currentItemIndex - 1;
       setCurrentItemIndex(prevIndex);
       setIsSubmitted(!!submittedAnswers[itemsData[prevIndex].id]);
       setAnswerResult(answerResultsByItemId[itemsData[prevIndex].id] || null);
       setUserAnswer(submittedAnswers[itemsData[prevIndex].id] || draftAnswers[itemsData[prevIndex].id] || '');
-    }
+    });
   };
 
   const handleViewResults = async () => {
@@ -572,7 +538,7 @@ export default function QuizTake() {
 
       {/* Main Question Area */}
       {currentItem && (
-        <section className="animate-fade-in-up space-y-10">
+        <section className={`space-y-10 transition-opacity duration-150 ease-out ${questionFading ? 'opacity-0' : 'opacity-100'}`}>
           <div className="space-y-6">
             <div className="flex items-center gap-3">
               <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2.5 py-1 rounded-md border border-brand-500/20">
@@ -599,48 +565,17 @@ export default function QuizTake() {
           {/* Answer Options */}
           <div className="space-y-4">
             {choiceOptions && (
-              <div className="grid gap-3">
-                {Object.entries(choiceOptions).map(([key, text]) => {
-                  const isOxQuestion = currentQuestionType === 'ox';
-                  const isSelected = isOxQuestion
-                    ? normalizeOxValue(userAnswer) === normalizeOxValue(key)
-                    : userAnswer === key;
-                  const isCorrectAnswer = isOxQuestion
-                    ? normalizeOxValue(answerResult?.correct_answer?.answer) === normalizeOxValue(key)
-                    : answerResult?.correct_answer?.answer === key;
-                  const isWrong = isSubmitted && isSelected && answerResult?.judgement !== 'correct';
-                  const shouldShowCorrect = isSubmitted && !isExamMode && isCorrectAnswer;
-
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => handleOptionSelect(key)}
-                      disabled={(isSubmitted && !isExamMode) || isCompleted}
-                      className={`relative group flex items-start gap-4 p-5 rounded-2xl text-left transition-all border ${
-                        isWrong
-                          ? 'bg-semantic-error/10 text-semantic-error border-semantic-error/40 ring-1 ring-inset ring-semantic-error/30'
-                          : shouldShowCorrect
-                            ? 'bg-semantic-success/10 text-semantic-success border-semantic-success/40 ring-1 ring-inset ring-semantic-success/30'
-                            : isSelected
-                              ? 'bg-brand-500/15 text-brand-200 border-brand-500/30 ring-1 ring-inset ring-brand-500/30 shadow-sm shadow-brand-900/20'
-                              : 'bg-surface text-content-primary border-white/[0.05] hover:bg-surface-hover'
-                      }`}
-                    >
-                      <span className={`text-base font-semibold tabular-nums mt-0.5 ${
-                        isWrong ? 'text-semantic-error' : shouldShowCorrect ? 'text-semantic-success' : isSelected ? 'text-brand-100' : 'text-content-muted'
-                      }`}>
-                        {key.toUpperCase()}
-                      </span>
-                      <div className="flex flex-col gap-1">
-                        <span className={`text-base font-medium leading-relaxed ${isSelected && !isWrong ? 'text-brand-50' : ''}`}>{text}</span>
-                        {isSubmitted && !isExamMode && optionDescriptions?.[key] && (
-                          <span className="text-sm text-content-muted leading-snug">{optionDescriptions[key]}</span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+              <QuizChoiceOptions
+                options={choiceOptions}
+                optionDescriptions={optionDescriptions}
+                selectedAnswer={userAnswer}
+                correctAnswer={answerResult?.correct_answer?.answer as string | null | undefined}
+                judgement={answerResult?.judgement}
+                questionType={currentQuestionType ?? ''}
+                isResultShown={isSubmitted && !isExamMode}
+                isDisabled={(isSubmitted && !isExamMode) || isCompleted}
+                onSelect={handleOptionSelect}
+              />
             )}
 
             {currentQuestionType !== null && FREE_TEXT_QUESTION_TYPES.has(currentQuestionType) && (
@@ -673,23 +608,11 @@ export default function QuizTake() {
             )}
           </div>
 
-          {/* Result Feedback (Immediate Mode Only) */}
           {isSubmitted && !isExamMode && answerResult && (
-            <div className={`animate-fade-in-up p-6 rounded-2xl border ${answerResult.judgement === 'correct' ? 'bg-brand-500/5 border-brand-500/30' : answerResult.judgement === 'partial' ? 'bg-semantic-warning/5 border-semantic-warning/30' : 'bg-semantic-error/5 border-semantic-error/30'}`}>
-              <div className="flex items-center gap-4 mb-4">
-                {answerResult.judgement === 'correct' ? (
-                  <CheckCircle2 size={24} className="text-brand-300" />
-                ) : (
-                  <AlertCircle size={24} className={answerResult.judgement === 'partial' ? 'text-semantic-warning' : 'text-semantic-error'} />
-                )}
-                <h3 className={`text-lg font-semibold ${answerResult.judgement === 'correct' ? 'text-brand-300' : answerResult.judgement === 'partial' ? 'text-semantic-warning' : 'text-semantic-error'}`}>
-                  {answerResult.judgement === 'correct' ? '정답입니다' : answerResult.judgement === 'partial' ? '부분 정답입니다' : '틀렸습니다'}
-                </h3>
-              </div>
-              <p className="text-base text-content-secondary leading-relaxed">
-                {answerResult.suggested_feedback || answerResult.explanation}
-              </p>
-            </div>
+            <QuizAnswerFeedback
+              judgement={answerResult.judgement}
+              feedbackText={answerResult.suggested_feedback || answerResult.explanation}
+            />
           )}
         </section>
       )}
@@ -723,17 +646,18 @@ export default function QuizTake() {
         </div>
 
         <div className="w-full sm:w-auto">
-          {(!isSubmitted || isExamMode) && !isCompleted ? (
-            <div className="flex items-center gap-3 w-full sm:w-auto">
-              {currentItemIndex < (itemsData?.length || 1) - 1 && (
-                <button
-                  onClick={handleSkip}
-                  disabled={submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending}
-                  className="flex-1 sm:flex-none h-12 px-6 bg-surface border border-white/[0.08] rounded-xl text-sm font-medium text-content-secondary hover:bg-surface-hover hover:text-white transition-colors disabled:opacity-30"
-                >
-                  건너뛰기
-                </button>
-              )}
+           {(!isSubmitted || isExamMode) && !isCompleted ? (
+             <div className="flex items-center gap-3 w-full sm:w-auto">
+               {currentItemIndex < (itemsData?.length || 1) - 1 && !isSubmitted && (
+                 <button
+                   onClick={handleSkip}
+                   disabled={submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending}
+                   className="flex-1 sm:flex-none h-12 px-6 bg-surface border border-white/[0.08] rounded-xl text-sm font-medium text-content-secondary hover:bg-surface-hover hover:text-white transition-colors disabled:opacity-30 group relative"
+                 >
+                   <span className="inline-block opacity-100 group-hover:opacity-0 transition-opacity duration-200">모르겠어요</span>
+                   <span className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">건너뛰기</span>
+                 </button>
+               )}
               <button
                 onClick={() => {
                   if (isExamMode) {
@@ -780,3 +704,4 @@ export default function QuizTake() {
     </div>
   );
 }
+

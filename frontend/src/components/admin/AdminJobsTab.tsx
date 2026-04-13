@@ -1,14 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/api';
-import type { AdminJobItem } from '@/types';
+import type { AdminJobItem, AdminTabProps } from '@/types';
 import { formatDateTime } from './adminUtils';
-import type { TabKey } from './adminUtils';
-
-interface AdminJobsTabProps {
-  isVerified: boolean;
-  activeTab: TabKey;
-}
 
 const STATUS_OPTIONS = [
   { value: '', label: '전체' },
@@ -51,7 +45,7 @@ function SpinnerIcon() {
   );
 }
 
-export default function AdminJobsTab({ isVerified, activeTab }: AdminJobsTabProps) {
+export default function AdminJobsTab({ isVerified, activeTab }: AdminTabProps) {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('');
   const [jobTypeFilter, setJobTypeFilter] = useState('');

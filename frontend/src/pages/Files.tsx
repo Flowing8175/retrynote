@@ -7,6 +7,7 @@ import { filesApi } from '@/api';
 import { Modal, Pagination, StatusBadge, SkeletonTransition } from '@/components';
 import { isFileProcessingStatus } from '@/types';
 import type { FileDetail } from '@/types';
+import { useModalState } from '@/hooks/useModalState';
 
 const failedStatuses = ['failed_partial', 'failed_terminal'];
 
@@ -111,11 +112,11 @@ export default function Files() {
   const [editingFilename, setEditingFilename] = useState('');
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-  const [moveDialogOpen, setMoveDialogOpen] = useState(false);
+  const moveModal = useModalState();
+  const fileDeleteModal = useModalState<FileDetail>();
+  const folderDeleteModal = useModalState<{ id: string; name: string }>();
   const [moveTargetFolderId, setMoveTargetFolderId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [filePendingDelete, setFilePendingDelete] = useState<FileDetail | null>(null);
-  const [folderPendingDelete, setFolderPendingDelete] = useState<{ id: string; name: string } | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
@@ -182,7 +183,7 @@ export default function Files() {
     mutationFn: (fileId: string) => filesApi.deleteFile(fileId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
-      setFilePendingDelete(null);
+      fileDeleteModal.close();
       setDeleteError(null);
     },
     onError: () => {
@@ -205,7 +206,7 @@ export default function Files() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
       setSelectedFileIds([]);
-      setMoveDialogOpen(false);
+      moveModal.close();
     },
   });
 
@@ -224,7 +225,7 @@ export default function Files() {
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       queryClient.invalidateQueries({ queryKey: ['files'] });
       setSelectedFolderId((current) => (current === folderId ? null : current));
-      setFolderPendingDelete(null);
+      folderDeleteModal.close();
     },
   });
 
@@ -330,7 +331,7 @@ export default function Files() {
                     <span className="truncate">{folder.name}</span>
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setFolderPendingDelete({ id: folder.id, name: folder.name }); }}
+                    onClick={(e) => { e.stopPropagation(); folderDeleteModal.open({ id: folder.id, name: folder.name }); }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-content-muted hover:text-semantic-error hover:bg-semantic-error/10 opacity-0 group-hover/folder:opacity-100 transition-all"
                     title="폴더 삭제"
                   >
@@ -545,7 +546,7 @@ export default function Files() {
                                 <RotateCw size={14} /> 재시도
                               </button>
                             )}
-                            <button onClick={() => setFilePendingDelete(file)} className="flex items-center gap-1.5 bg-semantic-error/10 border border-semantic-error/20 rounded-lg px-3 py-1.5 text-xs font-medium text-semantic-error hover:bg-semantic-error/20 transition-colors">
+                             <button onClick={() => fileDeleteModal.open(file)} className="flex items-center gap-1.5 bg-semantic-error/10 border border-semantic-error/20 rounded-lg px-3 py-1.5 text-xs font-medium text-semantic-error hover:bg-semantic-error/20 transition-colors">
                               <Trash2 size={14} /> 삭제
                             </button>
                           </div>
@@ -583,7 +584,7 @@ export default function Files() {
                   선택 삭제
                 </button>
                 <button
-                  onClick={() => setMoveDialogOpen(true)}
+                  onClick={moveModal.open}
                   className="flex-1 sm:flex-none bg-brand-500 text-brand-900 px-6 py-2 text-sm font-semibold rounded-xl hover:-translate-y-0.5 transition-transform"
                 >
                   폴더로 이동
@@ -595,22 +596,22 @@ export default function Files() {
       )}
 
       {/* Modals */}
-      <Modal isOpen={filePendingDelete !== null} onClose={() => setFilePendingDelete(null)} title="자료 삭제 확인">
+      <Modal isOpen={fileDeleteModal.isOpen} onClose={fileDeleteModal.close} title="자료 삭제 확인">
         <div className="space-y-6">
           <div className="bg-surface-deep p-5 rounded-2xl border border-white/[0.05]">
             <p className="text-sm text-content-secondary">
-              <span className="text-white font-medium">{filePendingDelete?.original_filename}</span> 자료를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+              <span className="text-white font-medium">{fileDeleteModal.value?.original_filename}</span> 자료를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
             </p>
           </div>
           {deleteError && (
             <p className="text-sm text-semantic-error">{deleteError}</p>
           )}
           <div className="flex gap-3 pt-2">
-            <button onClick={() => { setFilePendingDelete(null); setDeleteError(null); }} className="flex-1 py-2.5 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover">취소</button>
+            <button onClick={() => { fileDeleteModal.close(); setDeleteError(null); }} className="flex-1 py-2.5 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover">취소</button>
             <button
               onClick={() => {
-                if (!filePendingDelete) return;
-                deleteMutation.mutate(filePendingDelete.id);
+                if (!fileDeleteModal.value) return;
+                deleteMutation.mutate(fileDeleteModal.value.id);
               }}
               disabled={deleteMutation.isPending}
               className="flex-1 bg-semantic-error text-white py-2.5 text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-50"
@@ -621,17 +622,17 @@ export default function Files() {
         </div>
       </Modal>
 
-      <Modal isOpen={folderPendingDelete !== null} onClose={() => setFolderPendingDelete(null)} title="폴더 삭제 확인">
+      <Modal isOpen={folderDeleteModal.isOpen} onClose={folderDeleteModal.close} title="폴더 삭제 확인">
         <div className="space-y-6">
           <div className="bg-surface-deep p-5 rounded-2xl border border-white/[0.05]">
             <p className="text-sm text-content-secondary">
-              <span className="text-white font-medium">{folderPendingDelete?.name}</span> 폴더를 삭제하시겠습니까? 폴더 안의 파일은 삭제되지 않고 루트로 이동됩니다.
+              <span className="text-white font-medium">{folderDeleteModal.value?.name}</span> 폴더를 삭제하시겠습니까? 폴더 안의 파일은 삭제되지 않고 루트로 이동됩니다.
             </p>
           </div>
           <div className="flex gap-3 pt-2">
-            <button onClick={() => setFolderPendingDelete(null)} className="flex-1 py-2.5 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover">취소</button>
+            <button onClick={folderDeleteModal.close} className="flex-1 py-2.5 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover">취소</button>
             <button
-              onClick={() => { if (folderPendingDelete) deleteFolderMutation.mutate(folderPendingDelete.id); }}
+              onClick={() => { if (folderDeleteModal.value) deleteFolderMutation.mutate(folderDeleteModal.value.id); }}
               disabled={deleteFolderMutation.isPending}
               className="flex-1 bg-semantic-error text-white py-2.5 text-sm font-semibold rounded-xl hover:opacity-90 disabled:opacity-50"
             >
@@ -641,7 +642,7 @@ export default function Files() {
         </div>
       </Modal>
 
-      <Modal isOpen={moveDialogOpen} onClose={() => setMoveDialogOpen(false)} title="폴더 이동">
+      <Modal isOpen={moveModal.isOpen} onClose={moveModal.close} title="폴더 이동">
         <div className="space-y-6">
           <div className="space-y-3">
             <label className="text-sm font-medium text-content-primary">이동할 위치를 선택하세요</label>
@@ -655,7 +656,7 @@ export default function Files() {
             </select>
           </div>
           <div className="flex gap-3 pt-2">
-            <button onClick={() => setMoveDialogOpen(false)} className="flex-1 py-2.5 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover">취소</button>
+            <button onClick={moveModal.close} className="flex-1 py-2.5 text-sm font-medium text-content-secondary border border-white/[0.05] bg-surface rounded-xl hover:bg-surface-hover">취소</button>
             <button
               onClick={() => moveMutation.mutate({ fileIds: selectedFileIds, folderId: moveTargetFolderId })}
               className="flex-1 bg-brand-500 text-brand-900 py-2.5 text-sm font-semibold rounded-xl hover:-translate-y-0.5 transition-transform"

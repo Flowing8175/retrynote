@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFlip } from '@/hooks/useFlip';
+import { useModalState } from '@/hooks/useModalState';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide-react';
@@ -113,7 +114,7 @@ export default function QuizNew() {
     }
     setPreferredTierState(tier);
   };
-  const [showNoSourceModal, setShowNoSourceModal] = useState(false);
+  const noSourceModal = useModalState();
   const [noSourceConfirmed, setNoSourceConfirmed] = useState(false);
   const location = useLocation();
   const locationState = location.state as { inputError?: string; inputSourceMode?: string } | null;
@@ -244,7 +245,7 @@ export default function QuizNew() {
   };
 
   const resetNoSourceModal = () => {
-    setShowNoSourceModal(false);
+    noSourceModal.close();
     setNoSourceConfirmed(false);
   };
 
@@ -276,7 +277,7 @@ export default function QuizNew() {
       return;
     }
     if (sourceMode === 'no_source') {
-      setShowNoSourceModal(true);
+      noSourceModal.open();
       return;
     }
     void createQuiz();
@@ -335,108 +336,125 @@ export default function QuizNew() {
           layout="grid-2"
         />
 
-        <div key={sourceMode} className="animate-mode-switch">
-        {sourceMode === 'document_based' ? (
-          <div className={`space-y-6 bg-surface rounded-3xl p-6 md:p-8 ${fileError ? 'border border-semantic-error' : 'border border-white/[0.05]'}`}>
-            {fileError && (
-              <p className="text-xs text-semantic-error -mb-2">{fileError}</p>
-            )}
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <OptionGroup
-                options={[
-                  { value: '__all__', label: '전체' },
-                  ...folders.map((folder) => ({ value: folder.id, label: folder.name })),
-                ]}
-                value={selectedFolderId ?? '__all__'}
-                onChange={(v) => { const sv = v as string; setSelectedFolderId(sv === '__all__' ? null : sv); setSelectedFileIds([]); }}
-                size="sm"
-                layout="wrap"
-              />
-              <Link to="/files" className="inline-flex items-center py-2 px-2 text-xs font-medium text-brand-300 hover:text-white transition-colors">
-                자료 관리 →
-              </Link>
-            </div>
+        <div className="relative grid transition-[grid-template-rows] duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          style={{ gridTemplateRows: '1fr' }}>
+          <div
+            aria-hidden={sourceMode !== 'document_based'}
+            className={`transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              sourceMode === 'document_based'
+                ? 'opacity-100 translate-y-0 pointer-events-auto'
+                : 'opacity-0 -translate-y-1 pointer-events-none absolute inset-x-0 top-0'
+            }`}
+          >
+            <div className={`space-y-6 bg-surface rounded-3xl p-6 md:p-8 ${fileError ? 'border border-semantic-error' : 'border border-white/[0.05]'}`}>
+              {fileError && (
+                <p className="text-xs text-semantic-error -mb-2">{fileError}</p>
+              )}
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <OptionGroup
+                  options={[
+                    { value: '__all__', label: '전체' },
+                    ...folders.map((folder) => ({ value: folder.id, label: folder.name })),
+                  ]}
+                  value={selectedFolderId ?? '__all__'}
+                  onChange={(v) => { const sv = v as string; setSelectedFolderId(sv === '__all__' ? null : sv); setSelectedFileIds([]); }}
+                  size="sm"
+                  layout="wrap"
+                />
+                <Link to="/files" className="inline-flex items-center py-2 px-2 text-xs font-medium text-brand-300 hover:text-white transition-colors">
+                  자료 관리 →
+                </Link>
+              </div>
 
-            <div className="space-y-3">
-              {fileGroups.readyFiles.map((file) => {
-                const isSelected = selectedFileIds.includes(file.id);
-                return (
-                  <label
+              <div className="space-y-3">
+                {fileGroups.readyFiles.map((file) => {
+                  const isSelected = selectedFileIds.includes(file.id);
+                  return (
+                    <label
+                      key={file.id}
+                      className={`group flex items-center gap-4 px-5 py-4 cursor-pointer rounded-2xl transition-colors border ${
+                        isSelected 
+                          ? 'bg-brand-500/5 border-brand-500/30' 
+                          : 'bg-surface-deep border-white/[0.05] hover:bg-surface-hover'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleFileToggle(file.id)}
+                        className="w-5 h-5 rounded border-white/[0.1] bg-surface text-brand-500 focus:ring-brand-500"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-white truncate group-hover:text-brand-300 transition-colors mb-1">
+                          {file.original_filename || '제목 없는 자료'}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs text-content-muted">{formatFileSource(file.source_type)}</span>
+                          <span className="text-xs text-content-muted">{formatFileSize(file.file_size_bytes)}</span>
+                        </div>
+                      </div>
+                      <StatusBadge status={file.status} />
+                    </label>
+                  );
+                })}
+                {fileGroups.processingFiles.map((file) => (
+                  <div
                     key={file.id}
-                    className={`group flex items-center gap-4 px-5 py-4 cursor-pointer rounded-2xl transition-colors border ${
-                      isSelected 
-                        ? 'bg-brand-500/5 border-brand-500/30' 
-                        : 'bg-surface-deep border-white/[0.05] hover:bg-surface-hover'
-                    }`}
+                    className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-surface-deep border border-white/[0.05] opacity-60 cursor-not-allowed"
                   >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => handleFileToggle(file.id)}
-                      className="w-5 h-5 rounded border-white/[0.1] bg-surface text-brand-500 focus:ring-brand-500"
-                    />
+                    <div className="w-5 h-5 rounded border border-white/20 bg-surface shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-white truncate group-hover:text-brand-300 transition-colors mb-1">
+                      <div className="text-sm font-medium text-white truncate mb-1">
                         {file.original_filename || '제목 없는 자료'}
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs text-content-muted">{formatFileSource(file.source_type)}</span>
-                        <span className="text-xs text-content-muted">{formatFileSize(file.file_size_bytes)}</span>
                       </div>
                     </div>
                     <StatusBadge status={file.status} />
-                  </label>
-                );
-              })}
-              {fileGroups.processingFiles.map((file) => (
-                <div
-                  key={file.id}
-                  className="flex items-center gap-4 px-5 py-4 rounded-2xl bg-surface-deep border border-white/[0.05] opacity-60 cursor-not-allowed"
-                >
-                  <div className="w-5 h-5 rounded border border-white/20 bg-surface shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white truncate mb-1">
-                      {file.original_filename || '제목 없는 자료'}
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-content-muted">{formatFileSource(file.source_type)}</span>
-                    </div>
                   </div>
-                  <StatusBadge status={file.status} />
-                </div>
-              ))}
-              {fileGroups.readyFiles.length === 0 && fileGroups.processingFiles.length === 0 && (
-                <div className="text-center py-10 text-sm text-content-muted bg-surface-deep rounded-2xl border border-white/[0.05]">
-                  사용 가능한 자료가 없습니다.
-                </div>
+                ))}
+                {fileGroups.readyFiles.length === 0 && fileGroups.processingFiles.length === 0 && (
+                  <div className="text-center py-10 text-sm text-content-muted bg-surface-deep rounded-2xl border border-white/[0.05]">
+                    사용 가능한 자료가 없습니다.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div
+            aria-hidden={sourceMode !== 'no_source'}
+            className={`transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              sourceMode === 'no_source'
+                ? 'opacity-100 translate-y-0 pointer-events-auto'
+                : 'opacity-0 translate-y-1 pointer-events-none absolute inset-x-0 top-0'
+            }`}
+          >
+            <div className="space-y-4 bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
+              <label htmlFor="topic-input" className="block text-sm font-medium text-content-primary">
+                학습하고 싶은 주제를 입력하세요
+              </label>
+              <input
+                id="topic-input"
+                type="text"
+                value={topic}
+                onChange={(e) => { setTopic(e.target.value); setTopicError(null); }}
+                placeholder="예: 양자역학, 서양미술사, 파이썬 기초..."
+                className={`w-full bg-surface-deep rounded-xl text-base px-5 py-4 placeholder:text-content-muted focus:outline-none transition-shadow ${topicError ? 'border border-semantic-error focus:ring-2 focus:ring-semantic-error/50' : 'border border-white/[0.05] focus:ring-2 focus:ring-brand-500'}`}
+              />
+              {topicError ? (
+                <p className="text-xs text-semantic-error">{topicError}</p>
+              ) : (
+                <p className="text-xs text-content-muted">주제를 비워두면 무작위로 흥미로운 상식 퀴즈가 생성됩니다.</p>
               )}
             </div>
           </div>
-        ) : (
-          <div className="space-y-4 bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
-            <label htmlFor="topic-input" className="block text-sm font-medium text-content-primary">
-              학습하고 싶은 주제를 입력하세요
-            </label>
-            <input
-              id="topic-input"
-              type="text"
-              value={topic}
-              onChange={(e) => { setTopic(e.target.value); setTopicError(null); }}
-              placeholder="예: 양자역학, 서양미술사, 파이썬 기초..."
-              className={`w-full bg-surface-deep rounded-xl text-base px-5 py-4 placeholder:text-content-muted focus:outline-none transition-shadow ${topicError ? 'border border-semantic-error focus:ring-2 focus:ring-semantic-error/50' : 'border border-white/[0.05] focus:ring-2 focus:ring-brand-500'}`}
-            />
-            {topicError ? (
-              <p className="text-xs text-semantic-error">{topicError}</p>
-            ) : (
-              <p className="text-xs text-content-muted">주제를 비워두면 무작위로 흥미로운 상식 퀴즈가 생성됩니다.</p>
-            )}
-          </div>
-        )}
         </div>
       </section>
 
        {/* Configuration Section */}
-       <section ref={section2Ref} className="animate-fade-in-up stagger-2 space-y-8" data-tour="quiz-options">
+       <section ref={section2Ref} className="space-y-8" data-tour="quiz-options">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 font-semibold text-sm">
             2
@@ -602,7 +620,7 @@ export default function QuizNew() {
 
       {/* No Source Confirmation Modal */}
       <Modal
-        isOpen={showNoSourceModal}
+        isOpen={noSourceModal.isOpen}
         onClose={() => {
           if (createQuizMutation.isPending) {
             return;

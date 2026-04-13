@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 from app.database import async_session
+from app.utils.job_runner import JobFailure, JobRunner
 from app.models.file import File, FileStatus, ParsedDocument, DocumentChunk
 from app.models.quiz import (
     QuizSession,
@@ -42,124 +43,110 @@ async def process_file(job_id: str):
         if not job:
             return
 
-        job.status = "processing"
-        job.started_at = datetime.now(timezone.utc)
-        await db.commit()
+        async with JobRunner(db, job):
+            file_result = await db.execute(select(File).where(File.id == job.target_id))
+            file = file_result.scalar_one_or_none()
+            if not file:
+                raise JobFailure("File not found")
 
-        file_result = await db.execute(select(File).where(File.id == job.target_id))
-        file = file_result.scalar_one_or_none()
-        if not file:
-            job.status = "failed"
-            job.error_message = "File not found"
-            await db.commit()
-            return
-
-        try:
-            file.status = FileStatus.parsing
-            file.processing_started_at = datetime.now(timezone.utc)
-            await db.commit()
-
-            ocr_required = file.file_type in ("png", "jpg", "jpeg")
-            text = ""
-
-            if ocr_required:
-                file.ocr_required = True
-                file.status = FileStatus.ocr_pending
+            try:
+                file.status = FileStatus.parsing
+                file.processing_started_at = datetime.now(timezone.utc)
                 await db.commit()
 
-                file.status = FileStatus.ocr_processing
-                await db.commit()
+                ocr_required = file.file_type in ("png", "jpg", "jpeg")
+                text = ""
 
-                from app.services.ocr_service import extract_text_from_image
-                from app.services import storage as _storage
-
-                stored_path = file.stored_path
-                if not stored_path:
-                    raise ValueError("Image file missing stored_path")
-                image_data = await _storage.download_file(stored_path)
-                ocr_result = await extract_text_from_image(image_data)
-                text = ocr_result.text
-            elif file.source_type.value == "manual_text":
-                payload = job.payload_json or {}
-                text = payload.get("manual_text", "")
-            elif file.source_type.value == "upload":
-                text = await _extract_file_text_async(file)
-            elif file.source_type.value == "url":
-                if not file.source_url:
-                    raise ValueError("URL source missing source_url")
-                text = await _fetch_url_text(file.source_url)
-
-            file.status = FileStatus.parsed
-            await db.commit()
-
-            if not text.strip():
                 if ocr_required:
-                    file.status = FileStatus.failed_partial
-                    file.parse_error_code = "ocr_empty"
-                else:
-                    file.status = FileStatus.failed_terminal
-                    file.parse_error_code = "empty_content"
-                file.processing_finished_at = datetime.now(timezone.utc)
-                job.status = "failed"
-                job.error_message = "File content is empty"
-                job.finished_at = datetime.now(timezone.utc)
+                    file.ocr_required = True
+                    file.status = FileStatus.ocr_pending
+                    await db.commit()
+
+                    file.status = FileStatus.ocr_processing
+                    await db.commit()
+
+                    from app.services.ocr_service import extract_text_from_image
+                    from app.services import storage as _storage
+
+                    stored_path = file.stored_path
+                    if not stored_path:
+                        raise ValueError("Image file missing stored_path")
+                    image_data = await _storage.download_file(stored_path)
+                    ocr_result = await extract_text_from_image(image_data)
+                    text = ocr_result.text
+                elif file.source_type.value == "manual_text":
+                    payload = job.payload_json or {}
+                    text = payload.get("manual_text", "")
+                elif file.source_type.value == "upload":
+                    text = await _extract_file_text_async(file)
+                elif file.source_type.value == "url":
+                    if not file.source_url:
+                        raise ValueError("URL source missing source_url")
+                    text = await _fetch_url_text(file.source_url)
+
+                file.status = FileStatus.parsed
                 await db.commit()
-                return
 
-            normalized = _normalize_text(text)
+                if not text.strip():
+                    if ocr_required:
+                        file.status = FileStatus.failed_partial
+                        file.parse_error_code = "ocr_empty"
+                    else:
+                        file.status = FileStatus.failed_terminal
+                        file.parse_error_code = "empty_content"
+                    file.processing_finished_at = datetime.now(timezone.utc)
+                    raise JobFailure("File content is empty")
 
-            parsed_doc = ParsedDocument(
-                file_id=file.id,
-                raw_text=text,
-                normalized_text=normalized,
-                language="ko",
-                page_count=1,
-                parser_name="kakao_ocr" if ocr_required else "builtin",
-                parser_version="1.0",
-                ocr_applied=ocr_required,
-            )
-            db.add(parsed_doc)
-            await db.flush()
+                normalized = _normalize_text(text)
 
-            file.status = FileStatus.embedding_pending
-            await db.commit()
+                parsed_doc = ParsedDocument(
+                    file_id=file.id,
+                    raw_text=text,
+                    normalized_text=normalized,
+                    language="ko",
+                    page_count=1,
+                    parser_name="kakao_ocr" if ocr_required else "builtin",
+                    parser_version="1.0",
+                    ocr_applied=ocr_required,
+                )
+                db.add(parsed_doc)
+                await db.flush()
 
-            chunks = _create_chunks(file.id, parsed_doc.id, normalized)
-            db.add_all(chunks)
-            await db.flush()
+                file.status = FileStatus.embedding_pending
+                await db.commit()
 
-            for chunk in chunks:
-                chunk.embedding_status = "completed"
-            logger.warning(
-                "File %s: embedding_status set to 'completed' without actual embedding — "
-                "vector search will not work for this file until embeddings are generated",
-                file.id,
-            )
+                chunks = _create_chunks(file.id, parsed_doc.id, normalized)
+                db.add_all(chunks)
+                await db.flush()
 
-            file.status = FileStatus.ready
-            file.is_searchable = True
-            file.is_quiz_eligible = True
-            file.processing_finished_at = datetime.now(timezone.utc)
+                for chunk in chunks:
+                    chunk.embedding_status = "completed"
+                logger.warning(
+                    "File %s: embedding_status set to 'completed' without actual embedding — "
+                    "vector search will not work for this file until embeddings are generated",
+                    file.id,
+                )
 
-            job.status = "completed"
-            job.finished_at = datetime.now(timezone.utc)
-            await db.commit()
+                file.status = FileStatus.ready
+                file.is_searchable = True
+                file.is_quiz_eligible = True
+                file.processing_finished_at = datetime.now(timezone.utc)
 
-        except Exception as e:
-            is_ocr_failure = file.ocr_required and file.status in (
-                FileStatus.ocr_pending,
-                FileStatus.ocr_processing,
-            )
-            file.status = (
-                FileStatus.failed_partial
-                if is_ocr_failure
-                else FileStatus.failed_terminal
-            )
-            file.parse_error_code = str(e)[:200]
-            file.processing_finished_at = datetime.now(timezone.utc)
-            job.status = "failed"
-            job.error_message = str(e)
-            await db.commit()
+            except JobFailure:
+                raise
+            except Exception as e:
+                is_ocr_failure = file.ocr_required and file.status in (
+                    FileStatus.ocr_pending,
+                    FileStatus.ocr_processing,
+                )
+                file.status = (
+                    FileStatus.failed_partial
+                    if is_ocr_failure
+                    else FileStatus.failed_terminal
+                )
+                file.parse_error_code = str(e)[:200]
+                file.processing_finished_at = datetime.now(timezone.utc)
+                raise
 
 
 async def _extract_file_text_async(file: File) -> str:
@@ -558,288 +545,260 @@ async def generate_quiz(job_id: str):
         if not job:
             return
 
-        job.status = "processing"
-        job.started_at = datetime.now(timezone.utc)
-        await db.commit()
-
-        session_result = await db.execute(
-            select(QuizSession).where(QuizSession.id == job.target_id)
-        )
-        session = session_result.scalar_one_or_none()
-        if not session:
-            job.status = "failed"
-            job.error_message = "Session not found"
-            await db.commit()
-            return
-
-        try:
-            session.status = QuizSessionStatus.generating
-            await db.commit()
-
-            from app.utils.ai_client import (
-                call_ai_with_fallback,
-                GENERATION_SCHEMA,
-                BATCH_RETRY_GENERATION_SCHEMA,
+        async with JobRunner(db, job):
+            session_result = await db.execute(
+                select(QuizSession).where(QuizSession.id == job.target_id)
             )
-            from app.config import settings as cfg
+            session = session_result.scalar_one_or_none()
+            if not session:
+                raise JobFailure("Session not found")
 
-            payload = job.payload_json or {}
+            try:
+                session.status = QuizSessionStatus.generating
+                await db.commit()
 
-            # Handle retry generation
-            if job.job_type == "retry_generation":
-                concept_keys = payload.get("concept_keys", [])
-                question_count = payload.get("size", session.question_count)
+                from app.utils.ai_client import (
+                    call_ai_with_fallback,
+                    GENERATION_SCHEMA,
+                    BATCH_RETRY_GENERATION_SCHEMA,
+                )
+                from app.config import settings as cfg
 
-                if not concept_keys:
-                    session.status = QuizSessionStatus.generation_failed
-                    job.status = "failed"
-                    job.error_message = "No concept keys provided for retry"
-                    await db.commit()
-                    return
+                payload = job.payload_json or {}
 
-                items_created = 0
+                if job.job_type == "retry_generation":
+                    concept_keys = payload.get("concept_keys", [])
+                    question_count = payload.get("size", session.question_count)
 
-                # Phase 1: sequential DB reads to collect context per concept
-                tasks_data = []  # (idx, concept_key, quiz_item)
-                batch_items = []  # dicts for build_batch_retry_prompt
-                for idx, concept_key in enumerate(concept_keys):
-                    if question_count is not None and idx >= question_count:
-                        break
+                    if not concept_keys:
+                        session.status = QuizSessionStatus.generation_failed
+                        raise JobFailure("No concept keys provided for retry")
 
-                    wrong_result = await db.execute(
-                        select(AnswerLog, QuizItem)
-                        .join(QuizItem, QuizItem.id == AnswerLog.quiz_item_id)
-                        .where(
-                            AnswerLog.user_id == session.user_id,
-                            QuizItem.concept_key == concept_key,
-                            AnswerLog.judgement.in_(
-                                [Judgement.incorrect, Judgement.partial]
+                    items_created = 0
+
+                    tasks_data = []
+                    batch_items = []
+                    for idx, concept_key in enumerate(concept_keys):
+                        if question_count is not None and idx >= question_count:
+                            break
+
+                        wrong_result = await db.execute(
+                            select(AnswerLog, QuizItem)
+                            .join(QuizItem, QuizItem.id == AnswerLog.quiz_item_id)
+                            .where(
+                                AnswerLog.user_id == session.user_id,
+                                QuizItem.concept_key == concept_key,
+                                AnswerLog.judgement.in_(
+                                    [Judgement.incorrect, Judgement.partial]
+                                ),
+                            )
+                            .order_by(AnswerLog.created_at.desc())
+                            .limit(1)
+                        )
+                        row = wrong_result.first()
+                        if not row:
+                            continue
+
+                        answer_log, quiz_item = row
+                        tasks_data.append((idx, concept_key, quiz_item))
+                        batch_items.append(
+                            {
+                                "concept_key": concept_key,
+                                "concept_label": quiz_item.concept_label or concept_key,
+                                "previous_question_type": quiz_item.question_type.value,
+                                "previous_question": quiz_item.question_text,
+                                "error_type": answer_log.error_type.value
+                                if answer_log.error_type
+                                else "unknown",
+                                "user_answer": answer_log.user_answer_raw or "",
+                                "correct_answer": str(
+                                    quiz_item.correct_answer_json.get("answer", "")
+                                    if isinstance(quiz_item.correct_answer_json, dict)
+                                    else quiz_item.correct_answer_json
+                                ),
+                                "retry_count": 1,
+                            }
+                        )
+
+                    if not batch_items:
+                        session.status = QuizSessionStatus.generation_failed
+                        raise JobFailure("No retry questions could be generated")
+
+                    batch_prompt = build_batch_retry_prompt(batch_items)
+                    batch_result = await call_ai_with_fallback(
+                        batch_prompt,
+                        BATCH_RETRY_GENERATION_SCHEMA,
+                        primary_model=session.generation_model_name
+                        or cfg.balanced_generation_model,
+                        fallback_model=cfg.eco_generation_model,
+                        system_message=SYSTEM_PROMPT_RETRY_GENERATION,
+                        cache_key="retry_gen_v1",
+                    )
+
+                    result_by_concept = {
+                        q["concept_key"]: q
+                        for q in batch_result.get("questions", [])
+                        if q.get("concept_key")
+                    }
+                    for idx, concept_key, quiz_item in tasks_data:
+                        ai_result = result_by_concept.get(concept_key)
+                        if not ai_result or not ai_result.get("question_text"):
+                            logger.warning(
+                                "Retry generation: no AI result for concept_key=%r in session %s; skipping",
+                                concept_key,
+                                session.id,
+                            )
+                            continue
+                        new_item = QuizItem(
+                            quiz_session_id=session.id,
+                            item_order=idx + 1,
+                            question_type=QuestionType(
+                                ai_result.get("question_type", "multiple_choice")
+                            ),
+                            question_text=ai_result.get("question_text", ""),
+                            correct_answer_json=ai_result.get(
+                                "correct_answer", {"answer": ""}
+                            ),
+                            explanation_text=ai_result.get("explanation", ""),
+                            concept_key=concept_key,
+                            concept_label=quiz_item.concept_label,
+                            category_tag=quiz_item.category_tag,
+                            difficulty=quiz_item.difficulty or "medium",
+                            source_refs_json=None,
+                            options_json=ai_result.get("options"),
+                            option_descriptions_json=ai_result.get(
+                                "option_descriptions"
                             ),
                         )
-                        .order_by(AnswerLog.created_at.desc())
-                        .limit(1)
-                    )
-                    row = wrong_result.first()
-                    if not row:
-                        continue
+                        db.add(new_item)
+                        items_created += 1
 
-                    answer_log, quiz_item = row
-                    tasks_data.append((idx, concept_key, quiz_item))
-                    batch_items.append(
-                        {
-                            "concept_key": concept_key,
-                            "concept_label": quiz_item.concept_label or concept_key,
-                            "previous_question_type": quiz_item.question_type.value,
-                            "previous_question": quiz_item.question_text,
-                            "error_type": answer_log.error_type.value
-                            if answer_log.error_type
-                            else "unknown",
-                            "user_answer": answer_log.user_answer_raw or "",
-                            "correct_answer": str(
-                                quiz_item.correct_answer_json.get("answer", "")
-                                if isinstance(quiz_item.correct_answer_json, dict)
-                                else quiz_item.correct_answer_json
-                            ),
-                            "retry_count": 1,
-                        }
-                    )
+                    if items_created == 0:
+                        session.status = QuizSessionStatus.generation_failed
+                        raise JobFailure("No retry questions could be generated")
 
-                if not batch_items:
-                    session.status = QuizSessionStatus.generation_failed
-                    job.status = "failed"
-                    job.error_message = "No retry questions could be generated"
                     await db.commit()
+                    session.status = QuizSessionStatus.ready
                     return
 
-                # Phase 2: single batched AI call for all concepts
-                batch_prompt = build_batch_retry_prompt(batch_items)
-                batch_result = await call_ai_with_fallback(
-                    batch_prompt,
-                    BATCH_RETRY_GENERATION_SCHEMA,
+                source_texts = []
+                if session.source_mode.value == "document_based":
+                    file_results = await db.execute(
+                        select(File)
+                        .join(QuizSessionFile, QuizSessionFile.file_id == File.id)
+                        .where(QuizSessionFile.quiz_session_id == session.id)
+                    )
+                    for f in file_results.scalars().all():
+                        if f.parsed_document:
+                            source_texts.append(f.parsed_document.normalized_text or "")
+
+                question_count = payload.get("question_count", session.question_count)
+                difficulty = payload.get("difficulty", session.difficulty)
+                question_types = payload.get("question_types", []) or [
+                    "multiple_choice",
+                    "ox",
+                    "short_answer",
+                    "fill_blank",
+                    "essay",
+                ]
+
+                concept_counts = {}
+                if session.user_id:
+                    recent_concepts_result = await db.execute(
+                        select(QuizItem.concept_key)
+                        .join(QuizSession, QuizSession.id == QuizItem.quiz_session_id)
+                        .where(QuizSession.user_id == session.user_id)
+                        .order_by(QuizItem.created_at.desc())
+                        .limit(20)
+                    )
+                    recent_concepts = [
+                        r[0] for r in recent_concepts_result.all() if r[0]
+                    ]
+                    for c in recent_concepts:
+                        concept_counts[c] = concept_counts.get(c, 0) + 1
+
+                source_context = (
+                    "\n\n".join(source_texts[:3])
+                    if source_texts
+                    else "No source material provided."
+                )
+                if not source_texts and session.source_mode.value == "document_based":
+                    session.status = QuizSessionStatus.generation_failed
+                    raise JobFailure("No source material available")
+
+                is_no_source = session.source_mode.value == "no_source"
+                topic = payload.get("topic") or None
+                prompt = build_generation_prompt(
+                    source_context=source_context,
+                    question_count=question_count,
+                    difficulty=difficulty,
+                    question_types=question_types,
+                    concept_counts=concept_counts,
+                    is_no_source=is_no_source,
+                    topic=topic,
+                )
+
+                ai_result = await call_ai_with_fallback(
+                    prompt,
+                    GENERATION_SCHEMA,
                     primary_model=session.generation_model_name
                     or cfg.balanced_generation_model,
                     fallback_model=cfg.eco_generation_model,
-                    system_message=SYSTEM_PROMPT_RETRY_GENERATION,
-                    cache_key="retry_gen_v1",
+                    system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
+                    cache_key="quiz_gen_v1",
                 )
 
-                # Phase 3: match results by concept_key and insert
-                result_by_concept = {
-                    q["concept_key"]: q
-                    for q in batch_result.get("questions", [])
-                    if q.get("concept_key")
-                }
-                for idx, concept_key, quiz_item in tasks_data:
-                    ai_result = result_by_concept.get(concept_key)
-                    if not ai_result or not ai_result.get("question_text"):
-                        logger.warning(
-                            "Retry generation: no AI result for concept_key=%r in session %s; skipping",
-                            concept_key,
-                            session.id,
-                        )
-                        continue
-                    new_item = QuizItem(
-                        quiz_session_id=session.id,
-                        item_order=idx + 1,
-                        question_type=QuestionType(
-                            ai_result.get("question_type", "multiple_choice")
-                        ),
-                        question_text=ai_result.get("question_text", ""),
-                        correct_answer_json=ai_result.get(
-                            "correct_answer", {"answer": ""}
-                        ),
-                        explanation_text=ai_result.get("explanation", ""),
-                        concept_key=concept_key,
-                        concept_label=quiz_item.concept_label,
-                        category_tag=quiz_item.category_tag,
-                        difficulty=quiz_item.difficulty or "medium",
-                        source_refs_json=None,
-                        options_json=ai_result.get("options"),
-                        option_descriptions_json=ai_result.get("option_descriptions"),
-                    )
-                    db.add(new_item)
-                    items_created += 1
-
-                if items_created == 0:
+                if ai_result.get("rejected"):
                     session.status = QuizSessionStatus.generation_failed
-                    job.status = "failed"
-                    job.error_message = "No retry questions could be generated"
-                    await db.commit()
-                    return
+                    raise JobFailure(
+                        "INVALID_INPUT:"
+                        + ai_result.get(
+                            "rejection_reason",
+                            "퀴즈를 만들기 어려운 입력입니다. 학습하고 싶은 주제나 자료를 입력해 주세요.",
+                        )
+                    )
 
-                await db.commit()
+                all_questions = ai_result.get("questions", [])
+                questions = (
+                    all_questions
+                    if question_count is None
+                    else all_questions[:question_count]
+                )
+                if not questions:
+                    session.status = QuizSessionStatus.generation_failed
+                    raise JobFailure("AI returned no questions")
+
+                if question_count is None:
+                    session.question_count = len(questions)
+
+                for i, q in enumerate(questions):
+                    item = QuizItem(
+                        quiz_session_id=session.id,
+                        item_order=i + 1,
+                        question_type=QuestionType(
+                            q.get("question_type", "multiple_choice")
+                        ),
+                        question_text=q.get("question_text", ""),
+                        options_json=q.get("options"),
+                        option_descriptions_json=q.get("option_descriptions"),
+                        correct_answer_json=q.get("correct_answer"),
+                        explanation_text=q.get("explanation", ""),
+                        source_refs_json={"refs": q.get("source_refs", [])},
+                        concept_key=q.get("concept_key", ""),
+                        concept_label=q.get("concept_label", ""),
+                        category_tag=q.get("category_tag", ""),
+                        difficulty=q.get("difficulty", difficulty),
+                        similarity_fingerprint=q.get("concept_key", ""),
+                    )
+                    db.add(item)
+
                 session.status = QuizSessionStatus.ready
-                job.status = "completed"
-                job.finished_at = datetime.now(timezone.utc)
-                await db.commit()
-                return
 
-            # Normal generation flow continues below
-            source_texts = []
-            if session.source_mode.value == "document_based":
-                file_results = await db.execute(
-                    select(File)
-                    .join(QuizSessionFile, QuizSessionFile.file_id == File.id)
-                    .where(QuizSessionFile.quiz_session_id == session.id)
-                )
-                for f in file_results.scalars().all():
-                    if f.parsed_document:
-                        source_texts.append(f.parsed_document.normalized_text or "")
-
-            question_count = payload.get("question_count", session.question_count)
-            difficulty = payload.get("difficulty", session.difficulty)
-            question_types = payload.get("question_types", []) or [
-                "multiple_choice",
-                "ox",
-                "short_answer",
-                "fill_blank",
-                "essay",
-            ]
-
-            concept_counts = {}
-            if session.user_id:
-                recent_concepts_result = await db.execute(
-                    select(QuizItem.concept_key)
-                    .join(QuizSession, QuizSession.id == QuizItem.quiz_session_id)
-                    .where(QuizSession.user_id == session.user_id)
-                    .order_by(QuizItem.created_at.desc())
-                    .limit(20)
-                )
-                recent_concepts = [r[0] for r in recent_concepts_result.all() if r[0]]
-                for c in recent_concepts:
-                    concept_counts[c] = concept_counts.get(c, 0) + 1
-
-            source_context = (
-                "\n\n".join(source_texts[:3])
-                if source_texts
-                else "No source material provided."
-            )
-            if not source_texts and session.source_mode.value == "document_based":
+            except JobFailure:
+                raise
+            except Exception:
                 session.status = QuizSessionStatus.generation_failed
-                job.status = "failed"
-                job.error_message = "No source material available"
-                await db.commit()
-                return
-
-            is_no_source = session.source_mode.value == "no_source"
-            topic = payload.get("topic") or None
-            prompt = build_generation_prompt(
-                source_context=source_context,
-                question_count=question_count,
-                difficulty=difficulty,
-                question_types=question_types,
-                concept_counts=concept_counts,
-                is_no_source=is_no_source,
-                topic=topic,
-            )
-
-            ai_result = await call_ai_with_fallback(
-                prompt,
-                GENERATION_SCHEMA,
-                primary_model=session.generation_model_name
-                or cfg.balanced_generation_model,
-                fallback_model=cfg.eco_generation_model,
-                system_message=SYSTEM_PROMPT_QUIZ_GENERATION,
-                cache_key="quiz_gen_v1",
-            )
-
-            if ai_result.get("rejected"):
-                session.status = QuizSessionStatus.generation_failed
-                job.status = "failed"
-                job.error_message = "INVALID_INPUT:" + ai_result.get(
-                    "rejection_reason",
-                    "퀴즈를 만들기 어려운 입력입니다. 학습하고 싶은 주제나 자료를 입력해 주세요.",
-                )
-                await db.commit()
-                return
-
-            all_questions = ai_result.get("questions", [])
-            questions = (
-                all_questions
-                if question_count is None
-                else all_questions[:question_count]
-            )
-            if not questions:
-                session.status = QuizSessionStatus.generation_failed
-                job.status = "failed"
-                job.error_message = "AI returned no questions"
-                await db.commit()
-                return
-
-            if question_count is None:
-                session.question_count = len(questions)
-
-            for i, q in enumerate(questions):
-                item = QuizItem(
-                    quiz_session_id=session.id,
-                    item_order=i + 1,
-                    question_type=QuestionType(
-                        q.get("question_type", "multiple_choice")
-                    ),
-                    question_text=q.get("question_text", ""),
-                    options_json=q.get("options"),
-                    option_descriptions_json=q.get("option_descriptions"),
-                    correct_answer_json=q.get("correct_answer"),
-                    explanation_text=q.get("explanation", ""),
-                    source_refs_json={"refs": q.get("source_refs", [])},
-                    concept_key=q.get("concept_key", ""),
-                    concept_label=q.get("concept_label", ""),
-                    category_tag=q.get("category_tag", ""),
-                    difficulty=q.get("difficulty", difficulty),
-                    similarity_fingerprint=q.get("concept_key", ""),
-                )
-                db.add(item)
-
-            session.status = QuizSessionStatus.ready
-            job.status = "completed"
-            job.finished_at = datetime.now(timezone.utc)
-            await db.commit()
-
-        except Exception as e:
-            session.status = QuizSessionStatus.generation_failed
-            job.status = "failed"
-            job.error_message = str(e)
-            await db.commit()
+                raise
 
 
 async def grade_exam(job_id: str):
@@ -849,104 +808,98 @@ async def grade_exam(job_id: str):
         if not job:
             return
 
-        job.status = "processing"
-        job.started_at = datetime.now(timezone.utc)
-        await db.commit()
-
-        session_result = await db.execute(
-            select(QuizSession).where(QuizSession.id == job.target_id)
-        )
-        session = session_result.scalar_one_or_none()
-        if not session:
-            job.status = "failed"
-            await db.commit()
-            return
-
-        try:
-            session.status = QuizSessionStatus.grading
-            await db.commit()
-
-            items_result = await db.execute(
-                select(QuizItem)
-                .where(QuizItem.quiz_session_id == session.id)
-                .order_by(QuizItem.item_order)
+        async with JobRunner(db, job):
+            session_result = await db.execute(
+                select(QuizSession).where(QuizSession.id == job.target_id)
             )
-            items = items_result.scalars().all()
+            session = session_result.scalar_one_or_none()
+            if not session:
+                raise JobFailure("Session not found")
 
-            for item in items:
-                draft_result = await db.execute(
-                    select(DraftAnswer).where(
-                        DraftAnswer.quiz_item_id == item.id,
-                        DraftAnswer.quiz_session_id == session.id,
-                        DraftAnswer.user_id == session.user_id,
-                    )
+            try:
+                session.status = QuizSessionStatus.grading
+                await db.commit()
+
+                items_result = await db.execute(
+                    select(QuizItem)
+                    .where(QuizItem.quiz_session_id == session.id)
+                    .order_by(QuizItem.item_order)
                 )
-                draft = draft_result.scalar_one_or_none()
-                user_answer = draft.user_answer if draft else ""
+                items = items_result.scalars().all()
 
-                if not user_answer:
-                    grading = GradingResult(
-                        judgement=Judgement.skipped,
-                        score_awarded=0.0,
-                        error_type=ErrorType.no_response,
+                for item in items:
+                    draft_result = await db.execute(
+                        select(DraftAnswer).where(
+                            DraftAnswer.quiz_item_id == item.id,
+                            DraftAnswer.quiz_session_id == session.id,
+                            DraftAnswer.user_id == session.user_id,
+                        )
                     )
-                else:
-                    grading = await _grade_single_answer(
-                        item=item,
-                        user_answer=user_answer,
-                        model_name=session.generation_model_name,
-                        include_essay=False,
-                    )
+                    draft = draft_result.scalar_one_or_none()
+                    user_answer = draft.user_answer if draft else ""
 
-                existing = await db.execute(
-                    select(AnswerLog).where(
-                        AnswerLog.quiz_item_id == item.id,
-                        AnswerLog.user_id == session.user_id,
-                        AnswerLog.is_active_result.is_(True),
+                    if not user_answer:
+                        grading = GradingResult(
+                            judgement=Judgement.skipped,
+                            score_awarded=0.0,
+                            error_type=ErrorType.no_response,
+                        )
+                    else:
+                        grading = await _grade_single_answer(
+                            item=item,
+                            user_answer=user_answer,
+                            model_name=session.generation_model_name,
+                            include_essay=False,
+                        )
+
+                    existing = await db.execute(
+                        select(AnswerLog).where(
+                            AnswerLog.quiz_item_id == item.id,
+                            AnswerLog.user_id == session.user_id,
+                            AnswerLog.is_active_result.is_(True),
+                        )
                     )
+                    for old_log in existing.scalars().all():
+                        old_log.is_active_result = False
+
+                    answer_log = AnswerLog(
+                        quiz_item_id=item.id,
+                        quiz_session_id=session.id,
+                        user_id=session.user_id,
+                        user_answer_raw=user_answer,
+                        user_answer_normalized=normalize_answer(user_answer)
+                        if user_answer
+                        else "",
+                        judgement=grading.judgement,
+                        score_awarded=grading.score_awarded,
+                        max_score=grading.max_score,
+                        grading_confidence=grading.grading_confidence,
+                        error_type=grading.error_type,
+                        is_active_result=True,
+                        graded_at=datetime.now(timezone.utc),
+                    )
+                    db.add(answer_log)
+
+                    if session.user_id:
+                        await _update_weak_point(
+                            db, session.user_id, item, grading.judgement
+                        )
+
+                await db.flush()
+                (
+                    session.total_score,
+                    session.max_score,
+                ) = await _recalculate_session_totals(
+                    db, session.id, user_id=session.user_id
                 )
-                for old_log in existing.scalars().all():
-                    old_log.is_active_result = False
+                session.graded_at = datetime.now(timezone.utc)
+                session.status = QuizSessionStatus.graded
 
-                answer_log = AnswerLog(
-                    quiz_item_id=item.id,
-                    quiz_session_id=session.id,
-                    user_id=session.user_id,
-                    user_answer_raw=user_answer,
-                    user_answer_normalized=normalize_answer(user_answer)
-                    if user_answer
-                    else "",
-                    judgement=grading.judgement,
-                    score_awarded=grading.score_awarded,
-                    max_score=grading.max_score,
-                    grading_confidence=grading.grading_confidence,
-                    error_type=grading.error_type,
-                    is_active_result=True,
-                    graded_at=datetime.now(timezone.utc),
-                )
-                db.add(answer_log)
-
-                if session.user_id:
-                    await _update_weak_point(
-                        db, session.user_id, item, grading.judgement
-                    )
-
-            await db.flush()
-            session.total_score, session.max_score = await _recalculate_session_totals(
-                db, session.id, user_id=session.user_id
-            )
-            session.graded_at = datetime.now(timezone.utc)
-            session.status = QuizSessionStatus.graded
-
-            job.status = "completed"
-            job.finished_at = datetime.now(timezone.utc)
-            await db.commit()
-
-        except Exception as e:
-            session.status = QuizSessionStatus.submitted
-            job.status = "failed"
-            job.error_message = str(e)
-            await db.commit()
+            except JobFailure:
+                raise
+            except Exception:
+                session.status = QuizSessionStatus.submitted
+                raise
 
 
 async def _apply_objection_decision(
@@ -1042,16 +995,14 @@ async def review_objection(job_id: str):
         ).scalar_one_or_none()
         if not job:
             return
-        objection = (
-            await db.execute(select(Objection).where(Objection.id == job.target_id))
-        ).scalar_one_or_none()
-        if not objection:
-            job.status = "failed"
-            await db.commit()
-            return
-        job.status = "processing"
-        await db.commit()
-        try:
+
+        async with JobRunner(db, job):
+            objection = (
+                await db.execute(select(Objection).where(Objection.id == job.target_id))
+            ).scalar_one_or_none()
+            if not objection:
+                raise JobFailure("Objection not found")
+
             answer_log = (
                 await db.execute(
                     select(AnswerLog).where(AnswerLog.id == objection.answer_log_id)
@@ -1064,9 +1015,8 @@ async def review_objection(job_id: str):
             ).scalar_one_or_none()
             if not answer_log or not quiz_item:
                 objection.status = ObjectionStatus.rejected
-                job.status = "completed"
-                await db.commit()
                 return
+
             prompt = f"""이의제기를 검토하세요.
 
 원문 문제: {quiz_item.question_text}
@@ -1092,13 +1042,6 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
             await _apply_objection_decision(
                 db, objection, answer_log, quiz_item, ai_result
             )
-            job.status = "completed"
-            job.finished_at = datetime.now(timezone.utc)
-            await db.commit()
-        except Exception as e:
-            job.status = "failed"
-            job.error_message = str(e)
-            await db.commit()
 
 
 async def _update_weak_point(
@@ -1142,11 +1085,6 @@ async def _update_weak_point(
 
 
 async def admin_regrade(job_id: str) -> None:
-    """Regrade all active answer logs for a quiz item across all users.
-
-    Uses _grade_single_answer for grading and _recalculate_session_totals
-    to update session scores after regrading.
-    """
     from app.models.search import Job
 
     async with async_session() as db:
@@ -1156,74 +1094,69 @@ async def admin_regrade(job_id: str) -> None:
             logger.error("admin_regrade: job %s not found", job_id)
             return
 
-        item_result = await db.execute(
-            select(QuizItem).where(QuizItem.id == job.target_id)
-        )
-        item = item_result.scalar_one_or_none()
-        if not item:
-            logger.error("admin_regrade: quiz item %s not found", job.target_id)
-            job.status = "failed"
-            await db.commit()
-            return
-
-        logs_result = await db.execute(
-            select(AnswerLog, QuizSession)
-            .join(QuizSession, QuizSession.id == AnswerLog.quiz_session_id)
-            .where(
-                AnswerLog.quiz_item_id == item.id,
-                AnswerLog.is_active_result.is_(True),
+        async with JobRunner(db, job):
+            item_result = await db.execute(
+                select(QuizItem).where(QuizItem.id == job.target_id)
             )
-        )
-        rows = logs_result.all()
+            item = item_result.scalar_one_or_none()
+            if not item:
+                logger.error("admin_regrade: quiz item %s not found", job.target_id)
+                raise JobFailure("Quiz item not found")
 
-        for answer_log, session in rows:
-            try:
-                user_answer = answer_log.user_answer_raw or ""
-                grading = (
-                    await _grade_single_answer(
-                        item=item,
-                        user_answer=user_answer,
-                        model_name=session.generation_model_name,
-                        include_essay=False,
-                    )
-                    if user_answer
-                    else GradingResult(
-                        judgement=Judgement.skipped,
-                        score_awarded=0.0,
-                        error_type=ErrorType.no_response,
-                    )
+            logs_result = await db.execute(
+                select(AnswerLog, QuizSession)
+                .join(QuizSession, QuizSession.id == AnswerLog.quiz_session_id)
+                .where(
+                    AnswerLog.quiz_item_id == item.id,
+                    AnswerLog.is_active_result.is_(True),
                 )
-                answer_log.judgement = grading.judgement
-                answer_log.score_awarded = grading.score_awarded
-                answer_log.graded_at = datetime.now(timezone.utc)
-            except Exception as exc:
-                logger.warning(
-                    "admin_regrade: failed to regrade log %s: %s",
-                    answer_log.id,
-                    exc,
-                )
-
-        await db.flush()
-
-        affected_session_ids = {row[1].id for row in rows}
-        for sid in affected_session_ids:
-            sess_upd = await db.execute(
-                select(QuizSession).where(QuizSession.id == sid)
             )
-            sess_obj = sess_upd.scalar_one_or_none()
-            if sess_obj:
-                # Get the user_id for session total recalculation
-                # Use the first answer_log for this session to get user_id
-                user_id_for_session = next(
-                    (row[0].user_id for row in rows if row[1].id == sid),
-                    None,
-                )
-                if user_id_for_session:
-                    (
-                        sess_obj.total_score,
-                        sess_obj.max_score,
-                    ) = await _recalculate_session_totals(db, sid, user_id_for_session)
+            rows = logs_result.all()
 
-        job.status = "completed"
-        job.finished_at = datetime.now(timezone.utc)
-        await db.commit()
+            for answer_log, session in rows:
+                try:
+                    user_answer = answer_log.user_answer_raw or ""
+                    grading = (
+                        await _grade_single_answer(
+                            item=item,
+                            user_answer=user_answer,
+                            model_name=session.generation_model_name,
+                            include_essay=False,
+                        )
+                        if user_answer
+                        else GradingResult(
+                            judgement=Judgement.skipped,
+                            score_awarded=0.0,
+                            error_type=ErrorType.no_response,
+                        )
+                    )
+                    answer_log.judgement = grading.judgement
+                    answer_log.score_awarded = grading.score_awarded
+                    answer_log.graded_at = datetime.now(timezone.utc)
+                except Exception as exc:
+                    logger.warning(
+                        "admin_regrade: failed to regrade log %s: %s",
+                        answer_log.id,
+                        exc,
+                    )
+
+            await db.flush()
+
+            affected_session_ids = {row[1].id for row in rows}
+            for sid in affected_session_ids:
+                sess_upd = await db.execute(
+                    select(QuizSession).where(QuizSession.id == sid)
+                )
+                sess_obj = sess_upd.scalar_one_or_none()
+                if sess_obj:
+                    user_id_for_session = next(
+                        (row[0].user_id for row in rows if row[1].id == sid),
+                        None,
+                    )
+                    if user_id_for_session:
+                        (
+                            sess_obj.total_score,
+                            sess_obj.max_score,
+                        ) = await _recalculate_session_totals(
+                            db, sid, user_id_for_session
+                        )

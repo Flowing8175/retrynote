@@ -1,12 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/api';
-import type { AdminFileStatusBreakdown, AdminFileInProgress, AdminFileFailure } from '@/types';
+import type { AdminFileStatusBreakdown, AdminFileInProgress, AdminFileFailure, AdminTabProps } from '@/types';
 import { formatRelative, formatDateTime } from './adminUtils';
-
-interface AdminFilesTabProps {
-  isVerified: boolean;
-  activeTab: string;
-}
 
 function getStatusColorCls(status: string): { card: string; badge: string; dot: string } {
   if (status === 'ready') {
@@ -41,7 +36,7 @@ function truncate(str: string, max: number): string {
   return str.length > max ? `${str.slice(0, max)}…` : str;
 }
 
-export default function AdminFilesTab({ isVerified, activeTab }: AdminFilesTabProps) {
+export default function AdminFilesTab({ isVerified, activeTab }: AdminTabProps) {
   const { data, isLoading } = useQuery({
     queryKey: ['admin-files-pipeline'],
     queryFn: adminApi.getFilePipeline,
