@@ -7,6 +7,7 @@ export interface OptionItem<T extends string> {
   icon?: React.ReactNode;
   badge?: string;
   disabled?: boolean;
+  title?: string;
 }
 
 export interface OptionGroupProps<T extends string> {
@@ -61,6 +62,7 @@ export default function OptionGroup<T extends string>({
             type="button"
             onClick={() => handleClick(opt.value)}
             disabled={isDisabled}
+            title={opt.title}
             className={buttonClass(size, isActive, isDisabled, opt.description != null || opt.icon != null || opt.badge != null)}
           >
             {multiple && (

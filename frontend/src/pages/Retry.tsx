@@ -179,7 +179,7 @@ export default function Retry() {
             to="/wrong-notes"
             className="group flex items-center gap-2 bg-surface-deep border border-white/[0.05] px-4 py-2.5 rounded-xl text-sm font-medium text-white hover:bg-surface-hover transition-colors"
           >
-            오답노트
+            오답노트 보기
           </Link>
         </div>
       </section>
@@ -226,7 +226,8 @@ export default function Retry() {
                     { value: '__all__', label: '전체' },
                     ...fileGroupsForConcepts.map((g) => ({
                       value: g.fileId ?? '__ai__',
-                      label: g.fileName,
+                      label: g.mainConcept || g.fileName.replace(/\.[^.]+$/, '').slice(0, 20),
+                      title: g.fileName,
                     })),
                   ]}
                   value={selectedFileGroup ?? '__all__'}
