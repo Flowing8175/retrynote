@@ -153,7 +153,10 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
     setScale((s) => Math.max(0.5, parseFloat((s - 0.25).toFixed(2))));
   }
   function zoomFit() {
-    setScale(1.0);
+    const container = scrollRef.current;
+    if (!container) return;
+    const padding = 16;
+    setScale(parseFloat(((container.clientWidth - padding * 2) / PLACEHOLDER_W).toFixed(2)));
   }
 
   const setPageRef = useCallback((pageNum: number) => (el: HTMLDivElement | null) => {
@@ -183,7 +186,7 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
           <button onClick={zoomOut} disabled={scale <= 0.5} className="p-1.5 rounded-lg hover:bg-surface-raised disabled:opacity-40 disabled:cursor-not-allowed text-content-secondary transition-colors" aria-label="축소">
             <ZoomOut size={16} />
           </button>
-          <span className="text-xs text-content-muted w-12 text-center select-none">{Math.round(scale * 100)}%</span>
+          <button onClick={zoomFit} className="text-xs text-content-muted w-12 text-center select-none hover:text-white transition-colors" title="화면 맞춤">{Math.round(scale * 100)}%</button>
           <button onClick={zoomIn} disabled={scale >= 2.0} className="p-1.5 rounded-lg hover:bg-surface-raised disabled:opacity-40 disabled:cursor-not-allowed text-content-secondary transition-colors" aria-label="확대">
             <ZoomIn size={16} />
           </button>
@@ -216,9 +219,9 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
               </div>
             }
           >
-            <div className="flex flex-col items-center gap-2 py-4 px-2">
+            <div className="flex flex-col gap-2 py-4 px-2">
               {numPages && Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => (
-                <div key={pageNum} ref={setPageRef(pageNum)} className="shadow-lg">
+                <div key={pageNum} ref={setPageRef(pageNum)} className="shadow-lg mx-auto">
                   {activated.current.has(pageNum) ? (
                     <Page
                       pageNumber={pageNum}

@@ -98,7 +98,7 @@ export default function StudyViewer() {
 
   if (is404) {
     return (
-      <div className="flex flex-col h-[calc(100vh-4rem)] bg-background overflow-hidden -mx-4 -my-6 sm:-mx-6 lg:-mx-12 lg:-my-10">
+      <div className="fixed inset-0 top-16 z-30 flex flex-col bg-background overflow-hidden">
         <header className="flex items-center gap-3 px-4 py-3 bg-surface/80 backdrop-blur-sm border-b border-white/[0.05] shrink-0">
           <button
             onClick={() => navigate('/study')}
@@ -124,7 +124,7 @@ export default function StudyViewer() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] bg-background overflow-hidden -mx-4 -my-6 sm:-mx-6 lg:-mx-12 lg:-my-10">
+    <div className="fixed inset-0 top-16 z-30 flex flex-col bg-background overflow-hidden">
       <header className="flex items-center gap-3 px-4 py-3 bg-surface/80 backdrop-blur-sm border-b border-white/[0.05] shrink-0">
         <button
           onClick={() => navigate('/study')}
