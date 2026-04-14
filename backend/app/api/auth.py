@@ -5,7 +5,7 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 import jwt
 from jwt import InvalidTokenError as JWTError
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field
@@ -445,14 +445,14 @@ async def password_reset_confirm(
     token_record.used_at = datetime.now(timezone.utc)
 
     # Revoke all existing refresh tokens so old sessions cannot persist after a reset
-    active_tokens = await db.execute(
-        select(RefreshToken).where(
+    await db.execute(
+        update(RefreshToken)
+        .where(
             RefreshToken.user_id == user.id,
             RefreshToken.revoked_at.is_(None),
         )
+        .values(revoked_at=datetime.now(timezone.utc))
     )
-    for rt in active_tokens.scalars().all():
-        rt.revoked_at = datetime.now(timezone.utc)
 
     await db.commit()
     return {"status": "success"}
@@ -593,14 +593,14 @@ async def delete_account(
     if not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=400, detail="비밀번호가 올바르지 않습니다.")
 
-    tokens_result = await db.execute(
-        select(RefreshToken).where(
+    await db.execute(
+        update(RefreshToken)
+        .where(
             RefreshToken.user_id == user.id,
             RefreshToken.revoked_at.is_(None),
         )
+        .values(revoked_at=datetime.now(timezone.utc))
     )
-    for token in tokens_result.scalars().all():
-        token.revoked_at = datetime.now(timezone.utc)
 
     user.is_active = False
     user.status = "deleted"
@@ -650,17 +650,16 @@ async def migrate_guest_session(
     db.add(session)
     await db.flush()
 
-    for i, q in enumerate(req.questions):
-        try:
-            qtype = QuestionType(q.question_type)
-        except ValueError:
-            qtype = QuestionType.short_answer
-
-        item = QuizItem(
+    items = [
+        QuizItem(
             id=str(uuid.uuid4()),
             quiz_session_id=session.id,
             item_order=i,
-            question_type=qtype,
+            question_type=(
+                QuestionType(q.question_type)
+                if q.question_type in [qt.value for qt in QuestionType]
+                else QuestionType.short_answer
+            ),
             question_text=q.question_text,
             options_json=q.options,
             correct_answer_json=q.correct_answer,
@@ -668,7 +667,9 @@ async def migrate_guest_session(
             concept_label=q.concept_label,
             difficulty=q.difficulty,
         )
-        db.add(item)
+        for i, q in enumerate(req.questions)
+    ]
+    db.add_all(items)
 
     await db.commit()
     return MigrateGuestSessionResponse(quiz_session_id=session.id)

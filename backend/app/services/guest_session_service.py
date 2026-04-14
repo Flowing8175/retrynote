@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.guest import GuestSession
@@ -91,15 +91,13 @@ class GuestSessionService:
     async def cleanup_expired(db: AsyncSession, ttl_hours: int = 24) -> int:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=ttl_hours)
         result = await db.execute(
-            select(GuestSession).where(
+            update(GuestSession)
+            .where(
                 GuestSession.last_activity_at < cutoff,
                 GuestSession.converted_user_id.is_(None),
                 GuestSession.is_deleted.is_(False),
             )
+            .values(is_deleted=True)
         )
-        expired_sessions = result.scalars().all()
-        count = len(expired_sessions)
-        for session in expired_sessions:
-            session.is_deleted = True
         await db.flush()
-        return count
+        return result.rowcount  # type: ignore[attr-defined]

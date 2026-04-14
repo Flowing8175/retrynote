@@ -124,15 +124,21 @@ class UsageService:
         limits = TIER_LIMITS[tier]
         balance = await self._get_or_create_credit_balance(db, user.id)
 
+        # Fetch both quiz and ocr records in a single query
+        result = await db.execute(
+            select(UsageRecord).where(
+                UsageRecord.user_id == user.id,
+                UsageRecord.resource_type.in_(["quiz", "ocr"]),
+            )
+        )
+        records = result.scalars().all()
+
+        # Build a map of resource_type -> record for quick lookup
+        usage_map = {record.resource_type: record for record in records}
+
         windows = []
         for resource_type in ("quiz", "ocr"):
-            result = await db.execute(
-                select(UsageRecord).where(
-                    UsageRecord.user_id == user.id,
-                    UsageRecord.resource_type == resource_type,
-                )
-            )
-            record = result.scalar_one_or_none()
+            record = usage_map.get(resource_type)
             limit = (
                 limits.quiz_per_window
                 if resource_type == "quiz"

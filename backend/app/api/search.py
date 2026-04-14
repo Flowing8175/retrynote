@@ -1,8 +1,10 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
+from app.database import get_db, async_session
 from app.utils.db_helpers import paginate
 from app.models.quiz import AnswerLog, QuizItem, QuizSession
 from app.models.file import File
@@ -164,25 +166,53 @@ async def search(
     results: list[SearchResultItem] = []
     total = 0
 
-    if scope in ("all", "files"):
-        file_results, file_count = await _search_files(
-            db, user.id, q, folder_id, page, size
+    if scope == "all":
+
+        async def _files_with_session() -> tuple[list[SearchResultItem], int]:
+            async with async_session() as s:
+                return await _search_files(s, user.id, q, folder_id, page, size)
+
+        async def _notes_with_session() -> tuple[list[SearchResultItem], int]:
+            async with async_session() as s:
+                return await _search_wrong_notes(s, user.id, q, file_id, page, size)
+
+        async def _quiz_with_session() -> tuple[list[SearchResultItem], int]:
+            async with async_session() as s:
+                return await _search_quiz_history(s, user.id, q, page, size)
+
+        (
+            (file_results, file_count),
+            (note_results, note_count),
+            (quiz_results, quiz_count),
+        ) = await asyncio.gather(
+            _files_with_session(),
+            _notes_with_session(),
+            _quiz_with_session(),
         )
         results.extend(file_results)
         total += file_count
-
-    if scope in ("all", "wrong_notes"):
-        note_results, note_count = await _search_wrong_notes(
-            db, user.id, q, file_id, page, size
-        )
         results.extend(note_results)
         total += note_count
-
-    if scope in ("all", "quiz_history"):
-        quiz_results, quiz_count = await _search_quiz_history(
-            db, user.id, q, page, size
-        )
         results.extend(quiz_results)
         total += quiz_count
+    else:
+        if scope == "files":
+            file_results, file_count = await _search_files(
+                db, user.id, q, folder_id, page, size
+            )
+            results.extend(file_results)
+            total += file_count
+        elif scope == "wrong_notes":
+            note_results, note_count = await _search_wrong_notes(
+                db, user.id, q, file_id, page, size
+            )
+            results.extend(note_results)
+            total += note_count
+        elif scope == "quiz_history":
+            quiz_results, quiz_count = await _search_quiz_history(
+                db, user.id, q, page, size
+            )
+            results.extend(quiz_results)
+            total += quiz_count
 
     return SearchResponse(results=results, total=total, page=page, size=size)
