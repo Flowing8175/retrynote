@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -9,6 +9,10 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
   import.meta.url,
 ).toString();
+
+const PAGE_BUFFER = 3;
+const PLACEHOLDER_W = 595;
+const PLACEHOLDER_H = 842;
 
 interface PdfViewerProps {
   url: string;
@@ -22,70 +26,112 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
   const [scale, setScale] = useState(1.0);
   const [pageInputValue, setPageInputValue] = useState('1');
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [, setRenderTick] = useState(0);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map());
   const isScrollingToPage = useRef(false);
+  const currentPageRef = useRef(1);
+  const numPagesRef = useRef<number | null>(null);
+  const onPageChangeRef = useRef(onPageChange);
+  onPageChangeRef.current = onPageChange;
+  const activated = useRef(new Set<number>());
 
-  const fileOptions = {
+  const fileOptions = useMemo(() => ({
     url,
     httpHeaders: token ? { Authorization: `Bearer ${token}` } : {},
-  };
+  }), [url, token]);
 
   function onDocumentLoadSuccess({ numPages: total }: { numPages: number }) {
     setNumPages(total);
+    numPagesRef.current = total;
     setLoadError(null);
+    for (let i = 1; i <= Math.min(total, 1 + PAGE_BUFFER); i++) {
+      activated.current.add(i);
+    }
+    setRenderTick(t => t + 1);
   }
 
   function onDocumentLoadError(error: Error) {
     setLoadError(`PDF를 불러오지 못했습니다: ${error.message}`);
   }
 
-  // Track which page is visible via scroll position
-  const handleScroll = useCallback(() => {
-    if (isScrollingToPage.current || !scrollRef.current || !numPages) return;
+  const activateNearbyPages = useCallback(() => {
     const container = scrollRef.current;
-    const scrollTop = container.scrollTop;
-    const containerHeight = container.clientHeight;
-    const scrollCenter = scrollTop + containerHeight / 3;
+    const total = numPagesRef.current;
+    if (!container || !total) return;
+
+    const { scrollTop, clientHeight } = container;
+    const scrollCenter = scrollTop + clientHeight / 3;
 
     let closestPage = 1;
     let closestDistance = Infinity;
-
     pageRefs.current.forEach((el, pageNum) => {
-      const distance = Math.abs(el.offsetTop - scrollCenter);
-      if (distance < closestDistance) {
-        closestDistance = distance;
+      const dist = Math.abs(el.offsetTop - scrollCenter);
+      if (dist < closestDistance) {
+        closestDistance = dist;
         closestPage = pageNum;
       }
     });
 
-    if (closestPage !== currentPage) {
+    const start = Math.max(1, closestPage - PAGE_BUFFER);
+    const end = Math.min(total, closestPage + PAGE_BUFFER);
+    let changed = false;
+    for (let i = start; i <= end; i++) {
+      if (!activated.current.has(i)) {
+        activated.current.add(i);
+        changed = true;
+      }
+    }
+    if (changed) setRenderTick(t => t + 1);
+
+    if (closestPage !== currentPageRef.current) {
+      currentPageRef.current = closestPage;
       setCurrentPage(closestPage);
       setPageInputValue(String(closestPage));
-      onPageChange?.(closestPage);
+      onPageChangeRef.current?.(closestPage);
     }
-  }, [currentPage, numPages, onPageChange]);
+  }, []);
 
   useEffect(() => {
     const container = scrollRef.current;
     if (!container) return;
-    container.addEventListener('scroll', handleScroll, { passive: true });
-    return () => container.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
+
+    let ticking = false;
+    const onScroll = () => {
+      if (isScrollingToPage.current || ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        activateNearbyPages();
+        ticking = false;
+      });
+    };
+
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
+  }, [activateNearbyPages]);
 
   const scrollToPage = useCallback((page: number) => {
-    if (!numPages) return;
-    const clamped = Math.max(1, Math.min(page, numPages));
+    const total = numPagesRef.current;
+    if (!total) return;
+    const clamped = Math.max(1, Math.min(page, total));
     const el = pageRefs.current.get(clamped);
     if (el && scrollRef.current) {
       isScrollingToPage.current = true;
-      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      for (let i = Math.max(1, clamped - PAGE_BUFFER); i <= Math.min(total, clamped + PAGE_BUFFER); i++) {
+        activated.current.add(i);
+      }
+      setRenderTick(t => t + 1);
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      currentPageRef.current = clamped;
       setCurrentPage(clamped);
       setPageInputValue(String(clamped));
-      onPageChange?.(clamped);
-      setTimeout(() => { isScrollingToPage.current = false; }, 500);
+      onPageChangeRef.current?.(clamped);
+      setTimeout(() => { isScrollingToPage.current = false; }, 600);
     }
-  }, [numPages, onPageChange]);
+  }, []);
 
   function handlePageInputBlur() {
     const parsed = parseInt(pageInputValue, 10);
@@ -173,16 +219,23 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
             <div className="flex flex-col items-center gap-2 py-4 px-2">
               {numPages && Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => (
                 <div key={pageNum} ref={setPageRef(pageNum)} className="shadow-lg">
-                  <Page
-                    pageNumber={pageNum}
-                    scale={scale}
-                    className="bg-white"
-                    loading={
-                      <div className="flex items-center justify-center bg-surface rounded" style={{ width: 595 * scale, height: 842 * scale }}>
-                        <div className="w-6 h-6 border-2 border-surface-raised border-t-brand-500 rounded-full animate-spin" />
-                      </div>
-                    }
-                  />
+                  {activated.current.has(pageNum) ? (
+                    <Page
+                      pageNumber={pageNum}
+                      scale={scale}
+                      className="bg-white"
+                      loading={
+                        <div className="flex items-center justify-center bg-surface rounded" style={{ width: PLACEHOLDER_W * scale, height: PLACEHOLDER_H * scale }}>
+                          <div className="w-6 h-6 border-2 border-surface-raised border-t-brand-500 rounded-full animate-spin" />
+                        </div>
+                      }
+                    />
+                  ) : (
+                    <div
+                      className="flex items-center justify-center bg-surface rounded"
+                      style={{ width: PLACEHOLDER_W * scale, height: PLACEHOLDER_H * scale }}
+                    />
+                  )}
                 </div>
               ))}
             </div>
