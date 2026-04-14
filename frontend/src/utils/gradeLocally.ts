@@ -1,4 +1,4 @@
-import type { QuizItemResponse } from '@/types';
+import type { QuizItemDetail } from '@/types';
 
 export type LocalJudgement = 'correct' | 'incorrect' | 'pending_ai';
 
@@ -24,7 +24,7 @@ function normalizeAnswer(s: string): string {
  * - essay → always 'pending_ai' (requires server-side AI grading)
  */
 export function gradeLocally(
-  item: QuizItemResponse,
+  item: QuizItemDetail,
   userAnswer: string,
 ): LocalGradeResult {
   const qType = item.question_type;
