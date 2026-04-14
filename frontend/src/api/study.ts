@@ -30,10 +30,10 @@ export const studyApi = {
     return response.data;
   },
 
-  generateContent: async (fileId: string, type: StudyContentType): Promise<{ job_id: string; status: string }> => {
-    const response = await apiClient.post<{ job_id: string; status: string }>(
-      `/study/${fileId}/generate`,
-      { type }
+  generateContent: async (fileId: string, type: StudyContentType, forceRegenerate = false): Promise<{ status: string }> => {
+    const response = await apiClient.post<{ status: string }>(
+      `/study/${fileId}/${type}/generate`,
+      { force_regenerate: forceRegenerate }
     );
     return response.data;
   },
