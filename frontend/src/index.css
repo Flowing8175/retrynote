@@ -497,6 +497,21 @@ textarea:focus-visible,
   border-color: oklch(0.58 0.14 120) !important;
 }
 
+.mermaid-diagram .edge {
+  stroke: oklch(0.55 0.08 175) !important;
+  stroke-width: 2px !important;
+  stroke-linecap: round !important;
+  opacity: 0.8;
+}
+
+.mermaid-diagram path[class*="edge"],
+.mermaid-diagram line[class*="edge"],
+.mermaid-diagram .mindmap-edge path,
+.mermaid-diagram svg > g > path:not(.node-bkg) {
+  stroke: oklch(0.55 0.08 175) !important;
+  stroke-width: 2px !important;
+}
+
 .mermaid-diagram .edge.section-edge-color-0 {
   stroke: oklch(0.58 0.10 175) !important;
   stroke-width: 2px !important;
