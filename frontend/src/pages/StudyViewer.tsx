@@ -1,6 +1,6 @@
 import { useState, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, FileText, X } from 'lucide-react';
 import { PdfViewer } from '@/components/study/PdfViewer';
 import { useStudyStatus } from '@/api/study';
 import { API_BASE_URL } from '@/api/createApiClient';
@@ -64,6 +64,7 @@ export default function StudyViewer() {
   const [activeTab, setActiveTab] = useState<Tab>('요약');
   const [leftWidth, setLeftWidth] = useState(50);
   const [isDragging, setIsDragging] = useState(false);
+  const [showPdfOverlay, setShowPdfOverlay] = useState(false);
 
   const { data: status } = useStudyStatus(fileId ?? '');
 
@@ -114,44 +115,46 @@ export default function StudyViewer() {
       >
         {isPdf && (
           <>
-            <div className="min-h-0 overflow-hidden" style={{ width: `${leftWidth}%` }}>
+            <div
+              className="hidden lg:block min-h-0 overflow-hidden shrink-0"
+              style={{ width: `${leftWidth}%` }}
+            >
               <PdfViewer url={pdfUrl} />
             </div>
 
             <div
-              className="w-1 bg-gray-700 hover:bg-blue-500 transition-colors shrink-0 cursor-col-resize"
+              className="hidden lg:block w-1 bg-gray-700 hover:bg-blue-500 transition-colors shrink-0 cursor-col-resize"
               onMouseDown={handleDividerMouseDown}
             />
           </>
         )}
 
-        <div
-          className="flex flex-col min-h-0"
-          style={{ width: isPdf ? `${100 - leftWidth}%` : '100%' }}
-        >
-          <div className="flex items-center gap-1 px-3 pt-3 pb-0 bg-gray-800 border-b border-gray-700 shrink-0">
-            {TABS.map((tab) => {
-              const s = tabStatus(tab, status);
-              const isActive = activeTab === tab;
-              return (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t transition-colors ${
-                    isActive
-                      ? 'bg-gray-900 text-white border-t border-l border-r border-gray-700'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  {tab}
-                  {tab !== 'AI Tutor' && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${STATUS_COLOR[s]}`}>
-                      {STATUS_LABEL[s]}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+        <div className="flex flex-col min-h-0 flex-1">
+          <div className="bg-gray-800 border-b border-gray-700 shrink-0 overflow-x-auto">
+            <div className="flex items-center gap-1 px-3 pt-3 pb-0 whitespace-nowrap">
+              {TABS.map((tab) => {
+                const s = tabStatus(tab, status);
+                const isActive = activeTab === tab;
+                return (
+                  <button
+                    key={tab}
+                    onClick={() => setActiveTab(tab)}
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t transition-colors shrink-0 ${
+                      isActive
+                        ? 'bg-gray-900 text-white border-t border-l border-r border-gray-700'
+                        : 'text-gray-400 hover:text-gray-200'
+                    }`}
+                  >
+                    {tab}
+                    {tab !== 'AI Tutor' && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${STATUS_COLOR[s]}`}>
+                        {STATUS_LABEL[s]}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex-1 min-h-0 overflow-auto bg-gray-900 p-4">
@@ -159,6 +162,35 @@ export default function StudyViewer() {
           </div>
         </div>
       </div>
+
+      {showPdfOverlay && isPdf && (
+        <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col lg:hidden">
+          <div className="flex items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700 shrink-0">
+            <button
+              onClick={() => setShowPdfOverlay(false)}
+              className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors text-sm"
+            >
+              <X size={18} />
+              <span>닫기</span>
+            </button>
+            <div className="w-px h-4 bg-gray-700" />
+            <span className="text-sm font-medium text-white truncate flex-1">PDF 뷰어</span>
+          </div>
+          <div className="flex-1 min-h-0">
+            <PdfViewer url={pdfUrl} />
+          </div>
+        </div>
+      )}
+
+      {isPdf && (
+        <button
+          onClick={() => setShowPdfOverlay(true)}
+          className="fixed bottom-6 right-4 z-40 lg:hidden flex items-center gap-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-3 rounded-full shadow-lg transition-colors text-sm font-medium"
+        >
+          <FileText size={16} />
+          PDF 보기
+        </button>
+      )}
     </div>
   );
 }
