@@ -399,36 +399,10 @@ textarea:focus-visible,
   animation: scale-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.mermaid-diagram {
-  position: relative;
-  animation: diagram-fade-in 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
-}
-
-.mermaid-diagram::before {
-  content: '';
-  position: absolute;
-  inset: -10% -5%;
-  background: radial-gradient(
-    ellipse at center,
-    oklch(0.50 0.06 175 / 0.06) 0%,
-    oklch(0.50 0.06 175 / 0.015) 40%,
-    transparent 70%
-  );
-  pointer-events: none;
-  z-index: 0;
-}
-
 .mermaid-diagram svg {
   overflow: visible;
   max-width: 100%;
   height: auto;
-  position: relative;
-  z-index: 1;
-}
-
-@keyframes diagram-fade-in {
-  from { opacity: 0; transform: scale(0.98); }
-  to   { opacity: 1; transform: scale(1); }
 }
 
 .mermaid-diagram svg foreignObject {
@@ -436,10 +410,9 @@ textarea:focus-visible,
 }
 
 .mermaid-diagram .section-0 .node-bkg {
-  fill: oklch(0.38 0.08 175) !important;
-  stroke: oklch(0.72 0.12 175) !important;
+  fill: oklch(0.20 0.04 180) !important;
+  stroke: oklch(0.55 0.12 175) !important;
   stroke-width: 2.5px !important;
-  filter: drop-shadow(0 4px 12px oklch(0.55 0.10 175 / 0.30));
 }
 
 .mermaid-diagram .section-0 foreignObject > div,
@@ -450,14 +423,9 @@ textarea:focus-visible,
   text-align: center !important;
   width: 100% !important;
   height: 100% !important;
-  color: oklch(0.95 0.005 175) !important;
-  font-weight: 650 !important;
+  color: oklch(0.95 0.005 240) !important;
+  font-weight: 600 !important;
   font-size: 15px !important;
-  letter-spacing: 0.02em;
-  text-shadow: 0 1px 2px oklch(0 0 0 / 0.4);
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-  white-space: normal;
 }
 
 .mermaid-diagram .mindmap-node:not(.section-0) .node-bkg {
@@ -476,116 +444,95 @@ textarea:focus-visible,
   text-align: center !important;
   width: 100% !important;
   height: 100% !important;
-  padding: 9px 15px !important;
-  border-radius: 10px !important;
+  padding: 7px 16px !important;
+  border-radius: 8px !important;
   border: 1.5px solid !important;
-  color: oklch(0.97 0.008 240) !important;
-  font-weight: 500 !important;
+  color: oklch(0.93 0.005 240) !important;
+  font-weight: 450 !important;
   font-size: 13px !important;
-  line-height: 1.5 !important;
-  letter-spacing: 0.015em;
+  letter-spacing: 0.01em;
   box-sizing: border-box !important;
-  word-break: keep-all;
-  overflow-wrap: anywhere;
-  white-space: normal;
-  box-shadow:
-    0 1px 2px oklch(0 0 0 / 0.35),
-    inset 0 1px 0 oklch(1 0 0 / 0.06);
-  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1),
-              border-color 180ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.mermaid-diagram .mindmap-node:not(.section-0):hover foreignObject > div {
-  transform: translateY(-1px);
-  box-shadow:
-    0 4px 12px oklch(0 0 0 / 0.3),
-    inset 0 1px 0 oklch(1 0 0 / 0.1);
+  line-height: 1.45 !important;
 }
 
 .mermaid-diagram .section-1 foreignObject > div,
 .mermaid-diagram .section-1 foreignObject > span {
-  background: linear-gradient(180deg, oklch(0.30 0.05 250) 0%, oklch(0.25 0.04 250) 100%) !important;
-  border-color: oklch(0.55 0.08 250) !important;
+  background: oklch(0.25 0.06 245) !important;
+  border-color: oklch(0.58 0.14 245) !important;
 }
 
 .mermaid-diagram .section-2 foreignObject > div,
 .mermaid-diagram .section-2 foreignObject > span {
-  background: linear-gradient(180deg, oklch(0.30 0.05 165) 0%, oklch(0.25 0.04 165) 100%) !important;
-  border-color: oklch(0.55 0.08 165) !important;
+  background: oklch(0.26 0.07 155) !important;
+  border-color: oklch(0.58 0.14 155) !important;
 }
 
 .mermaid-diagram .section-3 foreignObject > div,
 .mermaid-diagram .section-3 foreignObject > span {
-  background: linear-gradient(180deg, oklch(0.30 0.04 55) 0%, oklch(0.25 0.03 55) 100%) !important;
-  border-color: oklch(0.55 0.07 55) !important;
+  background: oklch(0.27 0.08 80) !important;
+  border-color: oklch(0.60 0.15 80) !important;
 }
 
 .mermaid-diagram .section-4 foreignObject > div,
 .mermaid-diagram .section-4 foreignObject > span {
-  background: linear-gradient(180deg, oklch(0.30 0.04 350) 0%, oklch(0.25 0.03 350) 100%) !important;
-  border-color: oklch(0.55 0.07 350) !important;
+  background: oklch(0.26 0.07 25) !important;
+  border-color: oklch(0.58 0.14 25) !important;
 }
 
 .mermaid-diagram .section-5 foreignObject > div,
 .mermaid-diagram .section-5 foreignObject > span {
-  background: linear-gradient(180deg, oklch(0.30 0.04 290) 0%, oklch(0.25 0.03 290) 100%) !important;
-  border-color: oklch(0.52 0.07 290) !important;
+  background: oklch(0.24 0.07 295) !important;
+  border-color: oklch(0.56 0.13 295) !important;
 }
 
 .mermaid-diagram .section-6 foreignObject > div,
 .mermaid-diagram .section-6 foreignObject > span {
-  background: linear-gradient(180deg, oklch(0.30 0.05 210) 0%, oklch(0.25 0.04 210) 100%) !important;
-  border-color: oklch(0.55 0.08 210) !important;
+  background: oklch(0.25 0.06 210) !important;
+  border-color: oklch(0.56 0.13 210) !important;
 }
 
 .mermaid-diagram .section-7 foreignObject > div,
 .mermaid-diagram .section-7 foreignObject > span {
-  background: linear-gradient(180deg, oklch(0.30 0.04 135) 0%, oklch(0.25 0.03 135) 100%) !important;
-  border-color: oklch(0.55 0.07 135) !important;
-}
-
-.mermaid-diagram .edge {
-  stroke-linecap: round !important;
-  opacity: 0.75;
+  background: oklch(0.26 0.07 120) !important;
+  border-color: oklch(0.58 0.14 120) !important;
 }
 
 .mermaid-diagram .edge.section-edge-color-0 {
-  stroke: oklch(0.55 0.08 175) !important;
+  stroke: oklch(0.58 0.10 175) !important;
   stroke-width: 2px !important;
 }
 
 .mermaid-diagram .edge.section-edge-color-1 {
-  stroke: oklch(0.48 0.06 250) !important;
-  stroke-width: 1.75px !important;
+  stroke: oklch(0.55 0.10 245) !important;
+  stroke-width: 2px !important;
 }
 
 .mermaid-diagram .edge.section-edge-color-2 {
-  stroke: oklch(0.48 0.06 165) !important;
-  stroke-width: 1.75px !important;
+  stroke: oklch(0.55 0.10 155) !important;
+  stroke-width: 2px !important;
 }
 
 .mermaid-diagram .edge.section-edge-color-3 {
-  stroke: oklch(0.50 0.06 55) !important;
-  stroke-width: 1.75px !important;
+  stroke: oklch(0.57 0.10 80) !important;
+  stroke-width: 2px !important;
 }
 
 .mermaid-diagram .edge.section-edge-color-4 {
-  stroke: oklch(0.48 0.06 350) !important;
-  stroke-width: 1.75px !important;
+  stroke: oklch(0.55 0.10 25) !important;
+  stroke-width: 2px !important;
 }
 
 .mermaid-diagram .edge.section-edge-color-5 {
-  stroke: oklch(0.46 0.05 290) !important;
-  stroke-width: 1.75px !important;
+  stroke: oklch(0.53 0.09 295) !important;
+  stroke-width: 2px !important;
 }
 
 .mermaid-diagram .edge.section-edge-color-6 {
-  stroke: oklch(0.48 0.06 210) !important;
-  stroke-width: 1.75px !important;
+  stroke: oklch(0.53 0.09 210) !important;
+  stroke-width: 2px !important;
 }
 
 .mermaid-diagram .edge.section-edge-color-7 {
-  stroke: oklch(0.48 0.06 135) !important;
-  stroke-width: 1.75px !important;
+  stroke: oklch(0.55 0.09 120) !important;
+  stroke-width: 2px !important;
 }
