@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMutationWithInvalidation } from '@/hooks/useMutationWithInvalidation';
-import { Link } from 'react-router-dom';
-import { Upload, Trash2, Download, Edit3, RotateCw, Plus, X } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Upload, Trash2, Download, Edit3, RotateCw, Plus, X, BookOpen } from 'lucide-react';
 import type { AxiosError } from 'axios';
 import { filesApi } from '@/api';
 import { Modal, Pagination, StatusBadge, SkeletonTransition } from '@/components';
@@ -105,6 +105,7 @@ function FilesSkeleton() {
 }
 
 export default function Files() {
+  const navigate = useNavigate();
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -535,22 +536,27 @@ export default function Files() {
                             </div>
                           )}
 
-                          <div className="flex flex-wrap gap-2 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => filesApi.downloadFile(file.id)} className="flex items-center gap-1.5 bg-surface-deep border border-white/[0.05] rounded-lg px-3 py-1.5 text-xs font-medium text-content-secondary hover:text-white transition-colors">
-                              <Download size={14} /> 다운로드
-                            </button>
-                            <button onClick={() => beginRename(file)} className="flex items-center gap-1.5 bg-surface-deep border border-white/[0.05] rounded-lg px-3 py-1.5 text-xs font-medium text-content-secondary hover:text-white transition-colors">
-                              <Edit3 size={14} /> 이름 변경
-                            </button>
-                            {failedStatuses.includes(file.status) && (
-                              <button onClick={() => retryMutation.mutate(file.id)} className="flex items-center gap-1.5 bg-brand-500/10 border border-brand-500/20 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-300 hover:bg-brand-500/20 transition-colors">
-                                <RotateCw size={14} /> 재시도
-                              </button>
-                            )}
-                             <button onClick={() => fileDeleteModal.open(file)} className="flex items-center gap-1.5 bg-semantic-error/10 border border-semantic-error/20 rounded-lg px-3 py-1.5 text-xs font-medium text-semantic-error hover:bg-semantic-error/20 transition-colors">
-                              <Trash2 size={14} /> 삭제
-                            </button>
-                          </div>
+                           <div className="flex flex-wrap gap-2 pt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                             {file.status === 'ready' && (
+                               <button onClick={() => navigate(`/study/${file.id}`)} className="flex items-center gap-1.5 bg-brand-500/10 border border-brand-500/20 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-300 hover:bg-brand-500/20 transition-colors">
+                                 <BookOpen size={14} /> 학습 시작
+                               </button>
+                             )}
+                             <button onClick={() => filesApi.downloadFile(file.id)} className="flex items-center gap-1.5 bg-surface-deep border border-white/[0.05] rounded-lg px-3 py-1.5 text-xs font-medium text-content-secondary hover:text-white transition-colors">
+                               <Download size={14} /> 다운로드
+                             </button>
+                             <button onClick={() => beginRename(file)} className="flex items-center gap-1.5 bg-surface-deep border border-white/[0.05] rounded-lg px-3 py-1.5 text-xs font-medium text-content-secondary hover:text-white transition-colors">
+                               <Edit3 size={14} /> 이름 변경
+                             </button>
+                             {failedStatuses.includes(file.status) && (
+                               <button onClick={() => retryMutation.mutate(file.id)} className="flex items-center gap-1.5 bg-brand-500/10 border border-brand-500/20 rounded-lg px-3 py-1.5 text-xs font-medium text-brand-300 hover:bg-brand-500/20 transition-colors">
+                                 <RotateCw size={14} /> 재시도
+                               </button>
+                             )}
+                              <button onClick={() => fileDeleteModal.open(file)} className="flex items-center gap-1.5 bg-semantic-error/10 border border-semantic-error/20 rounded-lg px-3 py-1.5 text-xs font-medium text-semantic-error hover:bg-semantic-error/20 transition-colors">
+                               <Trash2 size={14} /> 삭제
+                             </button>
+                           </div>
                         </div>
                       </div>
                     </article>

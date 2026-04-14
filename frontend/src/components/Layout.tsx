@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu, X, CreditCard } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu, X, CreditCard, BookOpen } from 'lucide-react';
 import AnnouncementBanner from './AnnouncementBanner';
 import Navbar from './Navbar';
 import UsageBar from './UsageBar';
@@ -20,6 +20,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { path: '/dashboard', label: '대시보드', icon: <LayoutDashboard size={18} /> },
   { path: '/files', label: '자료 관리', icon: <FolderOpen size={18} /> },
+  { path: '/study', label: '학습', icon: <BookOpen size={18} /> },
   { path: '/quiz/new', label: '퀴즈 생성', icon: <CircleHelp size={18} /> },
   { path: '/quiz/history', label: '퀴즈 기록', icon: <History size={18} /> },
   { path: '/wrong-notes', label: '오답노트', icon: <TriangleAlert size={18} /> },
