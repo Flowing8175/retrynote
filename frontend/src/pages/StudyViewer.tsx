@@ -47,11 +47,11 @@ function tabStatus(tab: Tab, status: ReturnType<typeof useStudyStatus>['data']):
   }
 }
 
-function TabContent({ tab }: { tab: Tab }) {
+function TabContent({ tab, fileId }: { tab: Tab; fileId: string }) {
   return (
     <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-500">로딩 중...</div>}>
-      {tab === '요약' && <SummaryTab />}
-      {tab === '플래시카드' && <FlashcardTab />}
+      {tab === '요약' && <SummaryTab fileId={fileId} />}
+      {tab === '플래시카드' && <FlashcardTab fileId={fileId} />}
       {tab === '마인드맵' && <MindmapTab />}
       {tab === 'AI Tutor' && <TutorTab />}
     </Suspense>
@@ -155,7 +155,7 @@ export default function StudyViewer() {
           </div>
 
           <div className="flex-1 min-h-0 overflow-auto bg-gray-900 p-4">
-            <TabContent tab={activeTab} />
+            <TabContent tab={activeTab} fileId={fileId ?? ''} />
           </div>
         </div>
       </div>
