@@ -13,7 +13,7 @@ function StudyListSkeleton() {
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="bg-surface border border-white/[0.05] rounded-2xl p-5 space-y-3">
+          <div key={i} className="bg-surface border border-white/[0.05] rounded-3xl p-5 space-y-3">
             <div className="skeleton h-6 w-40 rounded-md" />
             <div className="skeleton h-4 w-32 rounded-md" />
             <div className="skeleton h-5 w-20 rounded-md" />
@@ -68,7 +68,7 @@ export default function StudyList() {
                 <button
                   key={file.id}
                   onClick={() => navigate(`/study/${file.id}`)}
-                  className="group relative text-left bg-surface border border-white/[0.05] rounded-2xl p-5 hover:bg-surface-hover hover:border-brand-500/30 transition-all"
+                  className="group relative text-left bg-surface border border-white/[0.05] rounded-3xl p-5 hover:bg-surface-hover hover:border-brand-500/30 transition-all"
                 >
                   <div className="space-y-3">
                     <div className="flex items-start justify-between gap-2">

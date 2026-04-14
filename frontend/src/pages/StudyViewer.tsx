@@ -31,10 +31,10 @@ const STATUS_LABEL: Record<ContentStatus, string> = {
 };
 
 const STATUS_COLOR: Record<ContentStatus, string> = {
-  not_generated: 'bg-gray-700 text-gray-400',
-  generating: 'bg-blue-900 text-blue-300',
-  completed: 'bg-green-900 text-green-300',
-  failed: 'bg-red-900 text-red-400',
+  not_generated: 'bg-surface-raised text-content-muted',
+  generating: 'bg-brand-500/10 text-brand-300',
+  completed: 'bg-semantic-success-bg text-semantic-success',
+  failed: 'bg-semantic-error-bg text-semantic-error',
 };
 
 function tabStatus(tab: Tab, status: ReturnType<typeof useStudyStatus>['data']): ContentStatus {
@@ -49,7 +49,7 @@ function tabStatus(tab: Tab, status: ReturnType<typeof useStudyStatus>['data']):
 
 function TabContent({ tab, fileId }: { tab: Tab; fileId: string }) {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-500">로딩 중...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center h-full text-content-muted">로딩 중...</div>}>
       {tab === '요약' && <SummaryTab fileId={fileId} />}
       {tab === '플래시카드' && <FlashcardTab fileId={fileId} />}
       {tab === '마인드맵' && <MindmapTab fileId={fileId} />}
@@ -98,11 +98,11 @@ export default function StudyViewer() {
 
   if (is404) {
     return (
-      <div className="flex flex-col h-screen bg-gray-900 overflow-hidden">
-        <header className="flex items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700 shrink-0">
+      <div className="flex flex-col h-screen bg-background overflow-hidden">
+        <header className="flex items-center gap-3 px-4 py-3 bg-surface/80 backdrop-blur-sm border-b border-white/[0.05] shrink-0">
           <button
             onClick={() => navigate('/study')}
-            className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors text-sm"
+            className="flex items-center gap-1.5 text-content-secondary hover:text-white transition-colors text-sm"
           >
             <ChevronLeft size={18} />
             <span>학습 목록</span>
@@ -110,11 +110,11 @@ export default function StudyViewer() {
         </header>
         <div className="flex flex-col items-center justify-center flex-1 gap-4 text-center px-4">
           <span className="text-5xl">🗑️</span>
-          <p className="text-gray-300 text-lg font-medium">이 자료는 더 이상 존재하지 않습니다</p>
-          <p className="text-gray-500 text-sm">삭제되었거나 접근할 수 없는 자료입니다.</p>
+          <p className="text-content-secondary text-lg font-medium">이 자료는 더 이상 존재하지 않습니다</p>
+          <p className="text-content-muted text-sm">삭제되었거나 접근할 수 없는 자료입니다.</p>
           <button
             onClick={() => navigate('/study')}
-            className="mt-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+            className="mt-2 px-5 py-2 bg-brand-500 hover:bg-brand-400 text-content-inverse text-sm font-medium rounded-xl transition-colors"
           >
             목록으로 돌아가기
           </button>
@@ -124,21 +124,21 @@ export default function StudyViewer() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-900 overflow-hidden">
-      <header className="flex items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700 shrink-0">
+    <div className="flex flex-col h-screen bg-background overflow-hidden">
+      <header className="flex items-center gap-3 px-4 py-3 bg-surface/80 backdrop-blur-sm border-b border-white/[0.05] shrink-0">
         <button
           onClick={() => navigate('/study')}
-          className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors text-sm"
+          className="flex items-center gap-1.5 text-content-secondary hover:text-white transition-colors text-sm"
         >
           <ChevronLeft size={18} />
           <span>학습 목록</span>
         </button>
-        <div className="w-px h-4 bg-gray-700" />
-        <h1 className="text-sm font-medium text-white truncate flex-1">{filename}</h1>
+        <div className="w-px h-4 bg-white/[0.05]" />
+        <h1 className="text-sm font-medium text-content-primary truncate flex-1">{filename}</h1>
       </header>
 
       {isShortDocument && (
-        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-900/40 border-b border-amber-700/50 text-amber-300 text-sm shrink-0">
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-semantic-warning-bg border-b border-semantic-warning-border text-semantic-warning text-sm shrink-0">
           <span>⚠️</span>
           <span>이 문서는 내용이 부족하여 학습 콘텐츠를 생성할 수 없습니다</span>
         </div>
@@ -159,15 +159,15 @@ export default function StudyViewer() {
             </div>
 
             <div
-              className="hidden lg:block w-1 bg-gray-700 hover:bg-blue-500 transition-colors shrink-0 cursor-col-resize"
+              className="hidden lg:block w-1 bg-white/[0.05] hover:bg-brand-500/50 transition-colors shrink-0 cursor-col-resize"
               onMouseDown={handleDividerMouseDown}
             />
           </>
         )}
 
         <div className="flex flex-col min-h-0 flex-1">
-          <div className="bg-gray-800 border-b border-gray-700 shrink-0 overflow-x-auto">
-            <div className="flex items-center gap-1 px-3 pt-3 pb-0 whitespace-nowrap">
+          <div className="bg-surface/80 backdrop-blur-sm border-b border-white/[0.05] shrink-0 overflow-x-auto">
+            <div className="flex items-center gap-2 px-3 py-2 whitespace-nowrap">
               {TABS.map((tab) => {
                 const s = tabStatus(tab, status);
                 const isActive = activeTab === tab;
@@ -177,11 +177,11 @@ export default function StudyViewer() {
                     key={tab}
                     onClick={() => { if (!isTabDisabled) setActiveTab(tab); }}
                     disabled={isTabDisabled}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t transition-colors shrink-0 ${
+                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all shrink-0 ${
                       isActive
-                        ? 'bg-gray-900 text-white border-t border-l border-r border-gray-700'
-                        : 'text-gray-400 hover:text-gray-200'
-                    } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400`}
+                        ? 'bg-brand-500/5 text-brand-300 border border-brand-500/10'
+                        : 'text-content-secondary hover:text-white border border-transparent hover:bg-surface-hover'
+                    } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-content-secondary`}
                   >
                     {tab}
                     {tab !== 'Repla' && (
@@ -195,11 +195,11 @@ export default function StudyViewer() {
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-auto bg-gray-900 p-4">
+          <div className="flex-1 min-h-0 overflow-auto bg-background p-4">
             {isShortDocument && activeTab !== 'Repla' ? (
               <div className="flex flex-col items-center justify-center h-full text-center gap-3">
                 <span className="text-4xl">📄</span>
-                <p className="text-gray-400 text-sm">
+                <p className="text-content-muted text-sm">
                   이 문서는 내용이 부족하여 학습 콘텐츠를 생성할 수 없습니다
                 </p>
               </div>
@@ -211,17 +211,17 @@ export default function StudyViewer() {
       </div>
 
       {showPdfOverlay && isPdf && (
-        <div className="fixed inset-0 z-50 bg-gray-900 flex flex-col lg:hidden">
-          <div className="flex items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700 shrink-0">
+        <div className="fixed inset-0 z-50 bg-background flex flex-col lg:hidden">
+          <div className="flex items-center gap-3 px-4 py-3 bg-surface/80 backdrop-blur-sm border-b border-white/[0.05] shrink-0">
             <button
               onClick={() => setShowPdfOverlay(false)}
-              className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors text-sm"
+              className="flex items-center gap-1.5 text-content-secondary hover:text-white transition-colors text-sm"
             >
               <X size={18} />
               <span>닫기</span>
             </button>
-            <div className="w-px h-4 bg-gray-700" />
-            <span className="text-sm font-medium text-white truncate flex-1">PDF 뷰어</span>
+            <div className="w-px h-4 bg-white/[0.05]" />
+            <span className="text-sm font-medium text-content-primary truncate flex-1">PDF 뷰어</span>
           </div>
           <div className="flex-1 min-h-0">
             <PdfViewer url={pdfUrl} />
@@ -232,7 +232,7 @@ export default function StudyViewer() {
       {isPdf && (
         <button
           onClick={() => setShowPdfOverlay(true)}
-          className="fixed bottom-6 right-4 z-40 lg:hidden flex items-center gap-2 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-3 rounded-full shadow-lg transition-colors text-sm font-medium"
+          className="fixed bottom-6 right-4 z-40 lg:hidden flex items-center gap-2 bg-brand-500 hover:bg-brand-400 active:bg-brand-600 text-content-inverse px-4 py-3 rounded-full shadow-lg transition-colors text-sm font-medium"
         >
           <FileText size={16} />
           PDF 보기

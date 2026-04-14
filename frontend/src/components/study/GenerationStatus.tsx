@@ -20,8 +20,8 @@ export function GenerationStatus({
   if (status === 'generating') {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-12">
-        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        <p className="text-gray-400 text-sm">생성 중...</p>
+        <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-content-muted text-sm">생성 중...</p>
       </div>
     );
   }
@@ -29,9 +29,9 @@ export function GenerationStatus({
   if (status === 'failed') {
     return (
       <div className="flex flex-col items-center justify-center gap-4 py-12">
-        <div className="w-12 h-12 rounded-full bg-red-900/30 flex items-center justify-center">
+        <div className="w-12 h-12 rounded-full bg-semantic-error-bg flex items-center justify-center">
           <svg
-            className="w-6 h-6 text-red-400"
+            className="w-6 h-6 text-semantic-error"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -45,12 +45,12 @@ export function GenerationStatus({
           </svg>
         </div>
         <div className="text-center">
-          <p className="text-gray-300 text-sm font-medium">생성에 실패했습니다</p>
-          <p className="text-gray-500 text-xs mt-1">{contentType}</p>
+          <p className="text-content-secondary text-sm font-medium">생성에 실패했습니다</p>
+          <p className="text-content-muted text-xs mt-1">{contentType}</p>
         </div>
         <button
           onClick={onRegenerate}
-          className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition-colors"
+          className="px-4 py-2 bg-semantic-error hover:opacity-90 text-white text-sm rounded-xl transition-colors"
         >
           다시 시도
         </button>
@@ -60,9 +60,9 @@ export function GenerationStatus({
 
   return (
     <div className="flex flex-col items-center justify-center gap-4 py-12">
-      <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center">
+      <div className="w-12 h-12 rounded-full bg-surface-raised flex items-center justify-center">
         <svg
-          className="w-6 h-6 text-gray-400"
+          className="w-6 h-6 text-content-muted"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -76,11 +76,11 @@ export function GenerationStatus({
         </svg>
       </div>
       <div className="text-center">
-        <p className="text-gray-400 text-sm">{contentType} 콘텐츠가 없습니다</p>
+        <p className="text-content-muted text-sm">{contentType} 콘텐츠가 없습니다</p>
       </div>
       <button
         onClick={onGenerate}
-        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors"
+        className="px-4 py-2 bg-brand-500 hover:bg-brand-400 text-content-inverse text-sm rounded-xl transition-colors"
       >
         {contentType} 생성하기
       </button>
