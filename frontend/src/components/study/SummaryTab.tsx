@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { RefreshCw, FileText, AlertCircle, Sparkles } from 'lucide-react';
-import { useStudySummary, useGenerateContent } from '@/api/study';
+import { useStudyStatus, useStudySummary, useGenerateContent } from '@/api/study';
 
 interface SummaryTabProps {
   fileId: string;
@@ -39,8 +40,20 @@ function SummarySkeleton() {
 }
 
 export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
-  const { data: summary, isLoading, isError } = useStudySummary(fileId);
+  const queryClient = useQueryClient();
+  const { data: statusData } = useStudyStatus(fileId);
+  const summaryStatus = statusData?.summary_status ?? 'not_generated';
+
+  const { data: summary, isLoading } = useStudySummary(fileId, {
+    enabled: summaryStatus === 'completed',
+  });
   const { mutate: generateContent, isPending: isGenerating } = useGenerateContent(fileId);
+
+  useEffect(() => {
+    if (summaryStatus === 'completed') {
+      void queryClient.invalidateQueries({ queryKey: ['study', 'summary', fileId] });
+    }
+  }, [summaryStatus, fileId, queryClient]);
 
   const processedContent = useMemo(() => {
     if (!summary?.content) return '';
@@ -175,12 +188,8 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
     [onPageNavigate],
   );
 
-  const isShowingLoader = isLoading || summary?.status === 'generating';
-  const effectiveStatus = isLoading
-    ? 'generating'
-    : isError
-      ? 'failed'
-      : (summary?.status ?? 'not_generated');
+  const isShowingLoader = summaryStatus === 'generating' || (summaryStatus === 'completed' && isLoading);
+  const effectiveStatus = summaryStatus;
 
   const canRegenerate = effectiveStatus === 'completed' || effectiveStatus === 'failed';
 

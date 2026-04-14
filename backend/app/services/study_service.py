@@ -207,21 +207,23 @@ async def generate_flashcards(
     )
     existing = result.scalar_one_or_none()
 
-    if existing is not None and not force_regenerate:
+    if existing is not None and existing.status == ContentStatus.generating:
+        flashcard_set = existing
+    elif existing is not None and not force_regenerate:
         logger.info("generate_flashcards: set already exists for file %s", file_id)
         return
+    else:
+        if existing is not None and force_regenerate:
+            existing.deleted_at = datetime.now(timezone.utc)
+            await db.flush()
 
-    if existing is not None and force_regenerate:
-        existing.deleted_at = datetime.now(timezone.utc)
+        flashcard_set = StudyFlashcardSet(
+            file_id=file_id,
+            status=ContentStatus.generating,
+        )
+        db.add(flashcard_set)
         await db.flush()
-
-    flashcard_set = StudyFlashcardSet(
-        file_id=file_id,
-        status=ContentStatus.generating,
-    )
-    db.add(flashcard_set)
-    await db.flush()
-    await db.commit()
+        await db.commit()
 
     try:
         file_result = await db.execute(select(File).where(File.id == file_id))
@@ -336,18 +338,20 @@ async def generate_mindmap(
     )
     existing = result.scalar_one_or_none()
 
-    if existing is not None and not force_regenerate:
+    if existing is not None and existing.status == ContentStatus.generating:
+        mindmap = existing
+    elif existing is not None and not force_regenerate:
         logger.info("generate_mindmap: mindmap already exists for file %s", file_id)
         return
+    else:
+        if existing is not None and force_regenerate:
+            existing.deleted_at = datetime.now(timezone.utc)
+            await db.flush()
 
-    if existing is not None and force_regenerate:
-        existing.deleted_at = datetime.now(timezone.utc)
+        mindmap = StudyMindmap(file_id=file_id, status=ContentStatus.generating)
+        db.add(mindmap)
         await db.flush()
-
-    mindmap = StudyMindmap(file_id=file_id, status=ContentStatus.generating)
-    db.add(mindmap)
-    await db.flush()
-    await db.commit()
+        await db.commit()
 
     try:
         file_result = await db.execute(select(File).where(File.id == file_id))

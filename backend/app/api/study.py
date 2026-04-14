@@ -183,6 +183,14 @@ async def generate_summary_endpoint(
             status_code=409, detail="Summary generation already in progress"
         )
 
+    if summary is None:
+        summary = StudySummary(file_id=file_id, status=ContentStatus.generating)
+        db.add(summary)
+    else:
+        summary.status = ContentStatus.generating
+        summary.content = None
+    await db.commit()
+
     dispatch_task("generate_study_summary", [file_id])
     return {"status": "dispatched"}
 
@@ -260,7 +268,17 @@ async def generate_flashcards_endpoint(
 
     if req.force_regenerate and flashcard_set:
         flashcard_set.deleted_at = datetime.now(timezone.utc)
-        await db.commit()
+        await db.flush()
+        flashcard_set = None
+
+    if flashcard_set is None:
+        flashcard_set = StudyFlashcardSet(
+            file_id=file_id, status=ContentStatus.generating
+        )
+        db.add(flashcard_set)
+    else:
+        flashcard_set.status = ContentStatus.generating
+    await db.commit()
 
     dispatch_task("generate_study_flashcards", [file_id])
     return {"status": "dispatched"}
@@ -326,7 +344,16 @@ async def generate_mindmap_endpoint(
 
     if req.force_regenerate and mindmap:
         mindmap.deleted_at = datetime.now(timezone.utc)
-        await db.commit()
+        await db.flush()
+        mindmap = None
+
+    if mindmap is None:
+        mindmap = StudyMindmap(file_id=file_id, status=ContentStatus.generating)
+        db.add(mindmap)
+    else:
+        mindmap.status = ContentStatus.generating
+        mindmap.data = None
+    await db.commit()
 
     dispatch_task("generate_study_mindmap", [file_id])
     return {"status": "dispatched"}

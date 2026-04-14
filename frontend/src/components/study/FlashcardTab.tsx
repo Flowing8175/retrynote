@@ -1,20 +1,33 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, RotateCw, Layers, AlertCircle, Clock } from 'lucide-react';
-import { useStudyFlashcards, useGenerateContent } from '@/api/study';
+import { useStudyStatus, useStudyFlashcards, useGenerateContent } from '@/api/study';
 
 interface FlashcardTabProps {
   fileId: string;
 }
 
 export function FlashcardTab({ fileId }: FlashcardTabProps) {
-  const { data, isLoading, error } = useStudyFlashcards(fileId);
+  const queryClient = useQueryClient();
+  const { data: statusData } = useStudyStatus(fileId);
+  const flashcardsStatus = statusData?.flashcards_status ?? 'not_generated';
+
+  const { data, isLoading } = useStudyFlashcards(fileId, {
+    enabled: flashcardsStatus === 'completed',
+  });
   const generateMutation = useGenerateContent(fileId);
+
+  useEffect(() => {
+    if (flashcardsStatus === 'completed') {
+      void queryClient.invalidateQueries({ queryKey: ['study', 'flashcards', fileId] });
+    }
+  }, [flashcardsStatus, fileId, queryClient]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
 
   const cards = data?.cards ?? [];
-  const status = data?.status ?? 'not_generated';
+  const status = flashcardsStatus;
   const total = cards.length;
   const currentCard = cards[currentIndex];
 
@@ -69,25 +82,7 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
     generateMutation.mutate('flashcards');
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-content-muted">
-        <div className="w-8 h-8 border-2 border-surface-raised border-t-brand-500 rounded-full animate-spin" />
-        <span className="text-sm">불러오는 중…</span>
-      </div>
-    );
-  }
-
-  if (error && !data) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-4 text-content-muted">
-        <AlertCircle className="w-10 h-10 text-semantic-error" />
-        <p className="text-sm">데이터를 불러오지 못했습니다.</p>
-      </div>
-    );
-  }
-
-  if (status === 'generating') {
+  if (status === 'generating' || (status === 'completed' && isLoading)) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-6 text-content-muted">
         <div className="relative">

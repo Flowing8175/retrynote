@@ -1,6 +1,7 @@
-import { lazy, Suspense, useMemo } from 'react';
+import { lazy, Suspense, useMemo, useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Network, RefreshCw } from 'lucide-react';
-import { useStudyMindmap, useGenerateContent } from '@/api/study';
+import { useStudyStatus, useStudyMindmap, useGenerateContent } from '@/api/study';
 import type { StudyMindmapNode, StudyMindmapEdge } from '@/types/study';
 import type { MindmapFlowNode, MindmapFlowEdge } from './MindmapFlow';
 
@@ -58,35 +59,33 @@ interface MindmapTabProps {
 }
 
 export function MindmapTab({ fileId }: MindmapTabProps) {
-  const { data: mindmap, isLoading, isError } = useStudyMindmap(fileId);
+  const queryClient = useQueryClient();
+  const { data: statusData } = useStudyStatus(fileId);
+  const mindmapStatus = statusData?.mindmap_status ?? 'not_generated';
+
+  const { data: mindmap, isLoading } = useStudyMindmap(fileId, {
+    enabled: mindmapStatus === 'completed',
+  });
   const { mutate: generate, isPending: isGenerating } = useGenerateContent(fileId);
 
-  if (isLoading) {
+  useEffect(() => {
+    if (mindmapStatus === 'completed') {
+      void queryClient.invalidateQueries({ queryKey: ['study', 'mindmap', fileId] });
+    }
+  }, [mindmapStatus, fileId, queryClient]);
+
+  const status = mindmapStatus;
+
+  if (status === 'generating' || (status === 'completed' && isLoading)) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-content-muted">
-        <Loader2 size={28} className="animate-spin" />
-        <span className="text-sm">불러오는 중...</span>
+        <Loader2 size={28} className="animate-spin text-brand-400" />
+        <span className="text-sm">
+          {status === 'generating' ? '마인드맵을 생성하고 있습니다...' : '불러오는 중...'}
+        </span>
       </div>
     );
   }
-
-  if (isError) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-semantic-error">
-        <AlertCircle size={28} />
-        <span className="text-sm">마인드맵을 불러오지 못했습니다</span>
-        <button
-          onClick={() => generate('mindmap')}
-          disabled={isGenerating}
-          className="mt-2 px-4 py-2 text-sm bg-surface-raised hover:bg-surface-hover disabled:opacity-50 text-content-secondary border border-white/[0.05] rounded-xl transition-colors"
-        >
-          다시 시도
-        </button>
-      </div>
-    );
-  }
-
-  const status = mindmap?.status ?? 'not_generated';
 
   if (status === 'not_generated') {
     return (
@@ -101,16 +100,6 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
           {isGenerating && <Loader2 size={14} className="animate-spin" />}
           마인드맵 생성
         </button>
-      </div>
-    );
-  }
-
-  if (status === 'generating') {
-    return (
-      <div className="flex flex-col items-center justify-center h-full gap-3 text-content-muted">
-        <Loader2 size={28} className="animate-spin text-brand-400" />
-        <span className="text-sm">마인드맵을 생성하고 있습니다...</span>
-        <span className="text-xs text-content-muted">잠시 후 페이지를 새로고침해 주세요</span>
       </div>
     );
   }

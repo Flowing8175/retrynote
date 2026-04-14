@@ -49,6 +49,18 @@ export function useStudyStatus(fileId: string) {
     queryKey: ['study', 'status', fileId],
     queryFn: () => studyApi.getStatus(fileId),
     enabled: !!fileId,
+    refetchInterval: (query) => {
+      const data = query.state.data as StudyStatus | undefined;
+      if (
+        data &&
+        (data.summary_status === 'generating' ||
+          data.flashcards_status === 'generating' ||
+          data.mindmap_status === 'generating')
+      ) {
+        return 3000;
+      }
+      return false;
+    },
     retry: (_, error: unknown) => {
       const status = (error as { response?: { status?: number } })?.response?.status;
       return status !== 404 && status !== 403;
@@ -56,27 +68,27 @@ export function useStudyStatus(fileId: string) {
   });
 }
 
-export function useStudySummary(fileId: string) {
+export function useStudySummary(fileId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['study', 'summary', fileId],
     queryFn: () => studyApi.getSummary(fileId),
-    enabled: !!fileId,
+    enabled: (options?.enabled !== false) && !!fileId,
   });
 }
 
-export function useStudyFlashcards(fileId: string) {
+export function useStudyFlashcards(fileId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['study', 'flashcards', fileId],
     queryFn: () => studyApi.getFlashcards(fileId),
-    enabled: !!fileId,
+    enabled: (options?.enabled !== false) && !!fileId,
   });
 }
 
-export function useStudyMindmap(fileId: string) {
+export function useStudyMindmap(fileId: string, options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ['study', 'mindmap', fileId],
     queryFn: () => studyApi.getMindmap(fileId),
-    enabled: !!fileId,
+    enabled: (options?.enabled !== false) && !!fileId,
   });
 }
 
@@ -84,9 +96,8 @@ export function useGenerateContent(fileId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (type: StudyContentType) => studyApi.generateContent(fileId, type),
-    onSuccess: (_data, type) => {
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['study', 'status', fileId] });
-      void queryClient.invalidateQueries({ queryKey: ['study', type, fileId] });
     },
   });
 }
