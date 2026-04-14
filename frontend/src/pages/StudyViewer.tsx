@@ -159,9 +159,11 @@ export default function StudyViewer() {
             </div>
 
             <div
-              className="hidden lg:block w-1 bg-white/[0.05] hover:bg-brand-500/50 transition-colors shrink-0 cursor-col-resize"
+              className="hidden lg:flex items-center justify-center w-2 bg-white/[0.03] hover:bg-brand-500/30 active:bg-brand-500/50 transition-colors shrink-0 cursor-col-resize group"
               onMouseDown={handleDividerMouseDown}
-            />
+            >
+              <div className="w-1 h-8 rounded-full bg-white/[0.15] group-hover:bg-brand-400/60 transition-colors" />
+            </div>
           </>
         )}
 
