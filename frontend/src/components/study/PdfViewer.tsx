@@ -36,13 +36,16 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
   const onPageChangeRef = useRef(onPageChange);
   onPageChangeRef.current = onPageChange;
   const activated = useRef(new Set<number>());
+  const pageWidth = useRef(PLACEHOLDER_W);
+  const pageHeight = useRef(PLACEHOLDER_H);
 
   const fileOptions = useMemo(() => ({
     url,
     httpHeaders: token ? { Authorization: `Bearer ${token}` } : {},
   }), [url, token]);
 
-  function onDocumentLoadSuccess({ numPages: total }: { numPages: number }) {
+  function onDocumentLoadSuccess(pdf: { numPages: number; getPage: (n: number) => Promise<{ getViewport: (opts: { scale: number }) => { width: number; height: number } }> }) {
+    const total = pdf.numPages;
     setNumPages(total);
     numPagesRef.current = total;
     setLoadError(null);
@@ -50,6 +53,14 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
       activated.current.add(i);
     }
     setRenderTick(t => t + 1);
+
+    pdf.getPage(1).then((page) => {
+      const viewport = page.getViewport({ scale: 1 });
+      pageWidth.current = viewport.width;
+      pageHeight.current = viewport.height;
+      // Auto-fit on load now that we know the real page size
+      zoomFit();
+    }).catch(() => { /* keep placeholder defaults */ });
   }
 
   function onDocumentLoadError(error: Error) {
@@ -155,8 +166,13 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
   function zoomFit() {
     const container = scrollRef.current;
     if (!container) return;
-    const padding = 16;
-    setScale(parseFloat(((container.clientWidth - padding * 2) / PLACEHOLDER_W).toFixed(2)));
+    const origOverflowY = container.style.overflowY;
+    container.style.overflowY = 'scroll';
+    const availableWidth = container.clientWidth;
+    container.style.overflowY = origOverflowY;
+    const padding = 16; // px-2 on inner wrapper = 8px each side
+    const fitted = parseFloat(((availableWidth - padding) / pageWidth.current).toFixed(2));
+    setScale(Math.max(0.5, Math.min(2.0, fitted)));
   }
 
   const setPageRef = useCallback((pageNum: number) => (el: HTMLDivElement | null) => {
@@ -228,7 +244,7 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
                       scale={scale}
                       className="bg-white"
                       loading={
-                        <div className="flex items-center justify-center bg-surface rounded" style={{ width: PLACEHOLDER_W * scale, height: PLACEHOLDER_H * scale }}>
+                        <div className="flex items-center justify-center bg-surface rounded" style={{ width: pageWidth.current * scale, height: pageHeight.current * scale }}>
                           <div className="w-6 h-6 border-2 border-surface-raised border-t-brand-500 rounded-full animate-spin" />
                         </div>
                       }
@@ -236,7 +252,7 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
                   ) : (
                     <div
                       className="flex items-center justify-center bg-surface rounded"
-                      style={{ width: PLACEHOLDER_W * scale, height: PLACEHOLDER_H * scale }}
+                      style={{ width: pageWidth.current * scale, height: pageHeight.current * scale }}
                     />
                   )}
                 </div>
