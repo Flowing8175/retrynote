@@ -25,9 +25,35 @@ def generate_summary_task(file_id: str):
 
 @celery_app.task(name="generate_study_flashcards")
 def generate_flashcards_task(file_id: str):
-    pass
+    async def _run():
+        from app.database import async_session
+        from app.services.study_service import generate_flashcards
+
+        async with async_session() as db:
+            await generate_flashcards(file_id, db)
+
+    try:
+        _run_async_task(_run())
+    except Exception as exc:
+        logger.exception(
+            "generate_study_flashcards task failed for file %s: %s", file_id, exc
+        )
+        raise
 
 
 @celery_app.task(name="generate_study_mindmap")
 def generate_mindmap_task(file_id: str):
-    pass
+    async def _run():
+        from app.database import async_session
+        from app.services.study_service import generate_mindmap
+
+        async with async_session() as db:
+            await generate_mindmap(file_id, db)
+
+    try:
+        _run_async_task(_run())
+    except Exception as exc:
+        logger.exception(
+            "generate_study_mindmap task failed for file %s: %s", file_id, exc
+        )
+        raise
