@@ -182,13 +182,17 @@ async def _validate_file_access(
 def _resolve_model_and_cost(
     req: "QuizSessionCreate",
     cfg: "Settings",
-) -> tuple[str, int]:
-    """Resolve the generation model name and its credit cost from the request.
+) -> tuple[str, float]:
+    """Resolve the generation model name and its credit estimate for pre-charging.
 
-    Returns (model_name, credit_cost).
-    Falls back to balanced_generation_model if preferred_model not set.
+    Returns (model_name, credit_estimate).
     """
-    from app.tier_config import MODEL_ECO, MODEL_BALANCED, MODEL_PERFORMANCE
+    from app.tier_config import (
+        MODEL_ECO,
+        MODEL_BALANCED,
+        MODEL_PERFORMANCE,
+        TIER_ESTIMATES,
+    )
 
     preferred = req.preferred_model or cfg.balanced_generation_model
     model_tier_label = None
@@ -199,8 +203,7 @@ def _resolve_model_and_cost(
     elif preferred == cfg.performance_generation_model:
         model_tier_label = MODEL_PERFORMANCE
 
-    _TIER_COSTS = {MODEL_ECO: 1, MODEL_BALANCED: 3, MODEL_PERFORMANCE: 5}
-    cost = _TIER_COSTS.get(model_tier_label, 1) if model_tier_label else 1
+    cost = TIER_ESTIMATES.get(model_tier_label, 1.0) if model_tier_label else 1.0
     return preferred, cost
 
 
@@ -292,6 +295,7 @@ async def create_quiz_session(
             "question_types": req.question_types,
             "source_mode": req.source_mode,
             "topic": req.topic,
+            "credit_estimate": generation_cost,
         },
     )
     db.add(job)
@@ -466,7 +470,7 @@ async def submit_answer(
     if item.question_type == QuestionType.essay:
         usage_svc = UsageService()
         tier = UserTier(user.tier)
-        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 1)
+        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 0.1)
         if not allowed:
             raise HTTPException(
                 status_code=402,
@@ -492,6 +496,15 @@ async def submit_answer(
         model_name=session.generation_model_name,
         include_essay=True,
     )
+
+    if item.question_type == QuestionType.essay:
+        from app.tier_config import calculate_credit_cost
+
+        _essay_model = session.generation_model_name or ""
+        _essay_actual = calculate_credit_cost(grading.tokens_used, _essay_model)
+        _essay_delta = _essay_actual - 0.1
+        if abs(_essay_delta) > 0.001:
+            await UsageService().adjust_credit(db, user.id, "quiz", _essay_delta)
 
     raw_correct = item.correct_answer_json
     if isinstance(raw_correct, dict):
@@ -679,7 +692,7 @@ async def submit_batch_answers(
     if essay_count > 0:
         usage_svc = UsageService()
         tier = UserTier(user.tier)
-        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", essay_count)
+        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 0.1)
         if not allowed:
             raise HTTPException(
                 status_code=402,
@@ -789,6 +802,20 @@ async def submit_batch_answers(
     session.submitted_at = now
     session.graded_at = now
     session.status = QuizSessionStatus.graded
+
+    if essay_count > 0:
+        from app.tier_config import calculate_credit_cost
+
+        _batch_total_tokens = sum(
+            g.tokens_used
+            for item, g in zip(items, grading_results)
+            if item.question_type == QuestionType.essay
+        )
+        _batch_model = session.generation_model_name or ""
+        _batch_actual = calculate_credit_cost(_batch_total_tokens, _batch_model)
+        _batch_delta = _batch_actual - 0.1
+        if abs(_batch_delta) > 0.001:
+            await UsageService().adjust_credit(db, user.id, "quiz", _batch_delta)
 
     await db.commit()
 
@@ -944,7 +971,6 @@ async def submit_exam(
             status_code=400, detail="Session is not ready for submission"
         )
 
-    # Only charge credits for essay items (AI-graded)
     essay_count_result = await db.execute(
         select(func.count(QuizItem.id)).where(
             QuizItem.quiz_session_id == session_id,
@@ -955,7 +981,7 @@ async def submit_exam(
     if essay_count > 0:
         usage_svc = UsageService()
         tier = UserTier(user.tier)
-        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", essay_count)
+        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 0.1)
         if not allowed:
             raise HTTPException(
                 status_code=402,
@@ -982,6 +1008,7 @@ async def submit_exam(
         status="pending",
         target_type="quiz_session",
         target_id=session_id,
+        payload_json={"credit_estimate": 0.1 if essay_count > 0 else 0.0},
     )
     db.add(job)
 
@@ -1093,9 +1120,14 @@ async def create_objection(
             status_code=400, detail="Objection already pending for this answer"
         )
 
+    from app.tier_config import TIER_ESTIMATES, MODEL_BALANCED
+
+    _objection_estimate = TIER_ESTIMATES[MODEL_BALANCED]
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 1)
+    allowed, _, _ = await usage_svc.check_and_consume(
+        db, user, "quiz", _objection_estimate
+    )
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -1117,7 +1149,7 @@ async def create_objection(
         status=ObjectionStatus.submitted,
     )
     db.add(objection)
-    await db.flush()  # populate objection.id before creating the Job
+    await db.flush()
 
     if session.status == QuizSessionStatus.graded:
         session.status = QuizSessionStatus.objection_pending
@@ -1128,6 +1160,7 @@ async def create_objection(
         status="pending",
         target_type="objection",
         target_id=objection.id,
+        payload_json={"credit_estimate": _objection_estimate},
     )
     db.add(job)
 

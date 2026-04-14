@@ -403,6 +403,7 @@ class GradingResult:
     error_type: "ErrorType | None" = None
     missing_points: "list | None" = None
     suggested_feedback: str = ""
+    tokens_used: int = 0
 
 
 async def _grade_single_answer(
@@ -474,7 +475,7 @@ async def _grade_single_answer(
                 f"accepted_answers, grading_confidence, grading_rationale, "
                 f"missing_points, error_type, suggested_feedback"
             )
-            ai = await call_ai_with_fallback(
+            ai, tokens = await call_ai_with_fallback(
                 prompt,
                 GRADING_SCHEMA,
                 primary_model=primary,
@@ -493,6 +494,7 @@ async def _grade_single_answer(
                 else None,
                 missing_points=ai.get("missing_points"),
                 suggested_feedback=ai.get("suggested_feedback", ""),
+                tokens_used=tokens,
             )
         except Exception:
             return GradingResult(judgement=Judgement.incorrect, score_awarded=0.0)
@@ -513,7 +515,7 @@ async def _grade_single_answer(
                 f"accepted_answers, grading_confidence, grading_rationale, "
                 f"missing_points, error_type, suggested_feedback"
             )
-            ai = await call_ai_with_fallback(
+            ai, tokens = await call_ai_with_fallback(
                 prompt,
                 GRADING_SCHEMA,
                 primary_model=primary,
@@ -532,6 +534,7 @@ async def _grade_single_answer(
                 else None,
                 missing_points=ai.get("missing_points"),
                 suggested_feedback=ai.get("suggested_feedback", ""),
+                tokens_used=tokens,
             )
         except Exception:
             return GradingResult(judgement=Judgement.incorrect, score_awarded=0.0)
@@ -627,7 +630,7 @@ async def generate_quiz(job_id: str):
                         raise JobFailure("No retry questions could be generated")
 
                     batch_prompt = build_batch_retry_prompt(batch_items)
-                    batch_result = await call_ai_with_fallback(
+                    batch_result, tokens_used = await call_ai_with_fallback(
                         batch_prompt,
                         BATCH_RETRY_GENERATION_SCHEMA,
                         primary_model=session.generation_model_name
@@ -678,6 +681,21 @@ async def generate_quiz(job_id: str):
                     if items_created == 0:
                         session.status = QuizSessionStatus.generation_failed
                         raise JobFailure("No retry questions could be generated")
+
+                    from app.tier_config import calculate_credit_cost
+                    from app.services.usage_service import UsageService
+
+                    actual_cost = calculate_credit_cost(
+                        tokens_used,
+                        session.generation_model_name or cfg.balanced_generation_model,
+                    )
+                    estimate = (job.payload_json or {}).get("credit_estimate", 0.0)
+                    delta = actual_cost - estimate
+                    _retry_uid = session.user_id
+                    if abs(delta) > 0.001 and _retry_uid is not None:
+                        await UsageService().adjust_credit(
+                            db, _retry_uid, "quiz", delta
+                        )
 
                     await db.commit()
                     session.status = QuizSessionStatus.ready
@@ -738,7 +756,7 @@ async def generate_quiz(job_id: str):
                         DIFFICULTY_SELECTION_SCHEMA,
                     )
 
-                    det_result = await call_ai_structured(
+                    det_result, _ = await call_ai_structured(
                         prompt=source_context[:4000],
                         schema=DIFFICULTY_SELECTION_SCHEMA,
                         system_message=SYSTEM_PROMPT_DIFFICULTY_SELECTION,
@@ -759,7 +777,7 @@ async def generate_quiz(job_id: str):
                     topic=topic,
                 )
 
-                ai_result = await call_ai_with_fallback(
+                ai_result, tokens_used = await call_ai_with_fallback(
                     prompt,
                     GENERATION_SCHEMA,
                     primary_model=session.generation_model_name
@@ -813,6 +831,20 @@ async def generate_quiz(job_id: str):
                     )
                     db.add(item)
 
+                from app.tier_config import calculate_credit_cost
+                from app.services.usage_service import UsageService
+
+                _gen_actual_cost = calculate_credit_cost(
+                    tokens_used,
+                    session.generation_model_name or cfg.balanced_generation_model,
+                )
+                _gen_estimate = (job.payload_json or {}).get("credit_estimate", 0.0)
+                _gen_delta = _gen_actual_cost - _gen_estimate
+                if abs(_gen_delta) > 0.001 and session.user_id:
+                    await UsageService().adjust_credit(
+                        db, str(session.user_id), "quiz", _gen_delta
+                    )
+
                 session.status = QuizSessionStatus.ready
 
             except JobFailure:
@@ -848,6 +880,8 @@ async def grade_exam(job_id: str):
                 )
                 items = items_result.scalars().all()
 
+                all_gradings: list[GradingResult] = []
+
                 for item in items:
                     draft_result = await db.execute(
                         select(DraftAnswer).where(
@@ -870,8 +904,10 @@ async def grade_exam(job_id: str):
                             item=item,
                             user_answer=user_answer,
                             model_name=session.generation_model_name,
-                            include_essay=False,
+                            include_essay=True,
                         )
+
+                    all_gradings.append(grading)
 
                     existing = await db.execute(
                         select(AnswerLog).where(
@@ -915,6 +951,22 @@ async def grade_exam(job_id: str):
                 )
                 session.graded_at = datetime.now(timezone.utc)
                 session.status = QuizSessionStatus.graded
+
+                from app.tier_config import calculate_credit_cost
+                from app.services.usage_service import UsageService
+
+                _exam_total_tokens = sum(g.tokens_used for g in all_gradings)
+                _exam_actual_cost = calculate_credit_cost(
+                    _exam_total_tokens,
+                    session.generation_model_name or cfg.balanced_generation_model,
+                )
+                _exam_estimate = (job.payload_json or {}).get("credit_estimate", 0.0)
+                _exam_delta = _exam_actual_cost - _exam_estimate
+                _exam_uid = session.user_id
+                if abs(_exam_delta) > 0.001 and _exam_uid is not None:
+                    await UsageService().adjust_credit(
+                        db, _exam_uid, "quiz", _exam_delta
+                    )
 
             except JobFailure:
                 raise
@@ -1049,7 +1101,7 @@ async def review_objection(job_id: str):
 
 다음 필드를 포함한 JSON으로 응답하세요:
 decision, reasoning, updated_judgement, updated_score_awarded, updated_error_type, should_apply"""
-            ai_result = await call_ai_with_fallback(
+            _obj_call = await call_ai_with_fallback(
                 prompt,
                 OBJECTION_REVIEW_SCHEMA,
                 primary_model=cfg.balanced_generation_model,
@@ -1057,12 +1109,25 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
                 system_message=SYSTEM_PROMPT_OBJECTION_REVIEW,
                 cache_key="objection_v1",
             )
+            ai_result: dict = _obj_call[0]
+            tokens_used: int = _obj_call[1]
             objection.review_result_json = ai_result
             objection.decided_at = datetime.now(timezone.utc)
             objection.decided_by = "ai"
             await _apply_objection_decision(
                 db, objection, answer_log, quiz_item, ai_result
             )
+            from app.tier_config import calculate_credit_cost
+            from app.services.usage_service import UsageService
+
+            _obj_actual_cost = calculate_credit_cost(
+                tokens_used, cfg.balanced_generation_model
+            )
+            _obj_estimate = (job.payload_json or {}).get("credit_estimate", 0.0)
+            _obj_delta = _obj_actual_cost - _obj_estimate
+            _obj_uid = answer_log.user_id
+            if abs(_obj_delta) > 0.001 and _obj_uid is not None:
+                await UsageService().adjust_credit(db, _obj_uid, "quiz", _obj_delta)
 
 
 async def _update_weak_point(
