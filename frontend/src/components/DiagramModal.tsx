@@ -76,11 +76,6 @@ export default function DiagramModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, conceptKey]);
 
-  const handleTypeChange = (type: DiagramTypeValue) => {
-    setSelectedType(type);
-    fetchDiagram(false, type);
-  };
-
   const handleRegenerate = () => {
     fetchDiagram(true, selectedType);
   };

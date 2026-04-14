@@ -63,12 +63,6 @@ export default function DiagramPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decodedKey]);
 
-  const handleTypeChange = (type: DiagramTypeValue) => {
-    setSelectedType(type);
-    setSearchParams({ type });
-    fetchDiagram(false, type);
-  };
-
   const handleRegenerate = () => fetchDiagram(true, selectedType);
   const handleBack = () => navigate(-1);
 
