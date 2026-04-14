@@ -38,6 +38,16 @@ from app.models.billing import (
     CreditPurchase,
     WebhookEvent,
 )
+from app.models.study import (
+    ContentStatus,
+    MessageRole,
+    StudySummary,
+    StudyFlashcardSet,
+    StudyFlashcard,
+    StudyMindmap,
+    StudyChat,
+    StudyMessage,
+)
 
 __all__ = [
     "GuestSession",
@@ -79,4 +89,12 @@ __all__ = [
     "CreditBalance",
     "CreditPurchase",
     "WebhookEvent",
+    "ContentStatus",
+    "MessageRole",
+    "StudySummary",
+    "StudyFlashcardSet",
+    "StudyFlashcard",
+    "StudyMindmap",
+    "StudyChat",
+    "StudyMessage",
 ]

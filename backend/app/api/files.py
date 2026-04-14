@@ -560,3 +560,42 @@ async def download_file(
         media_type="application/octet-stream",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}"},
     )
+
+
+@router.get("/{file_id}/view")
+async def view_file(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    from app.services import storage as _storage
+    from fastapi.responses import Response as _Response
+
+    file = await get_owned_file(file_id, db, user)
+    if not file.stored_path:
+        raise HTTPException(status_code=404, detail="File not available")
+
+    try:
+        data = await _storage.download_file(file.stored_path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="File not available")
+
+    from urllib.parse import quote as _urlquote
+
+    # Determine content type based on file type
+    content_type_map = {
+        "pdf": "application/pdf",
+        "txt": "text/plain",
+        "md": "text/markdown",
+    }
+    content_type = content_type_map.get(
+        file.file_type or "", "application/octet-stream"
+    )
+
+    filename = file.original_filename or os.path.basename(file.stored_path)
+    safe_name = _urlquote(filename, safe=" .-_~")
+    return _Response(
+        content=data,
+        media_type=content_type,
+        headers={"Content-Disposition": f"inline; filename*=UTF-8''{safe_name}"},
+    )
