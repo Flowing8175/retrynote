@@ -52,7 +52,7 @@ function TabContent({ tab, fileId }: { tab: Tab; fileId: string }) {
     <Suspense fallback={<div className="flex items-center justify-center h-full text-gray-500">로딩 중...</div>}>
       {tab === '요약' && <SummaryTab fileId={fileId} />}
       {tab === '플래시카드' && <FlashcardTab fileId={fileId} />}
-      {tab === '마인드맵' && <MindmapTab />}
+      {tab === '마인드맵' && <MindmapTab fileId={fileId} />}
       {tab === 'AI Tutor' && <TutorTab fileId={fileId} />}
     </Suspense>
   );
