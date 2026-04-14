@@ -7,7 +7,7 @@ import { useQuizStore } from '@/stores';
 import { gradeLocally } from '@/utils/gradeLocally';
 import type { AnswerResponse, BatchAnswerSubmit } from '@/types';
 import type { LocalGradeResult } from '@/utils/gradeLocally';
-import { ChevronLeft, ChevronRight, AlertCircle, Waypoints } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertCircle, Waypoints, X } from 'lucide-react';
 import DiagramModal from '@/components/DiagramModal';
 import { getErrorMessage } from '@/utils/errorMessages';
 import QuizGeneratingScreen from '@/components/quiz/QuizGeneratingScreen';
@@ -108,6 +108,11 @@ export default function QuizTake() {
   const [answerResultsByItemId, setAnswerResultsByItemId] = useState<Record<string, AnswerResponse>>({});
   const [furthestAvailableIndex, setFurthestAvailableIndex] = useState(0);
   const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
+  const [gradingItemId, setGradingItemId] = useState<string | null>(null);
+  const [isAiGradingDisabled, setIsAiGradingDisabled] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+
+  const currentItemIdRef = useRef<string | undefined>(undefined);
 
   const { data: sessionData, isLoading: sessionLoading, isError: sessionIsError, error: sessionError } = useQuery({
     queryKey: ['quizSession', sessionId],
@@ -239,6 +244,45 @@ export default function QuizTake() {
     },
   });
 
+  const completeSessionMutation = useMutation({
+    mutationFn: () => quizApi.completeQuizSession(sessionId || ''),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] }),
+        queryClient.invalidateQueries({ queryKey: ['quiz-history'] }),
+        queryClient.invalidateQueries({ queryKey: ['quiz-history-full'] }),
+        queryClient.invalidateQueries({ queryKey: ['wrongNotes'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['answerLogs', sessionId] }),
+      ]);
+      navigate(`/quiz/${sessionId}/results`);
+    },
+    onError: (err) => {
+      if (isAxiosError(err) && err.response?.status === 402) {
+        setCreditError(true);
+      }
+    },
+  });
+
+  const submitAnswerMutation = useMutation({
+    mutationFn: ({ itemId, answer }: { itemId: string; answer: string }) =>
+      quizApi.submitAnswer(sessionId || '', itemId, { user_answer: answer }),
+    onSuccess: (result, variables) => {
+      setAnswerResultsByItemId((prev) => ({ ...prev, [variables.itemId]: result }));
+      if (currentItemIdRef.current === variables.itemId) {
+        setAnswerResult(result);
+        setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
+      }
+      setGradingItemId((prev) => (prev === variables.itemId ? null : prev));
+    },
+    onError: (_err, variables) => {
+      setGradingItemId((prev) => (prev === variables.itemId ? null : prev));
+      if (isAxiosError(_err) && _err.response?.status === 402) {
+        setCreditError(true);
+      }
+    },
+  });
+
   const currentItem = itemsData?.[currentItemIndex];
   const currentQuestionType = typeof currentItem?.question_type === 'string' ? currentItem.question_type : null;
   const isExamMode = currentSession?.mode === 'exam';
@@ -250,7 +294,7 @@ export default function QuizTake() {
     : null;
   const optionDescriptions = currentItem?.option_descriptions as Record<string, string> | null;
 
-  const applyLocalGrade = (itemId: string, answer: string, localResult: LocalGradeResult) => {
+  const handleAnswerGrade = (itemId: string, answer: string, localResult: LocalGradeResult) => {
     const syntheticResult = buildSyntheticResult(localResult, answer);
     setAnswerResult(syntheticResult);
     setIsSubmitted(true);
@@ -261,8 +305,19 @@ export default function QuizTake() {
     setFurthestAvailableIndex((prev) =>
       Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1))
     );
-    setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
+    if (!isAiGradingDisabled) {
+      if (localResult.judgement === 'pending_ai') {
+        setGradingItemId(itemId);
+      } else {
+        setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
+      }
+      submitAnswerMutation.mutate({ itemId, answer });
+    } else {
+      setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
+    }
   };
+
+  currentItemIdRef.current = currentItem?.id;
 
   const applyExamLocalSave = (itemId: string, answer: string) => {
     setCurrentAnswer(itemId, answer);
@@ -293,7 +348,7 @@ export default function QuizTake() {
       currentQuestionType &&
       AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType)
     ) {
-      applyLocalGrade(currentItem.id, optionKey, gradeLocally(currentItem, optionKey));
+      handleAnswerGrade(currentItem.id, optionKey, gradeLocally(currentItem, optionKey));
     }
   };
 
@@ -363,13 +418,17 @@ export default function QuizTake() {
 
   const handleViewResults = () => {
     if (!sessionId || !itemsData) return;
-    const answers: BatchAnswerSubmit = {
-      answers: itemsData.map((item) => ({
-        item_id: item.id,
-        user_answer: submittedAnswers[item.id] || '',
-      })),
-    };
-    submitBatchMutation.mutate(answers);
+    if (isExamMode || isAiGradingDisabled) {
+      const answers: BatchAnswerSubmit = {
+        answers: itemsData.map((item) => ({
+          item_id: item.id,
+          user_answer: submittedAnswers[item.id] || '',
+        })),
+      };
+      submitBatchMutation.mutate(answers);
+    } else {
+      completeSessionMutation.mutate();
+    }
   };
 
   if (sessionLoading || (!sessionData && !sessionIsError)) {
@@ -535,6 +594,18 @@ export default function QuizTake() {
                   다이어그램
                 </button>
               )}
+              {!isExamMode && !isCompleted && (
+                <button
+                  onClick={() => setIsAiModalOpen(true)}
+                  className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-md border transition-colors ${
+                    isAiGradingDisabled
+                      ? 'text-content-muted bg-white/[0.04] border-white/[0.08]'
+                      : 'text-blue-400 bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/15'
+                  }`}
+                >
+                  AI채점
+                </button>
+              )}
             </div>
             <h2 className="text-3xl font-semibold leading-relaxed text-white">
               {currentItem.question_text}
@@ -573,7 +644,7 @@ export default function QuizTake() {
                       if (isExamMode) {
                         applyExamLocalSave(currentItem.id, userAnswer);
                       } else {
-                        applyLocalGrade(currentItem.id, userAnswer, gradeLocally(currentItem, userAnswer));
+                        handleAnswerGrade(currentItem.id, userAnswer, gradeLocally(currentItem, userAnswer));
                       }
                     }
                   }}
@@ -585,19 +656,20 @@ export default function QuizTake() {
             )}
           </div>
 
-          {isSubmitted && !isExamMode && answerResult && (
-            answerResult.judgement === 'pending_ai' ? (
+          {isSubmitted && !isExamMode && (
+            gradingItemId === currentItem.id ? (
               <div className="animate-fade-in-up p-6 rounded-2xl border border-brand-500/20 bg-brand-500/5">
-                <p className="text-sm text-content-secondary">
-                  ✓ 답변이 저장되었습니다. AI 채점 결과는 결과 화면에서 확인할 수 있습니다.
-                </p>
+                <div className="flex items-center gap-3 text-sm text-content-secondary">
+                  <div className="w-4 h-4 border-2 border-brand-400/40 border-t-brand-400 rounded-full animate-spin flex-shrink-0" />
+                  AI 채점 중...
+                </div>
               </div>
-            ) : (
+            ) : answerResult ? (
               <QuizAnswerFeedback
                 judgement={answerResult.judgement}
                 feedbackText={answerResult.suggested_feedback || answerResult.explanation}
               />
-            )
+            ) : null
           )}
         </section>
       )}
@@ -648,7 +720,7 @@ export default function QuizTake() {
                   if (isExamMode) {
                     applyExamLocalSave(currentItem.id, userAnswer);
                   } else {
-                    applyLocalGrade(currentItem.id, userAnswer, gradeLocally(currentItem, userAnswer));
+                    handleAnswerGrade(currentItem.id, userAnswer, gradeLocally(currentItem, userAnswer));
                   }
                 }}
                 hidden={!isExamMode && !!currentQuestionType && AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType)}
@@ -669,10 +741,10 @@ export default function QuizTake() {
             ) : (
               <button
                 onClick={handleViewResults}
-                disabled={submitBatchMutation.isPending}
+                disabled={submitBatchMutation.isPending || completeSessionMutation.isPending}
                 className="w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5"
               >
-                {submitBatchMutation.isPending ? '채점 중...' : '결과 보기'}
+                {(submitBatchMutation.isPending || completeSessionMutation.isPending) ? '채점 중...' : '결과 보기'}
               </button>
             )
           )}
@@ -684,6 +756,50 @@ export default function QuizTake() {
         conceptKey={diagramModal?.conceptKey ?? ''}
         conceptLabel={diagramModal?.conceptLabel ?? ''}
       />
+
+      {isAiModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          onClick={() => setIsAiModalOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-sm bg-surface-raised rounded-2xl border border-white/[0.08] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+              <h2 className="text-base font-semibold text-white">AI채점 비활성화</h2>
+              <button
+                onClick={() => setIsAiModalOpen(false)}
+                className="flex items-center justify-center w-7 h-7 rounded-lg text-content-muted hover:text-white hover:bg-white/[0.06] transition-colors"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-4">
+              <p className="text-sm text-content-secondary leading-relaxed">
+                크레딧 사용을 절감하기 위해 AI 채점을<br />임시적으로 비활성화할 수 있습니다.
+              </p>
+              <p className="text-sm text-semantic-error leading-relaxed">
+                답안과 정확히 일치하지 않으면<br />채점 결과에 오류가 있을 수 있습니다.
+              </p>
+              <button
+                onClick={() => {
+                  setIsAiGradingDisabled((v) => !v);
+                  setIsAiModalOpen(false);
+                }}
+                className={`w-full h-11 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 ${
+                  isAiGradingDisabled
+                    ? 'bg-brand-500 text-brand-900'
+                    : 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/15'
+                }`}
+              >
+                {isAiGradingDisabled ? '다시 활성화하기' : '비활성화하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -599,10 +599,23 @@ async def complete_quiz_session(
     answered_ids = set(answered_result.scalars().all())
     unanswered = [i for i in items if i.id not in answered_ids]
     if unanswered:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{len(unanswered)} item(s) not yet answered",
-        )
+        skip_ts = datetime.now(timezone.utc)
+        for item in unanswered:
+            skip_log = AnswerLog(
+                quiz_item_id=item.id,
+                quiz_session_id=session_id,
+                user_id=user.id,
+                user_answer_raw="",
+                user_answer_normalized="",
+                judgement=Judgement.skipped,
+                score_awarded=0.0,
+                max_score=1.0,
+                is_active_result=True,
+                error_type=ErrorType.no_response,
+                graded_at=skip_ts,
+            )
+            db.add(skip_log)
+        await db.flush()
 
     session.total_score, session.max_score = await _recalculate_session_totals(
         db, session_id, user.id
