@@ -94,12 +94,14 @@ async def generate_diagram(
     concept_label: str,
     category_tag: str | None = None,
     requested_diagram_type: str | None = None,
-) -> DiagramResponse:
+) -> tuple[DiagramResponse, int]:
     prompt = build_user_prompt(concept_label, category_tag)
     schema = _build_schema_for_type(requested_diagram_type)
     system_prompt = get_system_prompt()
 
-    ai_result = await call_ai_with_fallback(
+    tokens_used = 0
+
+    ai_result, tokens_used = await call_ai_with_fallback(
         prompt,
         schema,
         primary_model=settings.balanced_generation_model,
@@ -124,7 +126,7 @@ async def generate_diagram(
             "이전 응답의 Mermaid 구문이 유효하지 않습니다. "
             "위 개념을 그대로 유지하면서 올바른 Mermaid 구문으로 다시 생성하세요."
         )
-        ai_result = await call_ai_with_fallback(
+        ai_result, retry_tokens = await call_ai_with_fallback(
             fix_prompt,
             schema,
             primary_model=settings.balanced_generation_model,
@@ -134,6 +136,7 @@ async def generate_diagram(
             cache_key="diagram_gen_v1",
             strict=True,
         )
+        tokens_used += retry_tokens
         mermaid_code = _clean_mermaid_code(ai_result.get("mermaid_code", ""))
         diagram_type = ai_result.get("diagram_type", diagram_type)
         title = ai_result.get("title", title)
@@ -170,4 +173,4 @@ async def generate_diagram(
         title=diagram.title,
         cached=False,
         created_at=diagram.created_at,
-    )
+    ), tokens_used

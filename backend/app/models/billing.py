@@ -1,5 +1,14 @@
 from datetime import datetime
-from sqlalchemy import String, Integer, BigInteger, DateTime, ForeignKey, Index, func
+from sqlalchemy import (
+    String,
+    Integer,
+    BigInteger,
+    Float,
+    DateTime,
+    ForeignKey,
+    Index,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base, CommonMixin
 
@@ -44,7 +53,7 @@ class UsageRecord(CommonMixin, Base):
     window_end: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    consumed: Mapped[int] = mapped_column(Integer, default=0)
+    consumed: Mapped[float] = mapped_column(Float, default=0)
 
 
 class CreditBalance(CommonMixin, Base):

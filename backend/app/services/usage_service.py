@@ -59,8 +59,8 @@ class UsageService:
         db: AsyncSession,
         user: User,
         resource_type: str,
-        amount: int = 1,
-    ) -> tuple[bool, int, str]:
+        amount: float = 1.0,
+    ) -> tuple[bool, float, str]:
         """
         Returns (allowed, remaining, source).
         source = "tier" | "credit"
@@ -115,6 +115,19 @@ class UsageService:
             return (True, limit - record.consumed, "tier")
 
         return (False, 0, "tier")
+
+    async def adjust_credit(
+        self,
+        db: AsyncSession,
+        user_id: str,
+        resource_type: str,
+        delta: float,
+    ) -> None:
+        """Adjust consumed credits by delta (positive = charge more, negative = refund).
+        Used by workers to reconcile pre-charged estimates with actual token costs.
+        """
+        record = await self._get_or_create_window(db, user_id, resource_type)
+        record.consumed = round(record.consumed + delta, 2)
 
     async def get_usage_status(
         self, db: AsyncSession, user: User

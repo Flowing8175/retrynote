@@ -13,7 +13,8 @@ from app.services.diagram_service import (
     DiagramGenerationError,
 )
 from app.services.usage_service import UsageService
-from app.tier_config import TIER_LIMITS, UserTier
+from app.tier_config import TIER_LIMITS, UserTier, calculate_credit_cost
+from app.config import settings as cfg
 from app.middleware.auth import get_current_user
 
 router = APIRouter()
@@ -58,7 +59,8 @@ async def generate_concept_diagram(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 1)
+    # Balance gate — just check user has credits remaining
+    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 0.1)
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -72,7 +74,7 @@ async def generate_concept_diagram(
         )
 
     try:
-        diagram = await generate_diagram(
+        diagram, tokens_used = await generate_diagram(
             db,
             user.id,
             request.concept_key,
@@ -80,6 +82,11 @@ async def generate_concept_diagram(
             category_tag,
             requested_diagram_type=request.diagram_type,
         )
+        # Charge actual token-proportional cost (minus the 0.1 gate already charged)
+        actual_cost = calculate_credit_cost(tokens_used, cfg.balanced_generation_model)
+        remaining_cost = actual_cost - 0.1
+        if remaining_cost > 0:
+            await usage_svc.adjust_credit(db, user.id, "quiz", remaining_cost)
     except DiagramGenerationError:
         raise HTTPException(status_code=500, detail="다이어그램 생성에 실패했습니다")
 

@@ -14,8 +14,8 @@ class _CamelModel(BaseModel):
 
 class UsageWindowSchema(_CamelModel):
     resource_type: str
-    consumed: int
-    limit: int
+    consumed: float
+    limit: float
     window_starts_at: datetime
     window_ends_at: datetime
     source: str
@@ -61,6 +61,6 @@ class ManageUrlsResponse(_CamelModel):
 class LimitExceededError(_CamelModel):
     detail: str
     limit_type: str
-    current_usage: int
-    limit: int
+    current_usage: float
+    limit: float
     upgrade_url: str = "/pricing"

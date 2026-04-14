@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.billing import LimitExceededError
 from app.services.usage_service import UsageService
-from app.tier_config import TIER_LIMITS, UserTier
+from app.tier_config import TIER_LIMITS, UserTier, TIER_ESTIMATES, MODEL_BALANCED
 from app.models.quiz import (
     QuizSession,
     QuizSessionStatus,
@@ -131,7 +131,8 @@ async def create_retry_set(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 1)
+    estimate = TIER_ESTIMATES[MODEL_BALANCED]
+    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", estimate)
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -167,6 +168,7 @@ async def create_retry_set(
             "concept_keys": concept_keys,
             "size": effective_size,
             "source": req.source,
+            "credit_estimate": estimate,
         },
     )
     db.add(job)

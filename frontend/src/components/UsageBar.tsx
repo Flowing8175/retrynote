@@ -20,6 +20,10 @@ function getBarColor(pct: number): string {
   return 'oklch(0.72 0.18 160)';                 // green
 }
 
+function fmtCredits(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
 function formatStorageBytes(bytes: number): string {
   const gb = 1024 * 1024 * 1024;
   return bytes >= gb
@@ -161,7 +165,7 @@ export default function UsageBar({ expanded = true }: UsageBarProps) {
                       : `${formatStorageBytes(win.consumed)} / ${formatStorageBytes(win.limit)}`
                     : isUnlimited
                       ? '무제한'
-                      : `${win.consumed} / ${win.limit}`}
+                      : `${fmtCredits(win.consumed)} / ${fmtCredits(win.limit)}c`}
                 </span>
               </div>
               {!isUnlimited && (

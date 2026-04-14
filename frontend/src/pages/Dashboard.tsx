@@ -73,6 +73,10 @@ function DashboardSkeleton() {
 
 
 
+function fmtCredits(n: number): string {
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+
 function CreditUsageBar() {
   const { data: usageStatus, isLoading } = useUsageStatus();
 
@@ -101,7 +105,7 @@ function CreditUsageBar() {
         <span className="text-sm text-content-primary">
           이번 달 크레딧:{' '}
           <span className="font-semibold tabular-nums">
-            {remaining}/{limit}회
+            {fmtCredits(remaining)}/{fmtCredits(limit)}c
           </span>{' '}
           남았습니다
         </span>

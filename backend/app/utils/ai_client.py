@@ -384,7 +384,7 @@ async def _call_gemini_structured(
     temperature: float = 0.3,
     max_tokens: int = 4096,
     cache_key: str | None = None,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], int]:
     from google.genai import types
 
     gemini = _get_gemini_client()
@@ -430,18 +430,20 @@ async def _call_gemini_structured(
         raise ValueError("Gemini returned empty response")
     result = json.loads(response.text)
     usage = response.usage_metadata
+    total_tokens = 0
     if usage is not None:
+        total_tokens = getattr(usage, "total_token_count", 0) or 0
         asyncio.create_task(
             _log_token_usage(
                 model,
                 getattr(usage, "prompt_token_count", 0) or 0,
                 getattr(usage, "candidates_token_count", 0) or 0,
-                getattr(usage, "total_token_count", 0) or 0,
+                total_tokens,
                 cached_tokens=getattr(usage, "cached_content_token_count", 0) or 0,
                 cache_key=cache_key,
             )
         )
-    return result
+    return result, total_tokens
 
 
 async def call_ai_structured(
@@ -454,7 +456,7 @@ async def call_ai_structured(
     cache_key: str | None = None,
     cache_retention: str | None = None,
     strict: bool = False,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], int]:
     model = model or settings.balanced_generation_model
 
     if model.startswith("gemini-"):
@@ -495,7 +497,9 @@ async def call_ai_structured(
     if content is None:
         raise ValueError("AI returned empty response")
     result = json.loads(content)
+    total_tokens = 0
     if response.usage is not None:
+        total_tokens = response.usage.total_tokens
         cached = 0
         details = getattr(response.usage, "prompt_tokens_details", None)
         if details is not None:
@@ -505,12 +509,12 @@ async def call_ai_structured(
                 model,
                 response.usage.prompt_tokens,
                 response.usage.completion_tokens,
-                response.usage.total_tokens,
+                total_tokens,
                 cached_tokens=cached,
                 cache_key=cache_key,
             )
         )
-    return result
+    return result, total_tokens
 
 
 async def call_ai_with_fallback(
@@ -519,7 +523,7 @@ async def call_ai_with_fallback(
     primary_model: str,
     fallback_model: str,
     **kwargs,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], int]:
     try:
         return await call_ai_structured(prompt, schema, model=primary_model, **kwargs)
     except Exception as e:
