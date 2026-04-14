@@ -35,8 +35,12 @@ function formatHistoryMode(mode: string) {
   return mode === 'exam' ? '시험 모드' : '일반 모드';
 }
 
-function getSessionTitle(session: { title: string | null; source_mode: string; mode: string; question_count: number | null }) {
+function getSessionTitle(session: { title: string | null; source_mode: string; mode: string; question_count: number | null; concept_labels: string[] }) {
   if (session.title) return session.title;
+  if (session.concept_labels.length > 0) {
+    const labels = session.concept_labels.slice(0, 3).join(', ');
+    return session.concept_labels.length > 3 ? `${labels} 외 ${session.concept_labels.length - 3}개` : labels;
+  }
   const sourceLabel = session.source_mode === 'document_based' ? '자료 기반' : 'AI 배경지식';
   const modeLabel = session.mode === 'exam' ? '시험' : '학습';
   return `${sourceLabel} ${modeLabel} 퀴즈`;

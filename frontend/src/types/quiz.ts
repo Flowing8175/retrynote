@@ -59,6 +59,7 @@ export interface QuizSessionHistoryItem {
   total_score: number | null;
   max_score: number | null;
   created_at: string;
+  concept_labels: string[];
 }
 
 export interface QuizItemResponse {

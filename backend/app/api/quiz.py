@@ -145,6 +145,11 @@ async def list_quiz_sessions(
             total_score=session.total_score,
             max_score=session.max_score,
             created_at=session.created_at,
+            concept_labels=list(
+                dict.fromkeys(
+                    item.concept_label for item in session.items if item.concept_label
+                )
+            ),
         )
         for session in sessions
     ]

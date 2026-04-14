@@ -89,6 +89,7 @@ class QuizSessionHistoryItem(BaseModel):
     total_score: float | None
     max_score: float | None
     created_at: datetime
+    concept_labels: list[str] = []
 
 
 class QuizItemResponse(BaseModel):
