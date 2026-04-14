@@ -453,6 +453,7 @@ async def call_ai_structured(
     max_tokens: int = 4096,
     cache_key: str | None = None,
     cache_retention: str | None = None,
+    strict: bool = False,
 ) -> dict[str, Any]:
     model = model or settings.balanced_generation_model
 
@@ -479,7 +480,7 @@ async def call_ai_structured(
             "json_schema": {
                 "name": "structured_response",
                 "schema": schema,
-                "strict": False,
+                "strict": strict,
             },
         },
     }

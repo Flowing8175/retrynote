@@ -1,12 +1,14 @@
 import logging
+import re
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.models.diagram import ConceptDiagram
 from app.models.quiz import AnswerLog, QuizItem, Judgement
 from app.schemas.diagram import DiagramResponse
-from app.utils.ai_client import call_ai_structured
+from app.utils.ai_client import call_ai_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +50,23 @@ Mermaid 문법으로 다이어그램을 생성하세요.
 - 노드 수는 최대 30개로 제한하세요.
 - 사용 가능한 다이어그램 유형: flowchart, mindmap, sequenceDiagram, stateDiagram, classDiagram
 - 개념 선택 기준: 절차/흐름 → flowchart, 개념 구조/관계 → mindmap, 순서/상호작용 → sequenceDiagram, 상태 전이 → stateDiagram, 클래스/구조 → classDiagram
-- 유효한 Mermaid 문법만 사용하세요."""
+- 유효한 Mermaid 문법만 사용하세요.
+- mermaid_code 필드에는 마크다운 코드 펜스(```) 없이 순수 Mermaid 코드만 포함하세요. 예: flowchart TD\\n  A --> B"""
 
 
 class DiagramGenerationError(Exception):
     pass
+
+
+_MERMAID_FENCE_RE = re.compile(r"^```(?:mermaid)?\s*\n?(.*?)\n?```$", re.DOTALL)
+
+
+def _clean_mermaid_code(code: str) -> str:
+    stripped = code.strip()
+    match = _MERMAID_FENCE_RE.match(stripped)
+    if match:
+        return match.group(1).strip()
+    return stripped
 
 
 def _is_valid_mermaid(code: str) -> bool:
@@ -161,15 +175,18 @@ async def generate_diagram(
     schema = _build_schema_for_type(requested_diagram_type)
     system_prompt = _build_system_prompt_for_type(requested_diagram_type)
 
-    ai_result = await call_ai_structured(
+    ai_result = await call_ai_with_fallback(
         prompt,
         schema,
+        primary_model=settings.balanced_generation_model,
+        fallback_model=settings.eco_generation_model,
         system_message=system_prompt,
         max_tokens=2048,
         cache_key="diagram_gen_v1",
+        strict=True,
     )
 
-    mermaid_code: str = ai_result.get("mermaid_code", "")
+    mermaid_code: str = _clean_mermaid_code(ai_result.get("mermaid_code", ""))
     diagram_type: str = ai_result.get("diagram_type", "")
     title: str = ai_result.get("title", concept_label)
 
@@ -183,14 +200,17 @@ async def generate_diagram(
             "이전 응답의 Mermaid 구문이 유효하지 않습니다. "
             "위 개념을 그대로 유지하면서 올바른 Mermaid 구문으로 다시 생성하세요."
         )
-        ai_result = await call_ai_structured(
+        ai_result = await call_ai_with_fallback(
             fix_prompt,
             schema,
+            primary_model=settings.balanced_generation_model,
+            fallback_model=settings.eco_generation_model,
             system_message=system_prompt,
             max_tokens=2048,
             cache_key="diagram_gen_v1",
+            strict=True,
         )
-        mermaid_code = ai_result.get("mermaid_code", "")
+        mermaid_code = _clean_mermaid_code(ai_result.get("mermaid_code", ""))
         diagram_type = ai_result.get("diagram_type", diagram_type)
         title = ai_result.get("title", title)
 
