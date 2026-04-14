@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func, text, cast, Integer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -320,36 +320,40 @@ async def get_model_usage(
 ):
     await log_audit(db, admin.id, "view_model_usage", request)
 
-    logs_result = await db.execute(
-        select(SystemLog).where(SystemLog.event_type == "ai_token_usage")
+    model_col = SystemLog.meta_json["model"].as_string()
+    result = await db.execute(
+        select(
+            func.coalesce(model_col, "unknown").label("model_name"),
+            func.count().label("request_count"),
+            func.coalesce(
+                func.sum(
+                    cast(SystemLog.meta_json["prompt_tokens"].as_string(), Integer)
+                ),
+                0,
+            ).label("input_tokens"),
+            func.coalesce(
+                func.sum(
+                    cast(SystemLog.meta_json["completion_tokens"].as_string(), Integer)
+                ),
+                0,
+            ).label("output_tokens"),
+        )
+        .where(SystemLog.event_type == "ai_token_usage")
+        .group_by(model_col)
     )
-    logs = logs_result.scalars().all()
-
-    model_stats: dict[str, dict] = {}
-    for log in logs:
-        meta = log.meta_json or {}
-        model_name = meta.get("model", "unknown")
-        if model_name not in model_stats:
-            model_stats[model_name] = {
-                "request_count": 0,
-                "input_tokens": 0,
-                "output_tokens": 0,
-            }
-        model_stats[model_name]["request_count"] += 1
-        model_stats[model_name]["input_tokens"] += meta.get("prompt_tokens", 0)
-        model_stats[model_name]["output_tokens"] += meta.get("completion_tokens", 0)
+    rows = result.fetchall()
 
     return ModelUsageResponse(
         usage=[
             ModelUsageItem(
-                model_name=model_name,
-                request_count=stats["request_count"],
-                input_tokens=stats["input_tokens"],
-                output_tokens=stats["output_tokens"],
+                model_name=row.model_name,
+                request_count=row.request_count,
+                input_tokens=row.input_tokens,
+                output_tokens=row.output_tokens,
                 failure_count=0,
                 fallback_count=0,
             )
-            for model_name, stats in model_stats.items()
+            for row in rows
         ]
     )
 
@@ -639,51 +643,58 @@ async def get_system_health(
 
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
 
-    error_count_result = await db.execute(
-        select(func.count())
-        .select_from(SystemLog)
-        .where(
-            SystemLog.level.in_(["ERROR", "CRITICAL"]),
-            SystemLog.created_at >= cutoff,
+    counts_row = (
+        await db.execute(
+            select(
+                select(func.count())
+                .select_from(SystemLog)
+                .where(
+                    SystemLog.level.in_(["ERROR", "CRITICAL"]),
+                    SystemLog.created_at >= cutoff,
+                )
+                .correlate(None)
+                .scalar_subquery()
+                .label("error_count"),
+                select(func.count())
+                .select_from(SystemLog)
+                .where(SystemLog.created_at >= cutoff)
+                .correlate(None)
+                .scalar_subquery()
+                .label("total_logs_24h"),
+                select(func.count())
+                .select_from(Job)
+                .where(Job.status.in_(["pending", "running"]))
+                .correlate(None)
+                .scalar_subquery()
+                .label("pending_jobs"),
+                select(func.count())
+                .select_from(Job)
+                .where(Job.status == "failed", Job.created_at >= cutoff)
+                .correlate(None)
+                .scalar_subquery()
+                .label("failed_jobs_24h"),
+                select(func.count())
+                .select_from(User)
+                .where(User.deleted_at.is_(None))
+                .correlate(None)
+                .scalar_subquery()
+                .label("total_users"),
+                select(func.count())
+                .select_from(User)
+                .where(User.deleted_at.is_(None), User.is_active.is_(True))
+                .correlate(None)
+                .scalar_subquery()
+                .label("active_users"),
+            )
         )
-    )
-    error_count = error_count_result.scalar() or 0
+    ).one()
 
-    total_log_result = await db.execute(
-        select(func.count())
-        .select_from(SystemLog)
-        .where(SystemLog.created_at >= cutoff)
-    )
-    total_logs_24h = total_log_result.scalar() or 0
-
-    pending_jobs_result = await db.execute(
-        select(func.count())
-        .select_from(Job)
-        .where(Job.status.in_(["pending", "running"]))
-    )
-    pending_jobs = pending_jobs_result.scalar() or 0
-
-    failed_jobs_result = await db.execute(
-        select(func.count())
-        .select_from(Job)
-        .where(
-            Job.status == "failed",
-            Job.created_at >= cutoff,
-        )
-    )
-    failed_jobs_24h = failed_jobs_result.scalar() or 0
-
-    total_users_result = await db.execute(
-        select(func.count()).select_from(User).where(User.deleted_at.is_(None))
-    )
-    total_users = total_users_result.scalar() or 0
-
-    active_users_result = await db.execute(
-        select(func.count())
-        .select_from(User)
-        .where(User.deleted_at.is_(None), User.is_active.is_(True))
-    )
-    active_users = active_users_result.scalar() or 0
+    error_count = counts_row.error_count or 0
+    total_logs_24h = counts_row.total_logs_24h or 0
+    pending_jobs = counts_row.pending_jobs or 0
+    failed_jobs_24h = counts_row.failed_jobs_24h or 0
+    total_users = counts_row.total_users or 0
+    active_users = counts_row.active_users or 0
 
     error_rate = (
         round((error_count / total_logs_24h * 100), 1) if total_logs_24h > 0 else 0.0
@@ -717,25 +728,61 @@ async def get_dashboard_kpis(
     cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
     cutoff_7d = datetime.now(timezone.utc) - timedelta(days=7)
 
-    quizzes_today_result = await db.execute(
-        select(func.count())
-        .select_from(QuizSession)
-        .where(QuizSession.created_at >= cutoff_24h)
-    )
-    quizzes_today = quizzes_today_result.scalar() or 0
+    # --- Batch all scalar aggregates into one query ---
+    scalars_row = (
+        await db.execute(
+            select(
+                select(func.count())
+                .select_from(QuizSession)
+                .where(QuizSession.created_at >= cutoff_24h)
+                .correlate(None)
+                .scalar_subquery()
+                .label("quizzes_today"),
+                select(func.count())
+                .select_from(Job)
+                .where(Job.job_type == "generate_quiz")
+                .correlate(None)
+                .scalar_subquery()
+                .label("total_quiz_jobs"),
+                select(func.coalesce(func.sum(User.storage_used_bytes), 0))
+                .select_from(User)
+                .where(User.deleted_at.is_(None))
+                .correlate(None)
+                .scalar_subquery()
+                .label("total_storage_bytes"),
+                select(func.count())
+                .select_from(SystemLog)
+                .where(
+                    SystemLog.event_type == "ai_token_usage",
+                    SystemLog.created_at >= cutoff_24h,
+                )
+                .correlate(None)
+                .scalar_subquery()
+                .label("ai_token_usage_24h"),
+                select(func.count())
+                .select_from(User)
+                .where(User.created_at >= cutoff_7d, User.deleted_at.is_(None))
+                .correlate(None)
+                .scalar_subquery()
+                .label("signups_7d"),
+                select(func.count())
+                .select_from(User)
+                .where(User.last_login_at >= cutoff_24h, User.deleted_at.is_(None))
+                .correlate(None)
+                .scalar_subquery()
+                .label("dau"),
+            )
+        )
+    ).one()
 
-    total_quiz_jobs_result = await db.execute(
-        select(func.count()).select_from(Job).where(Job.job_type == "generate_quiz")
-    )
-    total_quiz_jobs = total_quiz_jobs_result.scalar() or 0
+    quizzes_today = scalars_row.quizzes_today or 0
+    total_quiz_jobs = scalars_row.total_quiz_jobs or 0
+    total_storage_bytes = scalars_row.total_storage_bytes or 0
+    ai_token_usage_24h = scalars_row.ai_token_usage_24h or 0
+    signups_7d = scalars_row.signups_7d or 0
+    dau = scalars_row.dau or 0
 
-    total_storage_result = await db.execute(
-        select(func.sum(User.storage_used_bytes))
-        .select_from(User)
-        .where(User.deleted_at.is_(None))
-    )
-    total_storage_bytes = total_storage_result.scalar() or 0
-
+    # --- List queries (return rows, must stay separate) ---
     top_storage_result = await db.execute(
         select(User.username, User.storage_used_bytes)
         .where(User.deleted_at.is_(None))
@@ -746,15 +793,6 @@ async def get_dashboard_kpis(
         TopStorageUser(username=row[0], storage_used_bytes=row[1])
         for row in top_storage_result.fetchall()
     ]
-
-    ai_token_result = await db.execute(
-        select(func.count())
-        .select_from(SystemLog)
-        .where(
-            SystemLog.event_type == "ai_token_usage", SystemLog.created_at >= cutoff_24h
-        )
-    )
-    ai_token_usage_24h = ai_token_result.scalar() or 0
 
     errors_result = await db.execute(
         select(SystemLog.event_type, func.count().label("cnt"))
@@ -770,20 +808,6 @@ async def get_dashboard_kpis(
         TopErrorItem(event_type=row[0], count=row[1])
         for row in errors_result.fetchall()
     ]
-
-    signups_result = await db.execute(
-        select(func.count())
-        .select_from(User)
-        .where(User.created_at >= cutoff_7d, User.deleted_at.is_(None))
-    )
-    signups_7d = signups_result.scalar() or 0
-
-    dau_result = await db.execute(
-        select(func.count())
-        .select_from(User)
-        .where(User.last_login_at >= cutoff_24h, User.deleted_at.is_(None))
-    )
-    dau = dau_result.scalar() or 0
 
     job_queue_result = await db.execute(
         select(Job.status, Job.job_type, func.count().label("cnt")).group_by(
