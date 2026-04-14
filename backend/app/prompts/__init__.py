@@ -21,6 +21,13 @@ from .grading_short import SYSTEM_PROMPT_GRADING_SHORT
 from .grading_essay import SYSTEM_PROMPT_GRADING_ESSAY
 from .objection import SYSTEM_PROMPT_OBJECTION_REVIEW
 from .retry_generation import SYSTEM_PROMPT_RETRY_GENERATION, build_batch_retry_prompt
+from .study import (
+    STUDY_MODEL,
+    SUMMARY_PROMPT,
+    FLASHCARD_PROMPT,
+    MINDMAP_PROMPT,
+    TUTOR_SYSTEM_PROMPT,
+)
 
 __all__ = [
     "SYSTEM_PROMPT_QUIZ_GENERATION",
@@ -34,4 +41,9 @@ __all__ = [
     "SYSTEM_PROMPT_OBJECTION_REVIEW",
     "SYSTEM_PROMPT_RETRY_GENERATION",
     "build_batch_retry_prompt",
+    "STUDY_MODEL",
+    "SUMMARY_PROMPT",
+    "FLASHCARD_PROMPT",
+    "MINDMAP_PROMPT",
+    "TUTOR_SYSTEM_PROMPT",
 ]
