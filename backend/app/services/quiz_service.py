@@ -133,6 +133,15 @@ async def process_file(job_id: str):
                 file.is_searchable = True
                 file.is_quiz_eligible = True
                 file.processing_finished_at = datetime.now(timezone.utc)
+                await db.commit()
+
+                # Auto-trigger summary generation when file reaches ready status
+                try:
+                    from app.workers.celery_app import dispatch_task
+
+                    dispatch_task("generate_study_summary", [file.id])
+                except Exception:
+                    pass  # Auto-trigger failure should not affect file processing
 
             except JobFailure:
                 raise
