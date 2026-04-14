@@ -132,12 +132,17 @@ async def create_public_quiz_session(
     db.add(session)
     await db.flush()
 
-    for fid in req.selected_file_ids:
-        result = await db.execute(select(File).where(File.id == fid))
-        f = result.scalar_one_or_none()
-        if not f or f.guest_session_id != guest.id:
-            raise HTTPException(status_code=403, detail=f"File {fid} not accessible")
-        db.add(QuizSessionFile(quiz_session_id=session.id, file_id=fid))
+    if req.selected_file_ids:
+        file_result = await db.execute(
+            select(File).where(File.id.in_(req.selected_file_ids))
+        )
+        files = {f.id: f for f in file_result.scalars().all()}
+
+        for fid in req.selected_file_ids:
+            f = files.get(fid)
+            if not f or f.guest_session_id != guest.id:
+                raise HTTPException(status_code=403, detail=f"File {fid} not accessible")
+            db.add(QuizSessionFile(quiz_session_id=session.id, file_id=fid))
 
     if req.manual_text:
         file_record = File(
@@ -337,16 +342,20 @@ async def get_public_quiz_results(
     )
     items = items_result.scalars().all()
 
+    item_ids = [item.id for item in items]
+    answer_result = await db.execute(
+        select(AnswerLog).where(
+            AnswerLog.quiz_item_id.in_(item_ids),
+            AnswerLog.guest_session_id == guest.id,
+            AnswerLog.is_active_result.is_(True),
+        )
+    )
+    answer_logs = answer_result.scalars().all()
+    answer_map = {log.quiz_item_id: log for log in answer_logs}
+
     result_items = []
     for item in items:
-        answer_result = await db.execute(
-            select(AnswerLog).where(
-                AnswerLog.quiz_item_id == item.id,
-                AnswerLog.guest_session_id == guest.id,
-                AnswerLog.is_active_result.is_(True),
-            )
-        )
-        answer = answer_result.scalar_one_or_none()
+        answer = answer_map.get(item.id)
 
         result_items.append(
             PublicQuizResultItem(
