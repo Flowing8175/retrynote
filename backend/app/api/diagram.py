@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.models.quiz import AnswerLog, QuizItem, Judgement
+from app.models.quiz import QuizItem, QuizSession
 from app.schemas.diagram import DiagramGenerateRequest, DiagramResponse
 from app.schemas.billing import LimitExceededError
 from app.services.diagram_service import (
@@ -27,15 +27,10 @@ async def generate_concept_diagram(
 ):
     qi_result = await db.execute(
         select(QuizItem)
-        .join(AnswerLog, AnswerLog.quiz_item_id == QuizItem.id)
+        .join(QuizSession, QuizItem.quiz_session_id == QuizSession.id)
         .where(
-            AnswerLog.user_id == user.id,
+            QuizSession.user_id == user.id,
             QuizItem.concept_key == request.concept_key,
-            AnswerLog.judgement.in_(
-                [Judgement.incorrect, Judgement.partial, Judgement.skipped]
-            ),
-            AnswerLog.is_active_result.is_(True),
-            AnswerLog.deleted_at.is_(None),
         )
         .limit(1)
     )
