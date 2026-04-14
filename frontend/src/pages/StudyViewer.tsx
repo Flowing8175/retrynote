@@ -147,7 +147,7 @@ export default function StudyViewer() {
       <div
         id="study-split-container"
         className="flex flex-1 min-h-0"
-        style={{ cursor: isDragging ? 'col-resize' : 'default' }}
+        style={{ cursor: isDragging ? 'col-resize' : 'default', userSelect: isDragging ? 'none' : 'auto' }}
       >
         {isPdf && (
           <>
