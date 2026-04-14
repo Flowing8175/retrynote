@@ -17,7 +17,7 @@ from fastapi import (
     Query,
 )
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -390,25 +390,19 @@ async def delete_folder(
 ):
     folder = await get_owned_folder(folder_id, db, user)
 
-    files_result = await db.execute(
-        select(File).where(File.folder_id == folder.id, File.user_id == user.id)
-    )
-    files = files_result.scalars().all()
-    for file in files:
-        file.folder_id = None
-        file.updated_by = user.id
-        file.updated_at = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
 
-    children_result = await db.execute(
-        select(Folder).where(
-            Folder.parent_folder_id == folder.id, Folder.user_id == user.id
-        )
+    await db.execute(
+        update(File)
+        .where(File.folder_id == folder.id, File.user_id == user.id)
+        .values(folder_id=None, updated_by=user.id, updated_at=now)
     )
-    children = children_result.scalars().all()
-    for child in children:
-        child.parent_folder_id = None
-        child.updated_by = user.id
-        child.updated_at = datetime.now(timezone.utc)
+
+    await db.execute(
+        update(Folder)
+        .where(Folder.parent_folder_id == folder.id, Folder.user_id == user.id)
+        .values(parent_folder_id=None, updated_by=user.id, updated_at=now)
+    )
 
     await db.delete(folder)
     await db.commit()
