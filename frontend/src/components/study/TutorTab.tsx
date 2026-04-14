@@ -133,7 +133,7 @@ export function TutorTab({ fileId, currentPage }: Props) {
   return (
     <div className="flex flex-col h-full bg-gray-900">
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-700 flex-shrink-0">
-        <h2 className="text-sm font-semibold text-gray-200">AI 튜터</h2>
+        <h2 className="text-sm font-semibold text-gray-200">Repla</h2>
         <button
           onClick={() => void handleNewChat()}
           disabled={isStreaming}
@@ -147,7 +147,7 @@ export function TutorTab({ fileId, currentPage }: Props) {
         {!hasMessages ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-4">
             <span className="text-4xl mb-4">🤖</span>
-            <p className="text-gray-300 font-medium mb-2">AI 튜터에게 무엇이든 물어보세요!</p>
+            <p className="text-gray-300 font-medium mb-2">Repla에게 무엇이든 물어보세요!</p>
             <p className="text-gray-500 text-sm mb-6">현재 학습 중인 자료에 대해 자유롭게 질문하세요.</p>
             <div className="space-y-2 w-full max-w-xs">
               {SUGGESTIONS.map((q) => (

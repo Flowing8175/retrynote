@@ -19,9 +19,9 @@ const TutorTab = lazy(() =>
   import('@/components/study/TutorTab').then((m) => ({ default: m.TutorTab }))
 );
 
-type Tab = '요약' | '플래시카드' | '마인드맵' | 'AI Tutor';
+type Tab = '요약' | '플래시카드' | '마인드맵' | 'Repla';
 
-const TABS: Tab[] = ['요약', '플래시카드', '마인드맵', 'AI Tutor'];
+const TABS: Tab[] = ['요약', '플래시카드', '마인드맵', 'Repla'];
 
 const STATUS_LABEL: Record<ContentStatus, string> = {
   not_generated: '생성 전',
@@ -53,7 +53,7 @@ function TabContent({ tab, fileId }: { tab: Tab; fileId: string }) {
       {tab === '요약' && <SummaryTab fileId={fileId} />}
       {tab === '플래시카드' && <FlashcardTab fileId={fileId} />}
       {tab === '마인드맵' && <MindmapTab fileId={fileId} />}
-      {tab === 'AI Tutor' && <TutorTab fileId={fileId} />}
+      {tab === 'Repla' && <TutorTab fileId={fileId} />}
     </Suspense>
   );
 }
@@ -171,7 +171,7 @@ export default function StudyViewer() {
               {TABS.map((tab) => {
                 const s = tabStatus(tab, status);
                 const isActive = activeTab === tab;
-                const isTabDisabled = isShortDocument && tab !== 'AI Tutor';
+                const isTabDisabled = isShortDocument && tab !== 'Repla';
                 return (
                   <button
                     key={tab}
@@ -184,7 +184,7 @@ export default function StudyViewer() {
                     } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400`}
                   >
                     {tab}
-                    {tab !== 'AI Tutor' && (
+                    {tab !== 'Repla' && (
                       <span className={`text-xs px-1.5 py-0.5 rounded-full ${STATUS_COLOR[s]}`}>
                         {STATUS_LABEL[s]}
                       </span>
@@ -196,7 +196,7 @@ export default function StudyViewer() {
           </div>
 
           <div className="flex-1 min-h-0 overflow-auto bg-gray-900 p-4">
-            {isShortDocument && activeTab !== 'AI Tutor' ? (
+            {isShortDocument && activeTab !== 'Repla' ? (
               <div className="flex flex-col items-center justify-center h-full text-center gap-3">
                 <span className="text-4xl">📄</span>
                 <p className="text-gray-400 text-sm">

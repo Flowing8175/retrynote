@@ -81,7 +81,7 @@ describe('TutorTab', () => {
   it('renders empty state with robot emoji when no messages', () => {
     render(<TutorTab fileId="file-1" />, { wrapper });
 
-    expect(screen.getByText('AI 튜터에게 무엇이든 물어보세요!')).toBeInTheDocument();
+    expect(screen.getByText('Repla에게 무엇이든 물어보세요!')).toBeInTheDocument();
   });
 
   it('shows suggestion buttons in empty state', () => {
