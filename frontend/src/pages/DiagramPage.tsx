@@ -3,8 +3,7 @@ import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react';
 import { isAxiosError } from 'axios';
 import MermaidDiagram from '@/components/MermaidDiagram';
-import { OptionGroup } from '@/components/ui';
-import { diagramApi, type DiagramResponse, DIAGRAM_TYPES, type DiagramTypeValue } from '@/api/diagram';
+import { diagramApi, type DiagramResponse, type DiagramTypeValue } from '@/api/diagram';
 
 type PageState = 'loading' | 'success' | 'error' | 'not-found' | 'quota_exceeded';
 
@@ -151,14 +150,6 @@ export default function DiagramPage() {
           재생성
         </button>
       </div>
-
-      <OptionGroup
-        options={DIAGRAM_TYPES.map(({ value, label }) => ({ value, label }))}
-        value={selectedType}
-        onChange={(v) => handleTypeChange(v as DiagramTypeValue)}
-        size="sm"
-        layout="wrap"
-      />
 
       <div className="min-h-[60vh] max-h-[80vh] overflow-y-auto overflow-x-auto rounded-2xl border border-white/[0.05] bg-[oklch(0.155_0.015_235)] p-6 sm:p-8">
         {diagram && <MermaidDiagram code={diagram.mermaid_code} className="w-full" />}

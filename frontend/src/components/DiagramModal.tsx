@@ -3,8 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import Modal from './Modal';
 import MermaidDiagram from './MermaidDiagram';
-import { OptionGroup } from '@/components/ui';
-import { diagramApi, type DiagramResponse, DIAGRAM_TYPES, type DiagramTypeValue } from '@/api/diagram';
+import { diagramApi, type DiagramResponse, type DiagramTypeValue } from '@/api/diagram';
 
 interface DiagramModalProps {
   isOpen: boolean;
@@ -101,20 +100,6 @@ export default function DiagramModal({
 
   return (
     <Modal isOpen={isOpen} onClose={handleClose} title={conceptLabel} size="6xl">
-      <div className="mb-3">
-        <OptionGroup
-          options={DIAGRAM_TYPES.map(({ value, label }) => ({
-            value,
-            label,
-            disabled: fetchState === 'loading',
-          }))}
-          value={selectedType}
-          onChange={(v) => handleTypeChange(v as DiagramTypeValue)}
-          size="sm"
-          layout="wrap"
-        />
-      </div>
-
       {fetchState === 'loading' && (
         <div className="flex flex-col items-center justify-center py-12">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
