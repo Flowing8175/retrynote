@@ -105,7 +105,7 @@ function CreditUsageBar() {
         <span className="text-sm text-content-primary">
           이번 달 크레딧:{' '}
           <span className="font-semibold tabular-nums">
-            {fmtCredits(remaining)}/{fmtCredits(limit)}c
+            {fmtCredits(remaining)}/{fmtCredits(limit)} 크레딧
           </span>{' '}
           남았습니다
         </span>

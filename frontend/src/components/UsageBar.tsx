@@ -158,15 +158,15 @@ export default function UsageBar({ expanded = true }: UsageBarProps) {
             <div key={win.resourceType} className="space-y-1">
               <div className="flex items-center justify-between gap-1">
                 <span className="text-xs text-content-muted truncate">{label}</span>
-                <span className="text-xs text-content-secondary font-medium shrink-0">
-                  {win.resourceType === 'storage'
-                    ? isUnlimited
-                      ? '무제한'
-                      : `${formatStorageBytes(win.consumed)} / ${formatStorageBytes(win.limit)}`
-                    : isUnlimited
-                      ? '무제한'
-                      : `${fmtCredits(win.consumed)} / ${fmtCredits(win.limit)}c`}
-                </span>
+                 <span className="text-xs text-content-secondary font-medium shrink-0">
+                   {win.resourceType === 'storage'
+                     ? isUnlimited
+                       ? '무제한'
+                       : `${formatStorageBytes(win.consumed)} / ${formatStorageBytes(win.limit)}`
+                     : isUnlimited
+                       ? '무제한'
+                       : `${fmtCredits(win.consumed)} / ${fmtCredits(win.limit)} 크레딧`}
+                 </span>
               </div>
               {!isUnlimited && (
                 <div className="h-1 bg-surface-hover rounded-full overflow-hidden">

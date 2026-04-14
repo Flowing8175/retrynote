@@ -153,10 +153,10 @@ export default function TryQuizResults() {
                   결과 저장 + 오답 추적하려면 가입하세요
                 </h2>
                 <ul className="space-y-2 mb-6 text-sm text-content-secondary">
-                  <li>✓ 방금 풀었던 퀴즈 결과가 자동 저장됩니다</li>
-                  <li>✓ 틀린 문제만 모아서 다시 풀 수 있습니다</li>
-                  <li>✓ 매달 무료 5c 크레딧</li>
-                </ul>
+                   <li>✓ 방금 풀었던 퀴즈 결과가 자동 저장됩니다</li>
+                   <li>✓ 틀린 문제만 모아서 다시 풀 수 있습니다</li>
+                   <li>✓ 매달 무료 5 크레딧</li>
+                 </ul>
                 <div className="flex flex-col gap-3">
                   <Link
                     to={signupHref}
