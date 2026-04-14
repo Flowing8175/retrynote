@@ -6,9 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.diagram import ConceptDiagram
-from app.models.quiz import AnswerLog, QuizItem, Judgement
 from app.schemas.diagram import DiagramResponse
 from app.utils.ai_client import call_ai_with_fallback
+from app.prompts.diagram import get_system_prompt, build_user_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -34,16 +34,6 @@ DIAGRAM_SCHEMA = {
     },
     "additionalProperties": False,
 }
-
-DIAGRAM_SYSTEM_PROMPT = """당신은 학습 개념을 시각적 다이어그램으로 요약하는 전문가입니다.
-사용자의 학습 내용과 오답 패턴을 분석하여 가장 적합한 다이어그램 유형을 선택하고,
-Mermaid 문법으로 다이어그램을 생성하세요.
-- 다이어그램의 모든 레이블과 텍스트는 반드시 한국어로 작성하세요.
-- 노드 수는 최대 30개로 제한하세요.
-- 사용 가능한 다이어그램 유형: mindmap
-- 개념 구조와 관계를 마인드맵으로 시각화하세요.
-- 유효한 Mermaid 문법만 사용하세요.
-- mermaid_code 필드에는 마크다운 코드 펜스(```) 없이 순수 Mermaid 코드만 포함하세요. 예: flowchart TD\\n  A --> B"""
 
 
 class DiagramGenerationError(Exception):
@@ -84,31 +74,6 @@ def _build_schema_for_type(requested_type: str | None) -> dict:
     }
 
 
-MINDMAP_AS_FLOWCHART_HINT = """
-반드시 'flowchart LR' (왼쪽→오른쪽 수평 트리) 문법으로 마인드맵을 생성하세요.
-- mermaid_code는 반드시 'flowchart LR'로 시작해야 합니다.
-- diagram_type 필드는 반드시 'mindmap'으로 설정하세요.
-- 중심 개념을 왼쪽 루트 노드에 두고, 하위 개념을 오른쪽으로 계층적으로 전개하세요.
-- 노드 ID는 영문(A, B, C, ...)이나 숫자 기반으로 하고, 한국어 레이블은 대괄호/괄호 안에 넣으세요.
-- 예시:
-  flowchart LR
-    A["중심 개념"] --> B["하위 1"]
-    A --> C["하위 2"]
-    B --> D["세부 1"]
-    B --> E["세부 2"]
-- 단방향 화살표(-->)만 사용하세요.
-- mindmap 문법은 절대 사용하지 마세요."""
-
-
-def _build_system_prompt_for_type(requested_type: str | None) -> str:
-    if requested_type is None:
-        return DIAGRAM_SYSTEM_PROMPT
-    if requested_type == "mindmap":
-        return DIAGRAM_SYSTEM_PROMPT + MINDMAP_AS_FLOWCHART_HINT
-    type_hint = f"\n반드시 '{requested_type}' 유형의 다이어그램만 생성하세요. 다른 유형은 사용하지 마세요."
-    return DIAGRAM_SYSTEM_PROMPT + type_hint
-
-
 async def get_cached_diagram(
     db: AsyncSession, user_id: str, concept_key: str, diagram_type: str | None = None
 ) -> ConceptDiagram | None:
@@ -122,32 +87,6 @@ async def get_cached_diagram(
     return result.scalar_one_or_none()
 
 
-async def get_wrong_answer_context(
-    db: AsyncSession, user_id: str, concept_key: str, limit: int = 5
-) -> list[dict]:
-    result = await db.execute(
-        select(AnswerLog, QuizItem)
-        .join(QuizItem, AnswerLog.quiz_item_id == QuizItem.id)
-        .where(
-            QuizItem.concept_key == concept_key,
-            AnswerLog.user_id == user_id,
-            AnswerLog.judgement.in_([Judgement.incorrect, Judgement.partial]),
-        )
-        .order_by(AnswerLog.created_at.desc())
-        .limit(limit)
-    )
-    rows = result.all()
-    return [
-        {
-            "question_text": qi.question_text[:200],
-            "user_answer": al.user_answer_raw,
-            "error_type": al.error_type.value if al.error_type else None,
-            "missing_points": al.missing_points_json,
-        }
-        for al, qi in rows
-    ]
-
-
 async def generate_diagram(
     db: AsyncSession,
     user_id: str,
@@ -156,34 +95,9 @@ async def generate_diagram(
     category_tag: str | None = None,
     requested_diagram_type: str | None = None,
 ) -> DiagramResponse:
-    wrong_answers = await get_wrong_answer_context(db, user_id, concept_key, limit=5)
-
-    wrong_answer_section = ""
-    if wrong_answers:
-        lines = []
-        for i, wa in enumerate(wrong_answers, 1):
-            lines.append(f"오답 {i}:")
-            lines.append(f"  질문: {wa['question_text']}")
-            if wa["user_answer"]:
-                lines.append(f"  사용자 답변: {wa['user_answer']}")
-            if wa["error_type"]:
-                lines.append(f"  오류 유형: {wa['error_type']}")
-            if wa["missing_points"]:
-                lines.append(f"  누락 포인트: {wa['missing_points']}")
-        wrong_answer_section = "\n".join(lines)
-    else:
-        wrong_answer_section = "오답 데이터 없음"
-
-    category_line = f"카테고리: {category_tag}\n" if category_tag else ""
-    prompt = (
-        f"개념: {concept_label}\n"
-        f"{category_line}"
-        f"\n오답 패턴:\n{wrong_answer_section}\n"
-        f"\n위 개념과 오답 패턴을 분석하여 학습에 도움이 되는 Mermaid 다이어그램을 생성하세요."
-    )
-
+    prompt = build_user_prompt(concept_label, category_tag)
     schema = _build_schema_for_type(requested_diagram_type)
-    system_prompt = _build_system_prompt_for_type(requested_diagram_type)
+    system_prompt = get_system_prompt()
 
     ai_result = await call_ai_with_fallback(
         prompt,
