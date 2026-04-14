@@ -8,6 +8,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     JSON,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base, CommonMixin
@@ -27,6 +28,7 @@ class MessageRole(str, enum.Enum):
 
 class StudySummary(CommonMixin, Base):
     __tablename__ = "study_summaries"
+    __table_args__ = (UniqueConstraint("file_id"),)
 
     file_id: Mapped[str] = mapped_column(
         String(36), ForeignKey("files.id"), nullable=False

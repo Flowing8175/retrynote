@@ -448,8 +448,12 @@ export default function QuizTake() {
       sessionData.status !== 'regraded' &&
       sessionData.status !== 'closed';
 
-    if (shouldFinalizeNormalSession) {
-      await completeQuizMutation.mutateAsync();
+    try {
+      if (shouldFinalizeNormalSession) {
+        await completeQuizMutation.mutateAsync();
+      }
+    } catch {
+      return;
     }
 
     navigate(`/quiz/${sessionId}/results`);
@@ -730,10 +734,11 @@ export default function QuizTake() {
                )}
               <button
                 onClick={() => {
+                  if (!currentItem) return;
                   if (isExamMode) {
-                    saveDraftAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                    saveDraftAnswerMutation.mutate({ itemId: currentItem.id, answer: userAnswer });
                   } else {
-                    submitAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                    submitAnswerMutation.mutate({ itemId: currentItem.id, answer: userAnswer });
                   }
                 }}
                 hidden={!isExamMode && !!currentQuestionType && AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType)}

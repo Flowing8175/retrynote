@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.file import ParsedDocument
 from app.models.study import MessageRole, StudyChat, StudyMessage
 from app.prompts.study import STUDY_MODEL, TUTOR_SYSTEM_PROMPT
-from app.utils.ai_client import _get_gemini_client
+from app.utils.ai_client import get_gemini_client
 from app.utils.sse import sse_data, sse_done, sse_error
 
 logger = logging.getLogger(__name__)
@@ -80,7 +80,7 @@ async def stream_tutor_response(
             page_context=page_context,
         )
         db.add(user_msg)
-        await db.flush()
+        await db.commit()
 
         history_result = await db.execute(
             select(StudyMessage)
@@ -120,7 +120,7 @@ async def stream_tutor_response(
             max_output_tokens=2048,
         )
 
-        gemini = _get_gemini_client()
+        gemini = get_gemini_client()
         full_response = ""
 
         stream = await gemini.aio.models.generate_content_stream(

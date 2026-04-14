@@ -1,71 +1,54 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import { Loader2, AlertCircle, Network, RefreshCw } from 'lucide-react';
 import { useStudyMindmap, useGenerateContent } from '@/api/study';
-import type { StudyMindmapNode } from '@/types/study';
+import type { StudyMindmapNode, StudyMindmapEdge } from '@/types/study';
 import type { MindmapFlowNode, MindmapFlowEdge } from './MindmapFlow';
 
 const MindmapFlow = lazy(() => import('./MindmapFlow'));
 
-const LEVEL_GAP = 220;
-const NODE_HEIGHT = 50;
-const NODE_GAP = 28;
-
-function subtreeSize(node: StudyMindmapNode): number {
-  const children = node.children ?? [];
-  if (children.length === 0) return NODE_HEIGHT + NODE_GAP;
-  return children.reduce((sum, c) => sum + subtreeSize(c), 0);
-}
-
-function placeSubtree(
-  children: StudyMindmapNode[],
-  parentId: string,
-  parentX: number,
-  parentCenterY: number,
-  direction: -1 | 1,
-  depth: number,
-  nodes: MindmapFlowNode[],
-  edges: MindmapFlowEdge[],
-) {
-  const total = children.reduce((s, c) => s + subtreeSize(c), 0);
-  let y = parentCenterY - total / 2;
-
-  for (const child of children) {
-    const size = subtreeSize(child);
-    const centerY = y + size / 2;
-    const childX = parentX + direction * LEVEL_GAP;
-
-    nodes.push({
-      id: child.id,
-      type: 'mindmap',
-      position: { x: childX, y: centerY },
-      data: { label: child.label, depth },
-    });
-    edges.push({
-      id: `e-${parentId}-${child.id}`,
-      source: parentId,
-      target: child.id,
-      type: 'smoothstep',
-      style: { stroke: 'oklch(0.30 0.01 250)', strokeWidth: 2 },
-    });
-
-    const grandchildren = child.children ?? [];
-    if (grandchildren.length > 0) {
-      placeSubtree(grandchildren, child.id, childX, centerY, direction, depth + 1, nodes, edges);
-    }
-    y += size;
+// BFS depth computation — needed because backend nodes lack `depth` but
+// MindmapFlow's getNodeStyle() requires it for visual hierarchy styling.
+function enrichWithDepth(
+  rawNodes: StudyMindmapNode[],
+  rawEdges: StudyMindmapEdge[],
+): { nodes: MindmapFlowNode[]; edges: MindmapFlowEdge[] } {
+  const targets = new Set(rawEdges.map((e) => e.target));
+  const childrenMap = new Map<string, string[]>();
+  for (const edge of rawEdges) {
+    const list = childrenMap.get(edge.source) ?? [];
+    list.push(edge.target);
+    childrenMap.set(edge.source, list);
   }
-}
 
-function buildLayout(root: StudyMindmapNode): { nodes: MindmapFlowNode[]; edges: MindmapFlowEdge[] } {
-  const nodes: MindmapFlowNode[] = [];
-  const edges: MindmapFlowEdge[] = [];
+  const depthMap = new Map<string, number>();
+  const roots = rawNodes.filter((n) => !targets.has(n.id));
+  const queue = roots.map((r) => ({ id: r.id, depth: 0 }));
+  if (queue.length === 0 && rawNodes.length > 0) {
+    queue.push({ id: rawNodes[0].id, depth: 0 });
+  }
+  while (queue.length > 0) {
+    const { id, depth } = queue.shift()!;
+    if (depthMap.has(id)) continue;
+    depthMap.set(id, depth);
+    for (const childId of childrenMap.get(id) ?? []) {
+      if (!depthMap.has(childId)) queue.push({ id: childId, depth: depth + 1 });
+    }
+  }
 
-  nodes.push({ id: root.id, type: 'mindmap', position: { x: 0, y: 0 }, data: { label: root.label, depth: 0 } });
+  const nodes: MindmapFlowNode[] = rawNodes.map((n) => ({
+    id: n.id,
+    type: n.type ?? 'mindmap',
+    position: n.position,
+    data: { label: String(n.data?.label ?? n.id), depth: depthMap.get(n.id) ?? 0 },
+  }));
 
-  const children = root.children ?? [];
-  const half = Math.ceil(children.length / 2);
-  placeSubtree(children.slice(0, half), root.id, 0, 0, -1, 1, nodes, edges);
-  placeSubtree(children.slice(half), root.id, 0, 0, 1, 1, nodes, edges);
+  const edges: MindmapFlowEdge[] = rawEdges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+    type: e.type,
+    style: e.style as React.CSSProperties | undefined,
+  }));
 
   return { nodes, edges };
 }
@@ -149,8 +132,15 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
     );
   }
 
-  const root = mindmap?.root;
-  if (!root) {
+  const rawData = mindmap?.data;
+  const hasData = rawData && Array.isArray(rawData.nodes) && rawData.nodes.length > 0;
+
+  const layout = useMemo(
+    () => (hasData ? enrichWithDepth(rawData.nodes, rawData.edges ?? []) : null),
+    [hasData, rawData],
+  );
+
+  if (!layout) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-content-muted">
         <Network size={32} className="text-content-muted" />
@@ -167,7 +157,7 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
     );
   }
 
-  const { nodes, edges } = buildLayout(root);
+  const { nodes, edges } = layout;
 
   return (
     <div className="relative w-full h-full">

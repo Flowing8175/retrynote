@@ -540,23 +540,18 @@ async def download_file(
     user: User = Depends(get_current_user),
 ):
     from app.services import storage as _storage
-    from fastapi.responses import Response as _Response
+    from fastapi.responses import StreamingResponse as _StreamingResponse
 
     file = await get_owned_file(file_id, db, user)
     if not file.stored_path:
-        raise HTTPException(status_code=404, detail="File not available")
-
-    try:
-        data = await _storage.download_file(file.stored_path)
-    except Exception:
         raise HTTPException(status_code=404, detail="File not available")
 
     from urllib.parse import quote as _urlquote
 
     filename = file.original_filename or os.path.basename(file.stored_path)
     safe_name = _urlquote(filename, safe=" .-_~")
-    return _Response(
-        content=data,
+    return _StreamingResponse(
+        content=_storage.download_file_stream(file.stored_path),
         media_type="application/octet-stream",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe_name}"},
     )
@@ -569,20 +564,14 @@ async def view_file(
     user: User = Depends(get_current_user),
 ):
     from app.services import storage as _storage
-    from fastapi.responses import Response as _Response
+    from fastapi.responses import StreamingResponse as _StreamingResponse
 
     file = await get_owned_file(file_id, db, user)
     if not file.stored_path:
         raise HTTPException(status_code=404, detail="File not available")
 
-    try:
-        data = await _storage.download_file(file.stored_path)
-    except Exception:
-        raise HTTPException(status_code=404, detail="File not available")
-
     from urllib.parse import quote as _urlquote
 
-    # Determine content type based on file type
     content_type_map = {
         "pdf": "application/pdf",
         "txt": "text/plain",
@@ -594,8 +583,8 @@ async def view_file(
 
     filename = file.original_filename or os.path.basename(file.stored_path)
     safe_name = _urlquote(filename, safe=" .-_~")
-    return _Response(
-        content=data,
+    return _StreamingResponse(
+        content=_storage.download_file_stream(file.stored_path),
         media_type=content_type,
         headers={"Content-Disposition": f"inline; filename*=UTF-8''{safe_name}"},
     )

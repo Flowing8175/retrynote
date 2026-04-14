@@ -61,6 +61,36 @@ async def download_file(key: str) -> bytes:
         return await asyncio.to_thread(dest.read_bytes)
 
 
+_STREAM_CHUNK = 64 * 1024
+
+
+async def download_file_stream(key: str):
+    if _b2_configured():
+
+        def _get_body():
+            client = _make_client()
+            response = client.get_object(Bucket=settings.b2_bucket_name, Key=key)
+            return response["Body"]
+
+        body = await asyncio.to_thread(_get_body)
+        while True:
+            chunk = await asyncio.to_thread(body.read, _STREAM_CHUNK)
+            if not chunk:
+                break
+            yield chunk
+    else:
+        dest = _LOCAL_ROOT / key
+        f = await asyncio.to_thread(open, dest, "rb")
+        try:
+            while True:
+                chunk = await asyncio.to_thread(f.read, _STREAM_CHUNK)
+                if not chunk:
+                    break
+                yield chunk
+        finally:
+            await asyncio.to_thread(f.close)
+
+
 async def delete_file(key: str) -> None:
     if _b2_configured():
 

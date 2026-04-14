@@ -25,6 +25,7 @@ __all__ = [
     "call_ai_structured",
     "call_ai_with_fallback",
     "stream_ai_text",
+    "get_gemini_client",
 ]
 
 client = AsyncOpenAI(api_key=settings.openai_api_key)
@@ -78,6 +79,9 @@ def _get_gemini_client():
 
         _gemini_client = genai.Client(api_key=settings.gemini_api_key)
     return _gemini_client
+
+
+get_gemini_client = _get_gemini_client
 
 
 class _GeminiCacheRegistry:

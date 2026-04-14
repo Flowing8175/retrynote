@@ -4,6 +4,7 @@ import re
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session
@@ -103,10 +104,19 @@ async def _get_or_create_summary(db: AsyncSession, file_id: str) -> StudySummary
         select(StudySummary).where(StudySummary.file_id == file_id)
     )
     summary = result.scalar_one_or_none()
-    if summary is None:
-        summary = StudySummary(file_id=file_id, status=ContentStatus.not_generated)
-        db.add(summary)
+    if summary is not None:
+        return summary
+
+    summary = StudySummary(file_id=file_id, status=ContentStatus.not_generated)
+    db.add(summary)
+    try:
         await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        result = await db.execute(
+            select(StudySummary).where(StudySummary.file_id == file_id)
+        )
+        summary = result.scalar_one()
     return summary
 
 

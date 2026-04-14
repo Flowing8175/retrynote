@@ -35,13 +35,22 @@ export interface StudyFlashcardSet {
 
 export interface StudyMindmapNode {
   id: string;
-  label: string;
-  children?: StudyMindmapNode[];
+  type?: string;
+  position: { x: number; y: number };
+  data: { label: string; [key: string]: unknown };
+}
+
+export interface StudyMindmapEdge {
+  id: string;
+  source: string;
+  target: string;
+  type?: string;
+  style?: Record<string, unknown>;
 }
 
 export interface StudyMindmap {
   file_id: string;
-  root: StudyMindmapNode | null;
+  data: { nodes: StudyMindmapNode[]; edges: StudyMindmapEdge[] } | null;
   generated_at: string | null;
   status: ContentStatus;
 }

@@ -95,8 +95,9 @@ export function TutorTab({ fileId, currentPage }: Props) {
     setInputText('');
     setSelectedPage(null);
 
-    const url = `/study/${fileId}/chat/stream?message=${encodeURIComponent(msg)}&page_context=${page ?? ''}`;
-    setStreamUrl(url);
+    const params = new URLSearchParams({ message: msg });
+    if (page != null) params.set('page_context', String(page));
+    setStreamUrl(`/study/${fileId}/chat/stream?${params}`);
     setSseEnabled(true);
   }, [inputText, isStreaming, selectedPageForCapture, fileId, addUserMessage, setSelectedPage]);
 
