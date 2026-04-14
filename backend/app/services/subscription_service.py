@@ -1,11 +1,17 @@
+import json
+import logging
+import re
 from datetime import datetime, timezone
+
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.models.billing import Subscription
 from app.tier_config import TIER_LIMITS, FREE_STORAGE_BYTES, UserTier
-from app.services.paddle_client import paddle
+from app.services.paddle_client import paddle, PaddleError
+
+logger = logging.getLogger(__name__)
 
 
 class SubscriptionService:
@@ -13,13 +19,37 @@ class SubscriptionService:
         if user.paddle_customer_id:
             return user.paddle_customer_id
 
-        customer = await paddle.create_customer(
-            email=user.email,
-            custom_data={"user_id": user.id, "username": user.username},
-        )
-        user.paddle_customer_id = customer["id"]
+        try:
+            customer = await paddle.create_customer(
+                email=user.email,
+                custom_data={"user_id": user.id, "username": user.username},
+            )
+            customer_id = customer["id"]
+        except PaddleError as e:
+            if e.status_code != 409:
+                raise
+            customer_id = self._extract_customer_id_from_conflict(e.detail)
+            if not customer_id:
+                raise
+            logger.info(
+                "Paddle customer already exists for %s, reusing %s",
+                user.email,
+                customer_id,
+            )
+
+        user.paddle_customer_id = customer_id
         await db.commit()
-        return customer["id"]
+        return customer_id
+
+    @staticmethod
+    def _extract_customer_id_from_conflict(detail: str) -> str | None:
+        try:
+            body = json.loads(detail)
+            msg = body.get("error", {}).get("detail", "")
+        except (json.JSONDecodeError, AttributeError):
+            msg = detail
+        match = re.search(r"customer of id (ctm_\w+)", msg)
+        return match.group(1) if match else None
 
     async def create_subscription_checkout(
         self,
