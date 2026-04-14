@@ -11,10 +11,7 @@ export interface DiagramResponse {
 }
 
 export const DIAGRAM_TYPES = [
-  { value: 'flowchart', label: '흐름도' },
   { value: 'mindmap', label: '마인드맵' },
-  { value: 'stateDiagram', label: '상태도' },
-  { value: 'classDiagram', label: '클래스도' },
 ] as const;
 
 export type DiagramTypeValue = typeof DIAGRAM_TYPES[number]['value'];

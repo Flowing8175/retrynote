@@ -14,7 +14,7 @@ export default function DiagramPage() {
   const navigate = useNavigate();
   const decodedKey = decodeURIComponent(conceptKey ?? '');
 
-  const initialType = (searchParams.get('type') as DiagramTypeValue | null) ?? 'flowchart';
+  const initialType = (searchParams.get('type') as DiagramTypeValue | null) ?? 'mindmap';
   const [selectedType, setSelectedType] = useState<DiagramTypeValue>(initialType);
   const [pageState, setPageState] = useState<PageState>('loading');
   const [diagram, setDiagram] = useState<DiagramResponse | null>(null);

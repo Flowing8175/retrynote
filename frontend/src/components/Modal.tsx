@@ -6,7 +6,7 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
-  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '4xl' | '6xl';
 }
 
 export default function Modal({ isOpen, onClose, title, children, size = 'lg' }: ModalProps) {
@@ -20,6 +20,7 @@ export default function Modal({ isOpen, onClose, title, children, size = 'lg' }:
     xl: 'max-w-xl',
     '2xl': 'max-w-2xl',
     '4xl': 'max-w-4xl',
+    '6xl': 'max-w-6xl',
   };
 
   const focusElementSafely = (element: HTMLElement | null) => {

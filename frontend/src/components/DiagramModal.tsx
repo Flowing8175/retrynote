@@ -24,7 +24,7 @@ export default function DiagramModal({
   const navigate = useNavigate();
   const [fetchState, setFetchState] = useState<FetchState>('loading');
   const [diagram, setDiagram] = useState<DiagramResponse | null>(null);
-  const [selectedType, setSelectedType] = useState<DiagramTypeValue>('flowchart');
+  const [selectedType, setSelectedType] = useState<DiagramTypeValue>('mindmap');
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchDiagram = async (force: boolean = false, type: DiagramTypeValue = selectedType) => {
@@ -100,7 +100,7 @@ export default function DiagramModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title={conceptLabel} size="4xl">
+    <Modal isOpen={isOpen} onClose={handleClose} title={conceptLabel} size="6xl">
       <div className="mb-3">
         <OptionGroup
           options={DIAGRAM_TYPES.map(({ value, label }) => ({
@@ -141,7 +141,7 @@ export default function DiagramModal({
               </button>
             </div>
           </div>
-          <div className="max-h-[60vh] overflow-y-auto overflow-x-auto rounded-xl border border-white/[0.04] bg-[oklch(0.145_0.015_235)] p-4">
+          <div className="max-h-[70vh] overflow-y-auto overflow-x-auto rounded-xl border border-white/[0.04] bg-[oklch(0.145_0.015_235)] p-4">
             <MermaidDiagram code={diagram.mermaid_code} />
           </div>
         </div>
