@@ -71,7 +71,8 @@ export function useSSE(url: string, options: SSEOptions = {}): SSEResult {
         return;
       }
 
-      const fullUrl = `${API_BASE_URL}${url}?token=${encodeURIComponent(token)}`;
+      const separator = url.includes('?') ? '&' : '?';
+      const fullUrl = `${API_BASE_URL}${url}${separator}token=${encodeURIComponent(token)}`;
       setSseStatus('connecting');
 
       const es = new EventSource(fullUrl);

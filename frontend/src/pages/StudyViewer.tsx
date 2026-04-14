@@ -53,7 +53,7 @@ function TabContent({ tab, fileId }: { tab: Tab; fileId: string }) {
       {tab === '요약' && <SummaryTab fileId={fileId} />}
       {tab === '플래시카드' && <FlashcardTab fileId={fileId} />}
       {tab === '마인드맵' && <MindmapTab />}
-      {tab === 'AI Tutor' && <TutorTab />}
+      {tab === 'AI Tutor' && <TutorTab fileId={fileId} />}
     </Suspense>
   );
 }
