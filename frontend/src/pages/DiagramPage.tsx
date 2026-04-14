@@ -160,7 +160,7 @@ export default function DiagramPage() {
         layout="wrap"
       />
 
-      <div className="min-h-[60vh] rounded-2xl border border-white/[0.05] bg-[oklch(0.155_0.015_235)] p-6 sm:p-8">
+      <div className="min-h-[60vh] max-h-[80vh] overflow-y-auto overflow-x-auto rounded-2xl border border-white/[0.05] bg-[oklch(0.155_0.015_235)] p-6 sm:p-8">
         {diagram && <MermaidDiagram code={diagram.mermaid_code} className="w-full" />}
       </div>
     </div>

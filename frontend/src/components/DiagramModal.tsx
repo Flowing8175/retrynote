@@ -141,7 +141,7 @@ export default function DiagramModal({
               </button>
             </div>
           </div>
-          <div className="rounded-xl border border-white/[0.04] bg-[oklch(0.145_0.015_235)] p-4">
+          <div className="max-h-[60vh] overflow-y-auto overflow-x-auto rounded-xl border border-white/[0.04] bg-[oklch(0.145_0.015_235)] p-4">
             <MermaidDiagram code={diagram.mermaid_code} />
           </div>
         </div>
