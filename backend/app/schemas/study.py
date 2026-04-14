@@ -107,6 +107,10 @@ class GenerateRequest(BaseModel):
 
 class StudyStatusResponse(BaseModel):
     file_id: str
+    filename: str | None = None
+    file_type: str | None = None
+    file_status: str | None = None
+    is_short_document: bool = False
     summary_status: str
     flashcards_status: str
     mindmap_status: str

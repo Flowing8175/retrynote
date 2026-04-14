@@ -49,6 +49,10 @@ export function useStudyStatus(fileId: string) {
     queryKey: ['study', 'status', fileId],
     queryFn: () => studyApi.getStatus(fileId),
     enabled: !!fileId,
+    retry: (_, error: unknown) => {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      return status !== 404 && status !== 403;
+    },
   });
 }
 

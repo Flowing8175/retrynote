@@ -4,7 +4,8 @@ export interface StudyStatus {
   file_id: string;
   filename: string | null;
   file_type: string | null;
-  file_status: string;
+  file_status: string | null;
+  is_short_document: boolean;
   summary_status: ContentStatus;
   flashcards_status: ContentStatus;
   mindmap_status: ContentStatus;

@@ -37,6 +37,7 @@ export function TutorTab({ fileId, currentPage }: Props) {
   const [streamUrl, setStreamUrl] = useState('');
   const [sseEnabled, setSseEnabled] = useState(false);
   const [shouldSyncHistory, setShouldSyncHistory] = useState(true);
+  const [sseError, setSseError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -80,6 +81,7 @@ export function TutorTab({ fileId, currentPage }: Props) {
     onError: () => {
       setSseEnabled(false);
       setIsStreaming(false);
+      setSseError('연결이 끊겼습니다. 다시 시도해주세요');
     },
   });
 
@@ -87,6 +89,7 @@ export function TutorTab({ fileId, currentPage }: Props) {
     const msg = inputText.trim();
     if (!msg || isStreaming) return;
 
+    setSseError(null);
     const page = selectedPageForCapture;
     addUserMessage(msg, page);
     setInputText('');
@@ -211,6 +214,12 @@ export function TutorTab({ fileId, currentPage }: Props) {
       </div>
 
       <div className="border-t border-gray-700 px-4 py-3 flex-shrink-0">
+        {sseError && (
+          <div className="flex items-center gap-2 mb-2 px-3 py-2 bg-red-900/40 border border-red-700/50 rounded-lg text-red-300 text-xs">
+            <span>⚠️</span>
+            <span>{sseError}</span>
+          </div>
+        )}
         {selectedPageForCapture != null && (
           <div className="flex items-center gap-2 mb-2">
             <span className="text-xs text-blue-400 bg-blue-900/30 rounded-full px-3 py-1 flex items-center gap-1">

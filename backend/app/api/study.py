@@ -84,7 +84,7 @@ async def get_study_status(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await _get_owned_file(file_id, db, user)
+    file = await _get_owned_file(file_id, db, user)
 
     summary_result = await db.execute(
         select(StudySummary).where(StudySummary.file_id == file_id)
@@ -107,8 +107,16 @@ async def get_study_status(
     )
     mindmap = mindmap_result.scalar_one_or_none()
 
+    parsed_doc = file.parsed_document
+    text = (parsed_doc.normalized_text or "") if parsed_doc else ""
+    is_short = file.status == FileStatus.ready and len(text) < 100
+
     return StudyStatusResponse(
         file_id=file_id,
+        filename=file.original_filename,
+        file_type=file.file_type,
+        file_status=file.status.value if file.status else None,
+        is_short_document=is_short,
         summary_status=(
             summary.status.value if summary else ContentStatus.not_generated.value
         ),

@@ -66,9 +66,11 @@ export default function StudyViewer() {
   const [isDragging, setIsDragging] = useState(false);
   const [showPdfOverlay, setShowPdfOverlay] = useState(false);
 
-  const { data: status } = useStudyStatus(fileId ?? '');
+  const { data: status, isError, error } = useStudyStatus(fileId ?? '');
 
+  const is404 = isError && (error as { response?: { status?: number } })?.response?.status === 404;
   const isPdf = status?.file_type?.toLowerCase() === 'pdf';
+  const isShortDocument = status?.is_short_document === true;
   const filename = status?.filename ?? '문서';
   const pdfUrl = `${API_BASE_URL}/files/${fileId}/view`;
 
@@ -94,6 +96,33 @@ export default function StudyViewer() {
     window.addEventListener('mouseup', onMouseUp);
   }
 
+  if (is404) {
+    return (
+      <div className="flex flex-col h-screen bg-gray-900 overflow-hidden">
+        <header className="flex items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700 shrink-0">
+          <button
+            onClick={() => navigate('/study')}
+            className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors text-sm"
+          >
+            <ChevronLeft size={18} />
+            <span>학습 목록</span>
+          </button>
+        </header>
+        <div className="flex flex-col items-center justify-center flex-1 gap-4 text-center px-4">
+          <span className="text-5xl">🗑️</span>
+          <p className="text-gray-300 text-lg font-medium">이 자료는 더 이상 존재하지 않습니다</p>
+          <p className="text-gray-500 text-sm">삭제되었거나 접근할 수 없는 자료입니다.</p>
+          <button
+            onClick={() => navigate('/study')}
+            className="mt-2 px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            목록으로 돌아가기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen bg-gray-900 overflow-hidden">
       <header className="flex items-center gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700 shrink-0">
@@ -107,6 +136,13 @@ export default function StudyViewer() {
         <div className="w-px h-4 bg-gray-700" />
         <h1 className="text-sm font-medium text-white truncate flex-1">{filename}</h1>
       </header>
+
+      {isShortDocument && (
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-900/40 border-b border-amber-700/50 text-amber-300 text-sm shrink-0">
+          <span>⚠️</span>
+          <span>이 문서는 내용이 부족하여 학습 콘텐츠를 생성할 수 없습니다</span>
+        </div>
+      )}
 
       <div
         id="study-split-container"
@@ -135,15 +171,17 @@ export default function StudyViewer() {
               {TABS.map((tab) => {
                 const s = tabStatus(tab, status);
                 const isActive = activeTab === tab;
+                const isTabDisabled = isShortDocument && tab !== 'AI Tutor';
                 return (
                   <button
                     key={tab}
-                    onClick={() => setActiveTab(tab)}
+                    onClick={() => { if (!isTabDisabled) setActiveTab(tab); }}
+                    disabled={isTabDisabled}
                     className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-t transition-colors shrink-0 ${
                       isActive
                         ? 'bg-gray-900 text-white border-t border-l border-r border-gray-700'
                         : 'text-gray-400 hover:text-gray-200'
-                    }`}
+                    } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400`}
                   >
                     {tab}
                     {tab !== 'AI Tutor' && (
@@ -158,7 +196,16 @@ export default function StudyViewer() {
           </div>
 
           <div className="flex-1 min-h-0 overflow-auto bg-gray-900 p-4">
-            <TabContent tab={activeTab} fileId={fileId ?? ''} />
+            {isShortDocument && activeTab !== 'AI Tutor' ? (
+              <div className="flex flex-col items-center justify-center h-full text-center gap-3">
+                <span className="text-4xl">📄</span>
+                <p className="text-gray-400 text-sm">
+                  이 문서는 내용이 부족하여 학습 콘텐츠를 생성할 수 없습니다
+                </p>
+              </div>
+            ) : (
+              <TabContent tab={activeTab} fileId={fileId ?? ''} />
+            )}
           </div>
         </div>
       </div>
