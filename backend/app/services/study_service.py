@@ -7,7 +7,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import async_session
 from app.models.file import File, ParsedDocument
 from app.models.study import (
     ContentStatus,
@@ -22,7 +21,9 @@ from app.prompts.study import (
     STUDY_MODEL,
     SUMMARY_PROMPT,
 )
-from app.utils.ai_client import stream_ai_text
+from app.services.usage_service import UsageService
+from app.tier_config import calculate_credit_cost
+from app.utils.ai_client import get_gemini_client
 
 logger = logging.getLogger(__name__)
 
@@ -38,17 +39,44 @@ def _strip_json_fences(text: str) -> str:
     return text
 
 
-async def _collect_ai_response(prompt: str) -> str:
-    chunks: list[str] = []
-    async for chunk in stream_ai_text(
-        prompt=prompt,
-        system_message="",
-        model=STUDY_MODEL,
+async def _collect_ai_response(prompt: str) -> tuple[str, int]:
+    from google.genai import types as genai_types
+
+    gemini = get_gemini_client()
+    config = genai_types.GenerateContentConfig(
         temperature=0.3,
-        max_tokens=8192,
-    ):
-        chunks.append(chunk)
-    return "".join(chunks).strip()
+        max_output_tokens=8192,
+    )
+    stream = await gemini.aio.models.generate_content_stream(
+        model=STUDY_MODEL,
+        contents=prompt,
+        config=config,
+    )
+
+    chunks: list[str] = []
+    total_tokens = 0
+    async for chunk in stream:
+        if chunk.text:
+            chunks.append(chunk.text)
+        usage = getattr(chunk, "usage_metadata", None)
+        if usage:
+            total_tokens = getattr(usage, "total_token_count", 0) or 0
+
+    return "".join(chunks).strip(), total_tokens
+
+
+async def _reconcile_credit(
+    db: AsyncSession,
+    user_id: str,
+    credit_estimate: float,
+    total_tokens: int,
+) -> None:
+    if not user_id:
+        return
+    actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+    delta = actual_cost - credit_estimate
+    if abs(delta) > 0.001:
+        await UsageService().adjust_credit(db, user_id, "quiz", delta)
 
 
 def _compute_tree_layout(nodes: list[dict], edges: list[dict]) -> list[dict]:
@@ -120,7 +148,13 @@ async def _get_or_create_summary(db: AsyncSession, file_id: str) -> StudySummary
     return summary
 
 
-async def generate_summary(file_id: str, db: AsyncSession) -> None:
+async def generate_summary(
+    file_id: str,
+    db: AsyncSession,
+    *,
+    user_id: str = "",
+    credit_estimate: float = 0,
+) -> None:
     summary = await _get_or_create_summary(db, file_id)
 
     summary.status = ContentStatus.generating
@@ -161,23 +195,13 @@ async def generate_summary(file_id: str, db: AsyncSession) -> None:
             text = text[:_MAX_TEXT_CHARS]
 
         prompt = SUMMARY_PROMPT.format(document_text=text)
-
-        chunks: list[str] = []
-        async for chunk in stream_ai_text(
-            prompt=prompt,
-            system_message="",
-            model=STUDY_MODEL,
-            temperature=0.3,
-            max_tokens=8192,
-        ):
-            chunks.append(chunk)
-
-        markdown_content = "".join(chunks).strip()
+        markdown_content, total_tokens = await _collect_ai_response(prompt)
 
         summary.content = markdown_content
         summary.status = ContentStatus.completed
         summary.generated_at = datetime.now(timezone.utc)
         summary.model_used = STUDY_MODEL
+        await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
         await db.commit()
 
         logger.info(
@@ -197,7 +221,12 @@ async def generate_summary(file_id: str, db: AsyncSession) -> None:
 
 
 async def generate_flashcards(
-    file_id: str, db: AsyncSession, force_regenerate: bool = False
+    file_id: str,
+    db: AsyncSession,
+    force_regenerate: bool = False,
+    *,
+    user_id: str = "",
+    credit_estimate: float = 0,
 ) -> None:
     result = await db.execute(
         select(StudyFlashcardSet).where(
@@ -252,7 +281,8 @@ async def generate_flashcards(
             text = text[:_MAX_TEXT_CHARS]
 
         prompt = FLASHCARD_PROMPT.format(document_text=text)
-        raw = _strip_json_fences(await _collect_ai_response(prompt))
+        raw_text, total_tokens = await _collect_ai_response(prompt)
+        raw = _strip_json_fences(raw_text)
 
         try:
             cards_data = json.loads(raw)
@@ -265,7 +295,9 @@ async def generate_flashcards(
                 prompt + "\n\n[중요] 반드시 순수 JSON 배열만 출력하세요."
                 " 코드 펜스, 마크다운, 설명 없이 JSON 배열만 반환하세요."
             )
-            raw2 = _strip_json_fences(await _collect_ai_response(retry_prompt))
+            raw_text2, retry_tokens = await _collect_ai_response(retry_prompt)
+            total_tokens += retry_tokens
+            raw2 = _strip_json_fences(raw_text2)
             try:
                 cards_data = json.loads(raw2)
             except json.JSONDecodeError as exc:
@@ -275,6 +307,7 @@ async def generate_flashcards(
                     exc,
                 )
                 flashcard_set.status = ContentStatus.failed
+                await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
                 await db.commit()
                 return
 
@@ -310,6 +343,7 @@ async def generate_flashcards(
         flashcard_set.status = ContentStatus.completed
         flashcard_set.generated_at = datetime.now(timezone.utc)
         flashcard_set.model_used = STUDY_MODEL
+        await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
         await db.commit()
 
         logger.info(
@@ -328,7 +362,12 @@ async def generate_flashcards(
 
 
 async def generate_mindmap(
-    file_id: str, db: AsyncSession, force_regenerate: bool = False
+    file_id: str,
+    db: AsyncSession,
+    force_regenerate: bool = False,
+    *,
+    user_id: str = "",
+    credit_estimate: float = 0,
 ) -> None:
     result = await db.execute(
         select(StudyMindmap).where(
@@ -380,7 +419,8 @@ async def generate_mindmap(
             text = text[:_MAX_TEXT_CHARS]
 
         prompt = MINDMAP_PROMPT.format(document_text=text)
-        raw = _strip_json_fences(await _collect_ai_response(prompt))
+        raw_text, total_tokens = await _collect_ai_response(prompt)
+        raw = _strip_json_fences(raw_text)
 
         try:
             mindmap_data = json.loads(raw)
@@ -393,7 +433,9 @@ async def generate_mindmap(
                 prompt + "\n\n[중요] 반드시 순수 JSON 객체만 출력하세요."
                 ' 코드 펜스, 마크다운, 설명 없이 {"nodes": [...], "edges": [...]} 형식의 JSON만 반환하세요.'
             )
-            raw2 = _strip_json_fences(await _collect_ai_response(retry_prompt))
+            raw_text2, retry_tokens = await _collect_ai_response(retry_prompt)
+            total_tokens += retry_tokens
+            raw2 = _strip_json_fences(raw_text2)
             try:
                 mindmap_data = json.loads(raw2)
             except json.JSONDecodeError as exc:
@@ -403,6 +445,7 @@ async def generate_mindmap(
                     exc,
                 )
                 mindmap.status = ContentStatus.failed
+                await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
                 await db.commit()
                 return
 
@@ -445,6 +488,7 @@ async def generate_mindmap(
         mindmap.status = ContentStatus.completed
         mindmap.generated_at = datetime.now(timezone.utc)
         mindmap.model_used = STUDY_MODEL
+        await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
         await db.commit()
 
         logger.info(

@@ -16,6 +16,7 @@ from app.models.study import (
     StudySummary,
 )
 from app.models.user import User
+from app.schemas.billing import LimitExceededError
 from app.schemas.study import (
     GenerateRequest,
     StudyChatHistoryResponse,
@@ -32,6 +33,8 @@ from app.services.tutor_service import (
     get_chat_sessions,
     stream_tutor_response,
 )
+from app.services.usage_service import UsageService
+from app.tier_config import STUDY_CREDIT_ESTIMATE, TIER_LIMITS, UserTier
 from app.utils.sse import get_current_user_from_query_token, sse_stream
 from app.workers.celery_app import dispatch_task
 
@@ -68,12 +71,31 @@ async def chat_stream(
     if file.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="Access denied")
 
+    usage_svc = UsageService()
+    tier = UserTier(current_user.tier)
+    allowed, _, _ = await usage_svc.check_and_consume(
+        db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다. 요금제를 업그레이드하거나 크레딧을 구매하세요.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+    await db.commit()
+
     return sse_stream(
         stream_tutor_response(
             file_id=file_id,
             message=message,
             page_context=page_context,
             db=db,
+            user_id=current_user.id,
+            credit_estimate=STUDY_CREDIT_ESTIMATE,
         )
     )
 
@@ -183,6 +205,22 @@ async def generate_summary_endpoint(
             status_code=409, detail="Summary generation already in progress"
         )
 
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed, _, _ = await usage_svc.check_and_consume(
+        db, user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다. 요금제를 업그레이드하거나 크레딧을 구매하세요.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+
     if summary is None:
         summary = StudySummary(file_id=file_id, status=ContentStatus.generating)
         db.add(summary)
@@ -191,7 +229,7 @@ async def generate_summary_endpoint(
         summary.content = None
     await db.commit()
 
-    dispatch_task("generate_study_summary", [file_id])
+    dispatch_task("generate_study_summary", [file_id, user.id, STUDY_CREDIT_ESTIMATE])
     return {"status": "dispatched"}
 
 
@@ -266,6 +304,22 @@ async def generate_flashcards_endpoint(
             status_code=409, detail="Flashcard generation already in progress"
         )
 
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed, _, _ = await usage_svc.check_and_consume(
+        db, user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다. 요금제를 업그레이드하거나 크레딧을 구매하세요.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+
     if req.force_regenerate and flashcard_set:
         flashcard_set.deleted_at = datetime.now(timezone.utc)
         await db.flush()
@@ -280,7 +334,9 @@ async def generate_flashcards_endpoint(
         flashcard_set.status = ContentStatus.generating
     await db.commit()
 
-    dispatch_task("generate_study_flashcards", [file_id])
+    dispatch_task(
+        "generate_study_flashcards", [file_id, user.id, STUDY_CREDIT_ESTIMATE]
+    )
     return {"status": "dispatched"}
 
 
@@ -342,6 +398,22 @@ async def generate_mindmap_endpoint(
             status_code=409, detail="Mindmap generation already in progress"
         )
 
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed, _, _ = await usage_svc.check_and_consume(
+        db, user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다. 요금제를 업그레이드하거나 크레딧을 구매하세요.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+
     if req.force_regenerate and mindmap:
         mindmap.deleted_at = datetime.now(timezone.utc)
         await db.flush()
@@ -355,7 +427,7 @@ async def generate_mindmap_endpoint(
         mindmap.data = None
     await db.commit()
 
-    dispatch_task("generate_study_mindmap", [file_id])
+    dispatch_task("generate_study_mindmap", [file_id, user.id, STUDY_CREDIT_ESTIMATE])
     return {"status": "dispatched"}
 
 

@@ -65,6 +65,9 @@ TIER_ESTIMATES: dict[str, float] = {
     MODEL_PERFORMANCE: 1.5,
 }
 
+# Pre-charge estimate for study AI calls (summary, flashcards, mindmap, chat).
+STUDY_CREDIT_ESTIMATE = 0.5
+
 
 def get_model_tier(model_name: str) -> str:
     """Map a concrete model name to its tier label."""

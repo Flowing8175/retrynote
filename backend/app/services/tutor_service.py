@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.file import ParsedDocument
 from app.models.study import MessageRole, StudyChat, StudyMessage
 from app.prompts.study import STUDY_MODEL, TUTOR_SYSTEM_PROMPT
+from app.services.usage_service import UsageService
+from app.tier_config import calculate_credit_cost
 from app.utils.ai_client import get_gemini_client
 from app.utils.sse import sse_data, sse_done, sse_error
 
@@ -61,6 +63,8 @@ async def stream_tutor_response(
     message: str,
     page_context: int | None,
     db: AsyncSession,
+    user_id: str = "",
+    credit_estimate: float = 0,
 ) -> AsyncGenerator[str, None]:
     try:
         parsed_result = await db.execute(
@@ -99,7 +103,6 @@ async def stream_tutor_response(
 
         contents: list[genai_types.Content] = []
         for msg in history:
-            # Gemini uses "model" for assistant turns, not "assistant"
             gemini_role = "user" if msg.role == MessageRole.user else "model"
             contents.append(
                 genai_types.Content(
@@ -122,6 +125,7 @@ async def stream_tutor_response(
 
         gemini = get_gemini_client()
         full_response = ""
+        total_tokens = 0
 
         stream = await gemini.aio.models.generate_content_stream(
             model=STUDY_MODEL,
@@ -133,6 +137,9 @@ async def stream_tutor_response(
             if chunk.text:
                 full_response += chunk.text
                 yield sse_data({"token": chunk.text})
+            usage = getattr(chunk, "usage_metadata", None)
+            if usage:
+                total_tokens = getattr(usage, "total_token_count", 0) or 0
 
         assistant_msg = StudyMessage(
             chat_id=chat.id,
@@ -141,6 +148,13 @@ async def stream_tutor_response(
             page_context=page_context,
         )
         db.add(assistant_msg)
+
+        if user_id and credit_estimate:
+            actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+            delta = actual_cost - credit_estimate
+            if abs(delta) > 0.001:
+                await UsageService().adjust_credit(db, user_id, "quiz", delta)
+
         await db.commit()
 
         yield sse_done()
