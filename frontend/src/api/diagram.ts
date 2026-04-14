@@ -13,7 +13,6 @@ export interface DiagramResponse {
 export const DIAGRAM_TYPES = [
   { value: 'flowchart', label: '흐름도' },
   { value: 'mindmap', label: '마인드맵' },
-  { value: 'sequenceDiagram', label: '순서도' },
   { value: 'stateDiagram', label: '상태도' },
   { value: 'classDiagram', label: '클래스도' },
 ] as const;
