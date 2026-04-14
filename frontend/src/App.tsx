@@ -34,6 +34,8 @@ const DiagramPage = lazyWithRetry(() => import('@/pages/DiagramPage'));
 const TryQuiz = lazyWithRetry(() => import('@/pages/TryQuiz'));
 const TryQuizTake = lazyWithRetry(() => import('@/pages/TryQuizTake'));
 const TryQuizResults = lazyWithRetry(() => import('@/pages/TryQuizResults'));
+const StudyList = lazyWithRetry(() => import('@/pages/StudyList'));
+const StudyViewer = lazyWithRetry(() => import('@/pages/StudyViewer'));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -254,6 +256,24 @@ function App() {
                </AdminRoute>
              </ProtectedRoute>
            } />
+          <Route path="/study" element={
+            <ProtectedRoute>
+              <Layout>
+                <LazyRoute>
+                  <StudyList />
+                </LazyRoute>
+              </Layout>
+            </ProtectedRoute>
+          } />
+          <Route path="/study/:fileId" element={
+            <ProtectedRoute>
+              <Layout showSidebar={false}>
+                <LazyRoute>
+                  <StudyViewer />
+                </LazyRoute>
+              </Layout>
+            </ProtectedRoute>
+          } />
           <Route path="*" element={<LazyRoute><NotFound /></LazyRoute>} />
         </Routes>
           <UpgradeModal />
