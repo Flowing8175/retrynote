@@ -23,7 +23,7 @@ export default function DiagramModal({
   const navigate = useNavigate();
   const [fetchState, setFetchState] = useState<FetchState>('loading');
   const [diagram, setDiagram] = useState<DiagramResponse | null>(null);
-  const [selectedType, setSelectedType] = useState<DiagramTypeValue>('mindmap');
+  const selectedType: DiagramTypeValue = 'mindmap';
   const abortRef = useRef<AbortController | null>(null);
 
   const fetchDiagram = async (force: boolean = false, type: DiagramTypeValue = selectedType) => {

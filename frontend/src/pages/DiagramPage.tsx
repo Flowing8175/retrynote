@@ -9,12 +9,12 @@ type PageState = 'loading' | 'success' | 'error' | 'not-found' | 'quota_exceeded
 
 export default function DiagramPage() {
   const { conceptKey } = useParams<{ conceptKey: string }>();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const decodedKey = decodeURIComponent(conceptKey ?? '');
 
   const initialType = (searchParams.get('type') as DiagramTypeValue | null) ?? 'mindmap';
-  const [selectedType, setSelectedType] = useState<DiagramTypeValue>(initialType);
+  const selectedType: DiagramTypeValue = initialType;
   const [pageState, setPageState] = useState<PageState>('loading');
   const [diagram, setDiagram] = useState<DiagramResponse | null>(null);
   const abortRef = useRef<AbortController | null>(null);
