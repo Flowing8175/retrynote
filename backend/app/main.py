@@ -124,6 +124,7 @@ from app.api import (
     diagram,
     guest,
     public,
+    study,
 )
 from app.api.billing import router as billing_router
 
@@ -140,6 +141,7 @@ app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
 app.include_router(billing_router, prefix="/billing", tags=["billing"])
 app.include_router(diagram.router, prefix="/diagrams", tags=["diagrams"])
+app.include_router(study.router, prefix="/study", tags=["study"])
 
 
 @app.get("/health")
