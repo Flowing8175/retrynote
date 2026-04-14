@@ -163,6 +163,11 @@ async def stream_tutor_response(
         logger.exception("stream_tutor_response error for file_id=%s: %s", file_id, exc)
         try:
             await db.rollback()
+            if user_id and credit_estimate:
+                await UsageService().adjust_credit(
+                    db, user_id, "quiz", -credit_estimate
+                )
+                await db.commit()
         except Exception:
             pass
         yield sse_error(str(exc))
