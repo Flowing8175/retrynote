@@ -128,6 +128,7 @@ def cleanup_guest_data_task():
 
 
 from celery.schedules import crontab
+from app.workers import study_tasks as _study_tasks  # noqa: F401
 
 celery_app.conf.beat_schedule = {
     **getattr(celery_app.conf, "beat_schedule", {}),
