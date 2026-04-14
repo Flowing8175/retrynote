@@ -12,6 +12,7 @@
 5. Health-checks `http://127.0.0.1:8001/health`, then reloads nginx
 
 Server: `ubuntu@134.185.101.134` (SSH key: `~/.ssh/oracle.key`)
+**Hardware: Oracle Cloud Always-Free — 2 vCPU, 1 GB RAM. Extremely constrained. Never run memory-heavy operations (large builds, multiple concurrent processes, heavy DB queries) on the server. Build frontend locally and rsync the dist.**
 App dir on server: `/home/retrynote/app`
 Services: `retrynote-api` (uvicorn, port 8001), `retrynote-worker` (celery)
 
@@ -73,6 +74,31 @@ SHELL
 **Accessing Config from Python Scripts:**
 - Settings class in `app/config.py` uses lowercase attribute names: `settings.database_url` (not `DATABASE_URL`)
 - All Doppler-injected env vars are automatically available to Python when `doppler run` is used
+
+## Alembic Migration Workaround
+
+Alembic CLI (`alembic upgrade head`) fails on the server due to a DB password parsing issue in `env.py`'s separate engine creation. **Use the app's own engine instead:**
+
+```bash
+ssh -i ~/.ssh/oracle.key ubuntu@134.185.101.134
+sudo -u retrynote bash << 'SHELL'
+cd /home/retrynote/app/backend
+TOKEN=$(cat /home/retrynote/.doppler/service-token | sed 's/DOPPLER_TOKEN=//')
+doppler run --project retrynote --config prd -t $TOKEN -- .venv/bin/python3 -c "
+import asyncio
+from app.database import engine, Base
+from app.models import *
+async def create():
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    await engine.dispose()
+    print('Tables created successfully')
+asyncio.run(create())
+"
+SHELL
+```
+
+**Note:** This uses `create_all` (additive — won't drop existing tables) rather than alembic migrations. For column alterations or drops, fix the alembic env.py password handling first.
 
 ## Admin Auth Flow
 
