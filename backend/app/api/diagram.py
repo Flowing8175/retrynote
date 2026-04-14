@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.models.objection import WeakPoint
+from app.models.quiz import AnswerLog, QuizItem, Judgement
 from app.schemas.diagram import DiagramGenerateRequest, DiagramResponse
 from app.schemas.billing import LimitExceededError
 from app.services.diagram_service import (
@@ -25,15 +25,26 @@ async def generate_concept_diagram(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    result = await db.execute(
-        select(WeakPoint).where(
-            WeakPoint.user_id == user.id,
-            WeakPoint.concept_key == request.concept_key,
+    qi_result = await db.execute(
+        select(QuizItem)
+        .join(AnswerLog, AnswerLog.quiz_item_id == QuizItem.id)
+        .where(
+            AnswerLog.user_id == user.id,
+            QuizItem.concept_key == request.concept_key,
+            AnswerLog.judgement.in_(
+                [Judgement.incorrect, Judgement.partial, Judgement.skipped]
+            ),
+            AnswerLog.is_active_result.is_(True),
+            AnswerLog.deleted_at.is_(None),
         )
+        .limit(1)
     )
-    weak_point = result.scalar_one_or_none()
-    if weak_point is None:
+    quiz_item = qi_result.scalar_one_or_none()
+    if quiz_item is None:
         raise HTTPException(status_code=404, detail="개념을 찾을 수 없습니다")
+
+    concept_label = quiz_item.concept_label or request.concept_key
+    category_tag = quiz_item.category_tag
 
     if not request.force:
         cached = await get_cached_diagram(
@@ -70,8 +81,8 @@ async def generate_concept_diagram(
             db,
             user.id,
             request.concept_key,
-            weak_point.concept_label or request.concept_key,
-            weak_point.category_tag,
+            concept_label,
+            category_tag,
             requested_diagram_type=request.diagram_type,
         )
     except DiagramGenerationError:
