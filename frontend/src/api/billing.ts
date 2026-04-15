@@ -7,9 +7,17 @@ import type {
 import type { ApiStatusResponse } from '../types';
 import apiClient from './client';
 
+export interface PaddleConfig {
+  clientToken: string;
+  environment: string;
+}
+
 export const billingApi = {
   getUsageStatus: (): Promise<UsageStatus> =>
     apiClient.get<UsageStatus>('/billing/usage').then((r) => r.data),
+
+  getPaddleConfig: (): Promise<PaddleConfig> =>
+    apiClient.get<PaddleConfig>('/billing/paddle-config').then((r) => r.data),
 
   getSubscription: (): Promise<Subscription | null> =>
     apiClient.get<Subscription | null>('/billing/subscription').then((r) => r.data),

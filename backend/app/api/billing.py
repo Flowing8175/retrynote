@@ -16,6 +16,7 @@ from app.schemas.billing import (
     CheckoutResponse,
     CreditCheckoutRequest,
     ManageUrlsResponse,
+    PaddleConfigResponse,
     SubscriptionResponse,
     UsageStatusResponse,
 )
@@ -40,6 +41,16 @@ async def get_usage_status(
     user: User = Depends(get_current_user),
 ):
     return await usage_svc.get_usage_status(db, user)
+
+
+@router.get("/paddle-config", response_model=PaddleConfigResponse)
+async def get_paddle_config(
+    _user: User = Depends(get_current_user),
+):
+    return PaddleConfigResponse(
+        client_token=settings.paddle_client_token,
+        environment=settings.paddle_environment,
+    )
 
 
 @router.get("/subscription", response_model=SubscriptionResponse | None)
@@ -84,7 +95,7 @@ async def checkout_subscription(
         raise HTTPException(status_code=503, detail="Payment not configured")
 
     customer_id = await subscription_svc.get_or_create_paddle_customer(db, user)
-    session_url = await subscription_svc.create_subscription_checkout(
+    txn_id = await subscription_svc.create_subscription_checkout(
         customer_id=customer_id,
         price_id=price_id,
         success_url=f"{settings.app_url}/settings/billing?success=1",
@@ -94,7 +105,7 @@ async def checkout_subscription(
             "billing_cycle": req.billing_cycle,
         },
     )
-    return CheckoutResponse(session_url=session_url)
+    return CheckoutResponse(transaction_id=txn_id)
 
 
 @router.post("/checkout/credits", response_model=CheckoutResponse)
@@ -107,7 +118,7 @@ async def checkout_credits(
 ):
     customer_id = await subscription_svc.get_or_create_paddle_customer(db, user)
     try:
-        session_url = await credit_svc.create_credit_checkout(
+        txn_id = await credit_svc.create_credit_checkout(
             customer_id=customer_id,
             credit_type=req.credit_type,
             pack_size=req.pack_size,
@@ -116,7 +127,7 @@ async def checkout_credits(
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
-    return CheckoutResponse(session_url=session_url)
+    return CheckoutResponse(transaction_id=txn_id)
 
 
 @router.get("/manage-urls", response_model=ManageUrlsResponse)

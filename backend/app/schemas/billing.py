@@ -50,7 +50,12 @@ class CreditCheckoutRequest(BaseModel):
 
 
 class CheckoutResponse(_CamelModel):
-    session_url: str
+    transaction_id: str
+
+
+class PaddleConfigResponse(_CamelModel):
+    client_token: str
+    environment: str
 
 
 class ManageUrlsResponse(_CamelModel):

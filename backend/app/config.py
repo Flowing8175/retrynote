@@ -77,6 +77,7 @@ class Settings(BaseSettings):
     kakao_rest_api_key: str = ""
 
     paddle_api_key: str = ""
+    paddle_client_token: str = ""
     paddle_environment: str = "sandbox"
     paddle_webhook_secret: str = ""
     paddle_lite_monthly_price_id: str = ""

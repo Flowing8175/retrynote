@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, CreditCard, HardDrive, CheckCircle } from 'lucide-react';
 import { billingApi } from '@/api/billing';
+import { openPaddleCheckout } from '@/lib/paddle';
 import { useUsageStatus } from '@/lib/useUsageStatus';
 import type { ResourceType } from '@/types/billing';
 
@@ -246,8 +247,8 @@ export default function BillingPage() {
     setPurchasingPack(key);
     try {
       const result = await billingApi.checkoutCredits(pack.creditType, pack.packSize);
-      window.location.href = result.sessionUrl;
-    } finally {
+      await openPaddleCheckout(result.transactionId, () => setPurchasingPack(null));
+    } catch {
       setPurchasingPack(null);
     }
   }

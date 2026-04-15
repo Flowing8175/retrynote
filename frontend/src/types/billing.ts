@@ -30,7 +30,7 @@ export interface Subscription {
 }
 
 export interface CheckoutSessionResponse {
-  sessionUrl: string;
+  transactionId: string;
 }
 
 export interface ManageUrlsResponse {

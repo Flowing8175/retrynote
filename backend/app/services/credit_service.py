@@ -112,5 +112,7 @@ class CreditService:
             },
             success_url=success_url,
         )
-        checkout = transaction.get("checkout") or {}
-        return checkout.get("url", "")
+        txn_id = transaction.get("id", "")
+        if not txn_id:
+            raise ValueError("Paddle returned a transaction without an id")
+        return txn_id

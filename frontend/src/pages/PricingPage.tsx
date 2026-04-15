@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { billingApi } from '@/api/billing';
+import { openPaddleCheckout } from '@/lib/paddle';
 import { useAuthStore } from '@/stores/authStore';
 import type { BillingCycle, UserTier } from '@/types/billing';
 
@@ -90,7 +91,7 @@ export default function PricingPage() {
     setLoadingTier(tier);
     try {
       const result = await billingApi.checkoutSubscription(tier, billingCycle);
-      window.location.href = result.sessionUrl;
+      await openPaddleCheckout(result.transactionId, () => setLoadingTier(null));
     } catch {
       setLoadingTier(null);
     }
@@ -100,7 +101,7 @@ export default function PricingPage() {
     setLoadingCredit(key);
     try {
       const result = await billingApi.checkoutCredits(creditType, packSize);
-      window.location.href = result.sessionUrl;
+      await openPaddleCheckout(result.transactionId, () => setLoadingCredit(null));
     } catch {
       setLoadingCredit(null);
     }
