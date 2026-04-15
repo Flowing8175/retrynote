@@ -148,7 +148,7 @@ export default function SignupGateModal({ onClose, topic }: Props) {
 
             <div className="scale-90 origin-left">
               <Turnstile
-                siteKey={import.meta.env.VITE_CLOUDFLARE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
+                siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
                 onSuccess={(token) => setTurnstileToken(token)}
                 onExpire={() => setTurnstileToken('')}
               />
