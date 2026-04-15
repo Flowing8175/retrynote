@@ -26,16 +26,17 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     (data: EventData) => {
       const { status } = data;
 
-      if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
+      if (
+        (status === STATUS.FINISHED || status === STATUS.SKIPPED) &&
+        tourActiveRef.current
+      ) {
         tourActiveRef.current = false;
         cleanupTourMockData(queryClient);
         localStorage.setItem('rn-tour-completed', 'true');
-        if (status === STATUS.FINISHED) {
-          navigate('/dashboard');
-        }
+        navigate('/dashboard');
       }
     },
-    [queryClient],
+    [queryClient, navigate],
   );
 
   const { Tour, controls } = useJoyride({
