@@ -756,7 +756,6 @@ async def _run_quiz_generation(
         topic=topic,
     )
 
-    effective_max_tokens = min(16384, max(4096, (question_count or 10) * 1200 + 1500))
     ai_result, tokens_used = await call_ai_with_fallback(
         prompt,
         GENERATION_SCHEMA,
@@ -764,7 +763,7 @@ async def _run_quiz_generation(
         fallback_model=cfg.eco_generation_model,
         system_message=get_generation_system_prompt(resolved_difficulty),
         cache_key=f"quiz_gen_{resolved_difficulty}_v1",
-        max_tokens=effective_max_tokens,
+        max_tokens=16384,
     )
 
     if ai_result.get("rejected"):
@@ -891,13 +890,6 @@ async def stream_quiz_generation(
         yield sse_data({"type": "stage", "stage": "analyzing"})
 
         payload = job.payload_json or {}
-        model_name = session.generation_model_name or _cfg.balanced_generation_model
-        logger.info(
-            "SSE gen starting for session %s (model=%s, q=%s)",
-            session.id,
-            model_name,
-            payload.get("question_count"),
-        )
 
         yield sse_data({"type": "stage", "stage": "generating"})
 
