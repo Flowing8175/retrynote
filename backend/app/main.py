@@ -1,3 +1,28 @@
+import faulthandler
+import signal
+import sys
+import os
+import logging
+
+faulthandler.enable(file=sys.stderr, all_threads=True)
+
+_crash_logger = logging.getLogger("crash_handler")
+
+
+def _signal_handler(signum, frame):
+    _crash_logger.critical(
+        "Worker %d received signal %d (%s)",
+        os.getpid(),
+        signum,
+        signal.Signals(signum).name,
+    )
+    faulthandler.dump_traceback(file=sys.stderr, all_threads=True)
+    sys.exit(128 + signum)
+
+
+for sig in (signal.SIGTERM, signal.SIGABRT, signal.SIGINT):
+    signal.signal(sig, _signal_handler)
+
 from datetime import datetime, timezone
 
 from app.config import settings
