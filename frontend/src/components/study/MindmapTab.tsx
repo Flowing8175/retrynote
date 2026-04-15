@@ -74,6 +74,15 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
     }
   }, [mindmapStatus, fileId, queryClient]);
 
+  // useMemo MUST be called before any conditional returns (Rules of Hooks)
+  const rawData = mindmap?.data;
+  const hasData = rawData && Array.isArray(rawData.nodes) && rawData.nodes.length > 0;
+
+  const layout = useMemo(
+    () => (hasData ? enrichWithDepth(rawData.nodes, rawData.edges ?? []) : null),
+    [hasData, rawData],
+  );
+
   const status = mindmapStatus;
 
   if (status === 'generating' || (status === 'completed' && isLoading)) {
@@ -120,14 +129,6 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
       </div>
     );
   }
-
-  const rawData = mindmap?.data;
-  const hasData = rawData && Array.isArray(rawData.nodes) && rawData.nodes.length > 0;
-
-  const layout = useMemo(
-    () => (hasData ? enrichWithDepth(rawData.nodes, rawData.edges ?? []) : null),
-    [hasData, rawData],
-  );
 
   if (!layout) {
     return (
