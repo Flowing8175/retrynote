@@ -380,6 +380,34 @@ def _is_cache_not_found_error(exc: Exception) -> bool:
     )
 
 
+def _jsonschema_to_gemini(node: dict) -> dict:
+    """Convert JSON Schema nullable unions to Gemini-compatible format.
+
+    Gemini expects ``type`` to be a single enum string (``OBJECT``, ``ARRAY``, …)
+    with a separate ``nullable: true`` flag, whereas JSON Schema uses
+    ``type: ["object", "null"]``.  Also strips ``additionalProperties`` which
+    Gemini does not recognise.
+    """
+    out: dict[str, Any] = {}
+    for key, value in node.items():
+        if key == "additionalProperties":
+            continue
+        if key == "type" and isinstance(value, list):
+            non_null = [t for t in value if t != "null"]
+            out["type"] = non_null[0].upper() if non_null else "STRING"
+            if "null" in value:
+                out["nullable"] = True
+        elif key == "type" and isinstance(value, str):
+            out["type"] = value.upper()
+        elif key == "properties" and isinstance(value, dict):
+            out["properties"] = {k: _jsonschema_to_gemini(v) for k, v in value.items()}
+        elif key == "items" and isinstance(value, dict):
+            out["items"] = _jsonschema_to_gemini(value)
+        else:
+            out[key] = value
+    return out
+
+
 async def _call_gemini_structured(
     prompt: str,
     schema: dict,
@@ -393,13 +421,14 @@ async def _call_gemini_structured(
 
     gemini = _get_gemini_client()
     cache_name = await _gemini_cache_registry.get_or_create(model, system_message)
+    gemini_schema = _jsonschema_to_gemini(schema)
 
     def _build_config(use_cache: bool) -> types.GenerateContentConfig:
         kwargs: dict[str, Any] = {
             "temperature": temperature,
             "max_output_tokens": max_tokens,
             "response_mime_type": "application/json",
-            "response_schema": schema,
+            "response_schema": gemini_schema,
         }
         if use_cache and cache_name:
             kwargs["cached_content"] = cache_name
