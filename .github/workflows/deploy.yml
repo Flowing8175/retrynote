@@ -95,8 +95,8 @@ jobs:
             # 서비스 재시작
             sudo systemctl restart retrynote-api retrynote-worker
 
-            # 헬스 체크
-            RETRIES=15
+            # 헬스 체크 (1GB RAM 서버에서 ~45초 소요)
+            RETRIES=30
             until curl -sf --max-time 5 http://127.0.0.1:8001/health > /dev/null 2>&1; do
               RETRIES=$((RETRIES - 1))
               [ "$RETRIES" -eq 0 ] && echo "API 시작 실패" && exit 1
