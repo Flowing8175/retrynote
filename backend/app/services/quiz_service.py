@@ -106,13 +106,33 @@ async def process_file(job_id: str):
                         await db.commit()
 
                         ocr_texts: list[str] = []
-                        for img_bytes in images[:MAX_DOC_OCR_IMAGES]:
+                        for idx, img_bytes in enumerate(images[:MAX_DOC_OCR_IMAGES]):
                             try:
                                 ocr_result = await extract_text_from_image(img_bytes)
                                 if ocr_result.text.strip():
                                     ocr_texts.append(ocr_result.text)
-                            except Exception:
-                                continue
+                            except RuntimeError as e:
+                                err = str(e)
+                                if "not configured" in err or "invalid API key" in err:
+                                    file.status = FileStatus.failed_terminal
+                                    file.parse_error_code = "ocr_not_configured"
+                                    file.processing_finished_at = datetime.now(
+                                        timezone.utc
+                                    )
+                                    raise JobFailure(f"OCR configuration error: {err}")
+                                logger.warning(
+                                    "OCR error for image %d in file %s: %s",
+                                    idx,
+                                    file.id,
+                                    err,
+                                )
+                            except Exception as e:
+                                logger.warning(
+                                    "OCR failed for image %d in file %s: %s",
+                                    idx,
+                                    file.id,
+                                    e,
+                                )
                         if ocr_texts:
                             text = "\n".join(ocr_texts)
                         ocr_required = True

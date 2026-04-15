@@ -35,7 +35,10 @@ function formatFileType(file: FileDetail) {
   return file.source_type === 'upload' ? 'UPLOAD' : 'DATA';
 }
 
-function getStatusHint(status: string): string {
+function getStatusHint(status: string, parseErrorCode?: string | null): string {
+  if (status === 'failed_terminal' && parseErrorCode === 'ocr_not_configured') {
+    return 'OCR 설정 오류 — 관리자에게 문의하세요';
+  }
   const hints: Record<string, string> = {
     ready: '퀴즈 생성 가능',
     failed_partial: '일부만 사용 가능',
@@ -528,9 +531,9 @@ export default function Files() {
                               <h2 className="text-lg font-medium text-white truncate group-hover:text-brand-300 transition-colors">
                                 {file.original_filename || '제목 없는 자료'}
                               </h2>
-                              {getStatusHint(file.status) && (
+                              {getStatusHint(file.status, file.parse_error_code) && (
                                 <p className="text-xs text-content-muted mt-0.5">
-                                  {getStatusHint(file.status)}
+                                  {getStatusHint(file.status, file.parse_error_code)}
                                 </p>
                               )}
                             </div>
