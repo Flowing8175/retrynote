@@ -58,6 +58,7 @@ async def process_file(job_id: str):
 
                 ocr_required = file.file_type in ("png", "jpg", "jpeg")
                 text = ""
+                file_data: bytes | None = None
 
                 if ocr_required:
                     file.ocr_required = True
@@ -80,7 +81,7 @@ async def process_file(job_id: str):
                     payload = job.payload_json or {}
                     text = payload.get("manual_text", "")
                 elif file.source_type.value == "upload":
-                    text = await _extract_file_text_async(file)
+                    text, file_data = await _extract_file_text_async(file)
                 elif file.source_type.value == "url":
                     if not file.source_url:
                         raise ValueError("URL source missing source_url")
@@ -88,6 +89,34 @@ async def process_file(job_id: str):
 
                 file.status = FileStatus.parsed
                 await db.commit()
+
+                if (
+                    not text.strip()
+                    and file_data
+                    and file.file_type in ("pptx", "pdf", "docx")
+                ):
+                    images = _extract_images_from_document(file_data, file.file_type)
+                    if images:
+                        from app.services.ocr_service import extract_text_from_image
+
+                        file.ocr_required = True
+                        file.status = FileStatus.ocr_processing
+                        await db.commit()
+
+                        ocr_texts: list[str] = []
+                        for img_bytes in images[:MAX_DOC_OCR_IMAGES]:
+                            try:
+                                ocr_result = await extract_text_from_image(img_bytes)
+                                if ocr_result.text.strip():
+                                    ocr_texts.append(ocr_result.text)
+                            except Exception:
+                                continue
+                        if ocr_texts:
+                            text = "\n".join(ocr_texts)
+                        ocr_required = True
+
+                        file.status = FileStatus.parsed
+                        await db.commit()
 
                 if not text.strip():
                     if ocr_required:
@@ -160,27 +189,27 @@ async def process_file(job_id: str):
                 raise
 
 
-async def _extract_file_text_async(file: File) -> str:
+async def _extract_file_text_async(file: File) -> tuple[str, bytes | None]:
     if not file.stored_path:
-        return ""
+        return "", None
 
     from app.services import storage as _storage
 
     try:
         data = await _storage.download_file(file.stored_path)
     except Exception:
-        return ""
+        return "", None
 
     ext = file.file_type
     if ext == "pdf":
-        return _extract_pdf_bytes(data)
+        return _extract_pdf_bytes(data), data
     elif ext == "docx":
-        return _extract_docx_bytes(data)
+        return _extract_docx_bytes(data), data
     elif ext == "pptx":
-        return _extract_pptx_bytes(data)
+        return _extract_pptx_bytes(data), data
     elif ext in ("txt", "md"):
-        return data.decode("utf-8", errors="replace")
-    return ""
+        return data.decode("utf-8", errors="replace"), data
+    return "", data
 
 
 def _extract_pdf_bytes(data: bytes) -> str:
@@ -220,6 +249,74 @@ def _extract_pptx_bytes(data: bytes) -> str:
         return text
     except Exception:
         return ""
+
+
+MAX_DOC_OCR_IMAGES = 30
+
+
+def _extract_images_from_pptx(data: bytes) -> list[bytes]:
+    try:
+        import io
+        from pptx import Presentation
+
+        prs = Presentation(io.BytesIO(data))
+        images: list[bytes] = []
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, "image"):
+                    try:
+                        images.append(shape.image.blob)
+                    except Exception:
+                        continue
+        return images
+    except Exception:
+        return []
+
+
+def _extract_images_from_pdf(data: bytes) -> list[bytes]:
+    try:
+        import io
+        from PyPDF2 import PdfReader
+
+        reader = PdfReader(io.BytesIO(data))
+        images: list[bytes] = []
+        for page in reader.pages:
+            try:
+                for img in page.images:
+                    images.append(img.data)
+            except Exception:
+                continue
+        return images
+    except Exception:
+        return []
+
+
+def _extract_images_from_docx(data: bytes) -> list[bytes]:
+    try:
+        import io
+        from docx import Document
+
+        doc = Document(io.BytesIO(data))
+        images: list[bytes] = []
+        for rel in doc.part.rels.values():
+            if "image" in rel.reltype:
+                try:
+                    images.append(rel.target_part.blob)
+                except Exception:
+                    continue
+        return images
+    except Exception:
+        return []
+
+
+def _extract_images_from_document(data: bytes, file_type: str) -> list[bytes]:
+    if file_type == "pptx":
+        return _extract_images_from_pptx(data)
+    elif file_type == "pdf":
+        return _extract_images_from_pdf(data)
+    elif file_type == "docx":
+        return _extract_images_from_docx(data)
+    return []
 
 
 def _validate_ip(addr: str) -> bool:
