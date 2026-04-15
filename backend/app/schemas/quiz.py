@@ -17,6 +17,7 @@ class QuizSessionCreate(BaseModel):
     source_mode: Literal["document_based", "no_source"]
     topic: str | None = Field(default=None, max_length=200)
     idempotency_key: str | None = Field(default=None, max_length=255)
+    stream: bool = False
 
     @field_validator("preferred_model")
     @classmethod

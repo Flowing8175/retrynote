@@ -1,6 +1,8 @@
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import AsyncGenerator
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -649,6 +651,267 @@ async def _grade_single_answer(
     return GradingResult(judgement=Judgement.incorrect, score_awarded=0.0)
 
 
+async def _run_quiz_generation(
+    db: AsyncSession,
+    session: QuizSession,
+    payload: dict,
+) -> tuple[list[dict], int, str]:
+    """Core quiz generation logic. Returns (questions, tokens_used, resolved_difficulty).
+
+    Raises JobFailure on rejection or empty results.
+    Does NOT persist QuizItems or change session status.
+    """
+    from app.utils.ai_client import call_ai_with_fallback, GENERATION_SCHEMA
+
+    source_texts: list[str] = []
+    if session.source_mode.value == "document_based":
+        file_results = await db.execute(
+            select(File)
+            .join(QuizSessionFile, QuizSessionFile.file_id == File.id)
+            .where(QuizSessionFile.quiz_session_id == session.id)
+        )
+        for f in file_results.scalars().all():
+            if f.parsed_document:
+                source_texts.append(f.parsed_document.normalized_text or "")
+
+    question_count = payload.get("question_count", session.question_count)
+    difficulty = payload.get("difficulty", session.difficulty)
+    question_types = payload.get("question_types", []) or [
+        "multiple_choice",
+        "ox",
+        "short_answer",
+        "fill_blank",
+        "essay",
+    ]
+
+    concept_counts: dict[str, int] = {}
+    if session.user_id:
+        recent_concepts_result = await db.execute(
+            select(QuizItem.concept_key)
+            .join(QuizSession, QuizSession.id == QuizItem.quiz_session_id)
+            .where(QuizSession.user_id == session.user_id)
+            .order_by(QuizItem.created_at.desc())
+            .limit(20)
+        )
+        recent_concepts = [r[0] for r in recent_concepts_result.all() if r[0]]
+        for c in recent_concepts:
+            concept_counts[c] = concept_counts.get(c, 0) + 1
+
+    source_context = (
+        "\n\n".join(source_texts[:3])
+        if source_texts
+        else "No source material provided."
+    )
+    if not source_texts and session.source_mode.value == "document_based":
+        raise JobFailure("No source material available")
+
+    is_no_source = session.source_mode.value == "no_source"
+    topic = payload.get("topic") or None
+
+    resolved_difficulty = difficulty
+    if difficulty == "auto" and not is_no_source:
+        from app.utils.ai_client import (
+            call_ai_structured,
+            DIFFICULTY_SELECTION_SCHEMA,
+        )
+
+        det_result, _ = await call_ai_structured(
+            prompt=source_context[:4000],
+            schema=DIFFICULTY_SELECTION_SCHEMA,
+            system_message=SYSTEM_PROMPT_DIFFICULTY_SELECTION,
+            model=cfg.eco_generation_model or cfg.balanced_generation_model,
+            max_tokens=100,
+        )
+        resolved_difficulty = det_result.get("difficulty", "medium")
+        if resolved_difficulty not in ("easy", "medium", "hard"):
+            resolved_difficulty = "medium"
+
+    prompt = build_generation_prompt(
+        source_context=source_context,
+        question_count=question_count,
+        difficulty=resolved_difficulty,
+        question_types=question_types,
+        concept_counts=concept_counts,
+        is_no_source=is_no_source,
+        topic=topic,
+    )
+
+    ai_result, tokens_used = await call_ai_with_fallback(
+        prompt,
+        GENERATION_SCHEMA,
+        primary_model=session.generation_model_name or cfg.balanced_generation_model,
+        fallback_model=cfg.eco_generation_model,
+        system_message=get_generation_system_prompt(resolved_difficulty),
+        cache_key=f"quiz_gen_{resolved_difficulty}_v1",
+    )
+
+    if ai_result.get("rejected"):
+        raise JobFailure(
+            "INVALID_INPUT:"
+            + ai_result.get(
+                "rejection_reason",
+                "퀴즈를 만들기 어려운 입력입니다. 학습하고 싶은 주제나 자료를 입력해 주세요.",
+            )
+        )
+
+    all_questions = ai_result.get("questions", [])
+    questions = (
+        all_questions if question_count is None else all_questions[:question_count]
+    )
+    if not questions:
+        raise JobFailure("AI returned no questions")
+
+    if question_count is None:
+        session.question_count = len(questions)
+
+    return questions, tokens_used, resolved_difficulty or "medium"
+
+
+def _persist_quiz_items(
+    db: AsyncSession,
+    session: QuizSession,
+    questions: list[dict],
+    default_difficulty: str,
+) -> list[QuizItem]:
+    """Create QuizItem records from AI output. Returns the created items."""
+    items: list[QuizItem] = []
+    for i, q in enumerate(questions):
+        item = QuizItem(
+            quiz_session_id=session.id,
+            item_order=i + 1,
+            question_type=QuestionType(q.get("question_type", "multiple_choice")),
+            question_text=q.get("question_text", ""),
+            options_json=q.get("options"),
+            option_descriptions_json=q.get("option_descriptions"),
+            correct_answer_json=q.get("correct_answer"),
+            explanation_text=q.get("explanation", ""),
+            source_refs_json={"refs": q.get("source_refs", [])},
+            concept_key=q.get("concept_key", ""),
+            concept_label=q.get("concept_label", ""),
+            category_tag=q.get("category_tag", ""),
+            difficulty=q.get("difficulty", default_difficulty),
+            similarity_fingerprint=q.get("concept_key", ""),
+        )
+        db.add(item)
+        items.append(item)
+    return items
+
+
+async def _adjust_generation_credits(
+    db: AsyncSession,
+    session: QuizSession,
+    tokens_used: int,
+    credit_estimate: float,
+) -> None:
+    """Adjust credits based on actual token usage vs estimate."""
+    from app.tier_config import calculate_credit_cost
+    from app.services.usage_service import UsageService
+
+    actual_cost = calculate_credit_cost(
+        tokens_used,
+        session.generation_model_name or cfg.balanced_generation_model,
+    )
+    delta = actual_cost - credit_estimate
+    if abs(delta) > 0.001 and session.user_id:
+        await UsageService().adjust_credit(db, str(session.user_id), "quiz", delta)
+
+
+def _serialize_quiz_item(item: QuizItem) -> dict:
+    """Serialize QuizItem to match QuizItemResponse shape for SSE streaming."""
+    return {
+        "id": item.id,
+        "item_order": item.item_order,
+        "question_type": item.question_type.value if item.question_type else None,
+        "question_text": item.question_text,
+        "options": item.options_json,
+        "option_descriptions": item.option_descriptions_json,
+        "difficulty": item.difficulty,
+        "concept_key": item.concept_key,
+        "concept_label": item.concept_label,
+        "category_tag": item.category_tag,
+        "correct_answer": item.correct_answer_json,
+        "explanation": item.explanation_text,
+        "tips": item.tips_text,
+        "source_refs": item.source_refs_json,
+    }
+
+
+async def stream_quiz_generation(
+    db: AsyncSession,
+    session: QuizSession,
+    job: Job,
+) -> AsyncGenerator[str, None]:
+    """SSE generator: runs quiz generation and streams items one-by-one."""
+    from app.utils.sse import sse_data, sse_error, sse_done
+
+    try:
+        session.status = QuizSessionStatus.generating
+        await db.commit()
+
+        yield sse_data({"type": "stage", "stage": "analyzing"})
+
+        payload = job.payload_json or {}
+
+        yield sse_data({"type": "stage", "stage": "generating"})
+
+        questions, tokens_used, resolved_difficulty = await _run_quiz_generation(
+            db, session, payload
+        )
+
+        items = _persist_quiz_items(db, session, questions, resolved_difficulty)
+
+        credit_estimate = payload.get("credit_estimate", 0.0)
+        await _adjust_generation_credits(db, session, tokens_used, credit_estimate)
+
+        session.status = QuizSessionStatus.ready
+        await db.commit()
+
+        for item in items:
+            await db.refresh(item)
+
+        yield sse_data(
+            {
+                "type": "stage",
+                "stage": "streaming_questions",
+                "total": len(items),
+            }
+        )
+
+        for i, item in enumerate(items):
+            yield sse_data(
+                {
+                    "type": "question",
+                    "index": i,
+                    "total": len(items),
+                    "item": _serialize_quiz_item(item),
+                }
+            )
+            if i < len(items) - 1:
+                await asyncio.sleep(0.35)
+
+        yield sse_done()
+
+    except JobFailure as e:
+        session.status = QuizSessionStatus.generation_failed
+        job.error_message = str(e)
+        try:
+            await db.commit()
+        except Exception:
+            pass
+        yield sse_error(str(e))
+    except Exception as e:
+        logger.exception(
+            "stream_quiz_generation error for session %s: %s", session.id, e
+        )
+        if session.status == QuizSessionStatus.generating:
+            session.status = QuizSessionStatus.draft
+        try:
+            await db.commit()
+        except Exception:
+            pass
+        yield sse_error(f"Generation failed: {e}")
+
+
 async def generate_quiz(job_id: str):
     async with async_session() as db:
         job_result = await db.execute(select(Job).where(Job.id == job_id))
@@ -807,149 +1070,17 @@ async def generate_quiz(job_id: str):
                     session.status = QuizSessionStatus.ready
                     return
 
-                source_texts = []
-                if session.source_mode.value == "document_based":
-                    file_results = await db.execute(
-                        select(File)
-                        .join(QuizSessionFile, QuizSessionFile.file_id == File.id)
-                        .where(QuizSessionFile.quiz_session_id == session.id)
-                    )
-                    for f in file_results.scalars().all():
-                        if f.parsed_document:
-                            source_texts.append(f.parsed_document.normalized_text or "")
-
-                question_count = payload.get("question_count", session.question_count)
-                difficulty = payload.get("difficulty", session.difficulty)
-                question_types = payload.get("question_types", []) or [
-                    "multiple_choice",
-                    "ox",
-                    "short_answer",
-                    "fill_blank",
-                    "essay",
-                ]
-
-                concept_counts = {}
-                if session.user_id:
-                    recent_concepts_result = await db.execute(
-                        select(QuizItem.concept_key)
-                        .join(QuizSession, QuizSession.id == QuizItem.quiz_session_id)
-                        .where(QuizSession.user_id == session.user_id)
-                        .order_by(QuizItem.created_at.desc())
-                        .limit(20)
-                    )
-                    recent_concepts = [
-                        r[0] for r in recent_concepts_result.all() if r[0]
-                    ]
-                    for c in recent_concepts:
-                        concept_counts[c] = concept_counts.get(c, 0) + 1
-
-                source_context = (
-                    "\n\n".join(source_texts[:3])
-                    if source_texts
-                    else "No source material provided."
-                )
-                if not source_texts and session.source_mode.value == "document_based":
-                    session.status = QuizSessionStatus.generation_failed
-                    raise JobFailure("No source material available")
-
-                is_no_source = session.source_mode.value == "no_source"
-                topic = payload.get("topic") or None
-
-                resolved_difficulty = difficulty
-                if difficulty == "auto" and not is_no_source:
-                    from app.utils.ai_client import (
-                        call_ai_structured,
-                        DIFFICULTY_SELECTION_SCHEMA,
-                    )
-
-                    det_result, _ = await call_ai_structured(
-                        prompt=source_context[:4000],
-                        schema=DIFFICULTY_SELECTION_SCHEMA,
-                        system_message=SYSTEM_PROMPT_DIFFICULTY_SELECTION,
-                        model=cfg.eco_generation_model or cfg.balanced_generation_model,
-                        max_tokens=100,
-                    )
-                    resolved_difficulty = det_result.get("difficulty", "medium")
-                    if resolved_difficulty not in ("easy", "medium", "hard"):
-                        resolved_difficulty = "medium"
-
-                prompt = build_generation_prompt(
-                    source_context=source_context,
-                    question_count=question_count,
-                    difficulty=resolved_difficulty,
-                    question_types=question_types,
-                    concept_counts=concept_counts,
-                    is_no_source=is_no_source,
-                    topic=topic,
-                )
-
-                ai_result, tokens_used = await call_ai_with_fallback(
-                    prompt,
-                    GENERATION_SCHEMA,
-                    primary_model=session.generation_model_name
-                    or cfg.balanced_generation_model,
-                    fallback_model=cfg.eco_generation_model,
-                    system_message=get_generation_system_prompt(resolved_difficulty),
-                    cache_key=f"quiz_gen_{resolved_difficulty}_v1",
-                )
-
-                if ai_result.get("rejected"):
-                    session.status = QuizSessionStatus.generation_failed
-                    raise JobFailure(
-                        "INVALID_INPUT:"
-                        + ai_result.get(
-                            "rejection_reason",
-                            "퀴즈를 만들기 어려운 입력입니다. 학습하고 싶은 주제나 자료를 입력해 주세요.",
-                        )
-                    )
-
-                all_questions = ai_result.get("questions", [])
-                questions = (
-                    all_questions
-                    if question_count is None
-                    else all_questions[:question_count]
-                )
-                if not questions:
-                    session.status = QuizSessionStatus.generation_failed
-                    raise JobFailure("AI returned no questions")
-
-                if question_count is None:
-                    session.question_count = len(questions)
-
-                for i, q in enumerate(questions):
-                    item = QuizItem(
-                        quiz_session_id=session.id,
-                        item_order=i + 1,
-                        question_type=QuestionType(
-                            q.get("question_type", "multiple_choice")
-                        ),
-                        question_text=q.get("question_text", ""),
-                        options_json=q.get("options"),
-                        option_descriptions_json=q.get("option_descriptions"),
-                        correct_answer_json=q.get("correct_answer"),
-                        explanation_text=q.get("explanation", ""),
-                        source_refs_json={"refs": q.get("source_refs", [])},
-                        concept_key=q.get("concept_key", ""),
-                        concept_label=q.get("concept_label", ""),
-                        category_tag=q.get("category_tag", ""),
-                        difficulty=q.get("difficulty", difficulty),
-                        similarity_fingerprint=q.get("concept_key", ""),
-                    )
-                    db.add(item)
-
-                from app.tier_config import calculate_credit_cost
-                from app.services.usage_service import UsageService
-
-                _gen_actual_cost = calculate_credit_cost(
+                (
+                    questions,
                     tokens_used,
-                    session.generation_model_name or cfg.balanced_generation_model,
+                    resolved_difficulty,
+                ) = await _run_quiz_generation(db, session, payload)
+                _persist_quiz_items(db, session, questions, resolved_difficulty)
+
+                credit_estimate = payload.get("credit_estimate", 0.0)
+                await _adjust_generation_credits(
+                    db, session, tokens_used, credit_estimate
                 )
-                _gen_estimate = (job.payload_json or {}).get("credit_estimate", 0.0)
-                _gen_delta = _gen_actual_cost - _gen_estimate
-                if abs(_gen_delta) > 0.001 and session.user_id:
-                    await UsageService().adjust_credit(
-                        db, str(session.user_id), "quiz", _gen_delta
-                    )
 
                 session.status = QuizSessionStatus.ready
 

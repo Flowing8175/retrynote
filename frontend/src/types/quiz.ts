@@ -10,6 +10,7 @@ export interface QuizSessionCreate {
   source_mode: 'document_based' | 'no_source';
   topic: string | null;
   idempotency_key: string | null;
+  stream?: boolean;
 }
 
 export interface QuizSessionResponse {

@@ -256,11 +256,9 @@ export default function QuizTake() {
     queryFn: () => quizApi.getQuizSession(sessionId || ''),
     enabled: !!sessionId,
     refetchInterval: (query) =>
-      shouldStream || isStreaming
-        ? false
-        : query.state.data?.status === 'generating' || query.state.data?.status === 'draft'
-          ? QUIZ_REFRESH_INTERVAL_MS
-          : false,
+      query.state.data?.status === 'generating'
+        ? QUIZ_REFRESH_INTERVAL_MS
+        : false,
   });
 
   useEffect(() => {
@@ -287,11 +285,11 @@ export default function QuizTake() {
         return false;
       }
 
-      if (shouldStream || isStreaming) {
+      if (sessionData.status === 'draft') {
         return false;
       }
 
-      if (sessionData.status === 'draft' || sessionData.status === 'generating') {
+      if (sessionData.status === 'generating') {
         return QUIZ_REFRESH_INTERVAL_MS;
       }
 

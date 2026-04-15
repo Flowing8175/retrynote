@@ -45,6 +45,7 @@ from app.models.objection import Objection, ObjectionStatus
 from app.schemas.objection import ObjectionCreate, ObjectionResponse
 from app.middleware.auth import get_current_user
 from app.middleware.rate_limit_pro import pro_rate_limit
+from app.utils.sse import get_current_user_from_query_token, sse_stream
 from app.workers.celery_app import dispatch_task
 from app.services.usage_service import UsageService
 from app.tier_config import TIER_LIMITS, UserTier
@@ -299,18 +300,58 @@ async def create_quiz_session(
         },
     )
     db.add(job)
-    session.status = QuizSessionStatus.generating
+
+    if not req.stream:
+        session.status = QuizSessionStatus.generating
 
     await db.commit()
     await db.refresh(session)
 
-    dispatch_task("generate_quiz", [job.id])
+    if not req.stream:
+        dispatch_task("generate_quiz", [job.id])
 
     return QuizSessionResponse(
         quiz_session_id=session.id,
         status=session.status.value,
         job_id=job.id,
     )
+
+
+@router.get("/{session_id}/generate/stream")
+async def generate_quiz_stream(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_query_token),
+):
+    session = await get_owned_or_raise(
+        db,
+        QuizSession,
+        session_id,
+        current_user.id,
+        not_found_detail="Session not found",
+        forbidden_detail="Access denied",
+    )
+
+    if session.status not in (QuizSessionStatus.draft, QuizSessionStatus.generating):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Session is not awaiting generation (status: {session.status.value})",
+        )
+
+    job_result = await db.execute(
+        select(Job).where(
+            Job.target_type == "quiz_session",
+            Job.target_id == session_id,
+            Job.job_type == "quiz_generation",
+        )
+    )
+    job = job_result.scalar_one_or_none()
+    if not job:
+        raise HTTPException(status_code=404, detail="Generation job not found")
+
+    from app.services.quiz_service import stream_quiz_generation
+
+    return sse_stream(stream_quiz_generation(db, session, job))
 
 
 @router.get("/{session_id}", response_model=QuizSessionDetail)

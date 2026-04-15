@@ -208,6 +208,7 @@ export default function QuizNew() {
           source_mode: sourceMode,
           topic: sourceMode === 'no_source' ? (topic.trim() || null) : null,
           idempotency_key: crypto.randomUUID(),
+          stream: true,
         },
         abortControllerRef.current.signal
       );
