@@ -36,9 +36,9 @@ export default function StudyList() {
   return (
     <SkeletonTransition loading={isLoading} skeleton={<StudyListSkeleton />}>
       {isLoading ? null : (
-        <div className="max-w-4xl mx-auto space-y-8 py-10 animate-fade-in">
+         <div className="max-w-4xl mx-auto space-y-8 py-10 animate-fade-in">
           {/* Header */}
-          <section className="animate-fade-in-up space-y-2">
+          <section className="animate-fade-in-up space-y-2" data-tour="study-list">
             <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">학습</h1>
             <p className="text-base text-content-secondary">
               준비된 학습 자료를 선택하여 학습을 시작하세요.

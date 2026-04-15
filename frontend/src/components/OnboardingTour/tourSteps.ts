@@ -45,6 +45,18 @@ export function getTourSteps(navigate: NavigateFunction): Step[] {
       skipBeacon: true,
     },
     {
+      target: '[data-tour="study-list"]',
+      title: 'AI 학습 도구',
+      content:
+        '업로드한 자료를 선택하면 AI가 요약, 플래시카드, 마인드맵을 자동으로 생성합니다. AI 튜터에게 질문할 수도 있습니다.',
+      placement: 'bottom',
+      skipBeacon: true,
+      before: async () => {
+        navigate('/study');
+        await delay(400);
+      },
+    },
+    {
       target: '[data-tour="quiz-source"]',
       title: '퀴즈 생성',
       content: '업로드한 파일을 선택하면 AI가 해당 내용을 바탕으로 퀴즈를 만들어 드립니다.',

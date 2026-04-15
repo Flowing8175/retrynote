@@ -155,6 +155,7 @@ export function seedTourMockData(queryClient: QueryClient): void {
   };
 
   queryClient.setQueryData(['files', 1, '', null], filesMockData);
+  queryClient.setQueryData(['files', 'ready'], filesMockData);
 
   const quizConfigMockData: QuizConfig = {
     default_generation_model: 'gpt-4o-mini',
@@ -270,6 +271,7 @@ export function seedTourMockData(queryClient: QueryClient): void {
  */
 export function cleanupTourMockData(queryClient: QueryClient): void {
   queryClient.removeQueries({ queryKey: ['dashboard'] });
+  queryClient.removeQueries({ queryKey: ['files', 'ready'] });
   queryClient.removeQueries({ queryKey: ['files'] });
   queryClient.removeQueries({ queryKey: ['quiz-config'] });
   queryClient.removeQueries({ queryKey: ['wrongNotes'] });
