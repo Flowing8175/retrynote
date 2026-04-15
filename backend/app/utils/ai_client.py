@@ -469,7 +469,38 @@ async def _call_gemini_structured(
 
     if not response.text:
         raise ValueError("Gemini returned empty response")
-    result = json.loads(response.text)
+
+    # Detect truncated responses before attempting expensive JSON parse.
+    # Gemini truncates output at max_output_tokens, producing invalid JSON.
+    finish_reason = None
+    if response.candidates:
+        finish_reason = getattr(response.candidates[0], "finish_reason", None)
+    # finish_reason is an enum; normalize to string for comparison.
+    fr_str = str(finish_reason).upper() if finish_reason else ""
+    if "MAX_TOKENS" in fr_str or "LENGTH" in fr_str:
+        resp_len = len(response.text)
+        logger.warning(
+            "Gemini response truncated (finish_reason=%s, %d chars) for model %s",
+            finish_reason,
+            resp_len,
+            model,
+        )
+        raise ValueError(
+            f"Gemini response truncated at {resp_len} chars (finish_reason={finish_reason})"
+        )
+
+    try:
+        result = json.loads(response.text)
+    except json.JSONDecodeError:
+        resp_len = len(response.text)
+        logger.warning(
+            "Gemini returned invalid JSON (%d chars, finish_reason=%s) for model %s",
+            resp_len,
+            finish_reason,
+            model,
+        )
+        raise
+
     usage = response.usage_metadata
     total_tokens = 0
     if usage is not None:
@@ -568,13 +599,16 @@ async def call_ai_with_fallback(
     try:
         return await call_ai_structured(prompt, schema, model=primary_model, **kwargs)
     except Exception as e:
+        err_summary = f"{type(e).__name__}: {e}"
+        if len(err_summary) > 300:
+            err_summary = err_summary[:300] + "…"
         logger.warning(
-            "Primary model %s failed (%s: %s), retrying with fallback %s",
+            "Primary model %s failed (%s), retrying with fallback %s",
             primary_model,
-            type(e).__name__,
-            e,
+            err_summary,
             fallback_model,
         )
+        del e
         return await call_ai_structured(prompt, schema, model=fallback_model, **kwargs)
 
 

@@ -21,20 +21,25 @@ async def _with_heartbeat(
 ) -> AsyncGenerator[str, None]:
     it = source.__aiter__()
     pending: asyncio.Task[str] | None = None
-    while True:
-        if pending is None:
-            pending = asyncio.ensure_future(it.__anext__())
-        try:
-            chunk = await asyncio.wait_for(
-                asyncio.shield(pending), timeout=HEARTBEAT_INTERVAL_SECS
-            )
-            pending = None
-            yield chunk
-        except asyncio.TimeoutError:
-            yield ": keepalive\n\n"
-        except StopAsyncIteration:
-            pending = None
-            break
+    try:
+        while True:
+            if pending is None:
+                pending = asyncio.ensure_future(it.__anext__())
+            try:
+                chunk = await asyncio.wait_for(
+                    asyncio.shield(pending), timeout=HEARTBEAT_INTERVAL_SECS
+                )
+                pending = None
+                yield chunk
+            except asyncio.TimeoutError:
+                yield ": keepalive\n\n"
+            except StopAsyncIteration:
+                pending = None
+                break
+    finally:
+        if pending is not None and not pending.done():
+            pending.cancel()
+        await source.aclose()
 
 
 def sse_stream(generator: AsyncGenerator[str, None]) -> StreamingResponse:
