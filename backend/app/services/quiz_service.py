@@ -906,6 +906,9 @@ async def stream_quiz_generation(
         session.status = QuizSessionStatus.ready
         await db.commit()
         generation_completed = True
+        logger.info(
+            "SSE gen completed for session %s, %d items", session.id, len(items)
+        )
 
         for item in items:
             await db.refresh(item)
@@ -930,6 +933,9 @@ async def stream_quiz_generation(
             if i < len(items) - 1:
                 await asyncio.sleep(0.35)
 
+        logger.info(
+            "SSE streaming done for session %s, yielding done event", session.id
+        )
         yield sse_done()
 
     except JobFailure as e:
@@ -957,6 +963,15 @@ async def stream_quiz_generation(
                 pass
         yield sse_error(f"Generation failed: {e}")
     finally:
+        if not generation_completed:
+            logger.warning(
+                "SSE gen incomplete for session %s (status=%s, completed=%s)",
+                session.id,
+                session.status.value
+                if hasattr(session.status, "value")
+                else session.status,
+                generation_completed,
+            )
         if not generation_completed and session.status == QuizSessionStatus.generating:
             try:
                 await _dispatch_celery_fallback(job.id, session.id)
