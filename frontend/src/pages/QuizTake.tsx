@@ -5,12 +5,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import type { AnswerLogEntry, AnswerResponse } from '@/types';
+import type { QuizItemDetail } from '@/types/quiz';
 import { ChevronLeft, ChevronRight, AlertCircle, Waypoints } from 'lucide-react';
 import DiagramModal from '@/components/DiagramModal';
 import { getErrorMessage } from '@/utils/errorMessages';
 import QuizGeneratingScreen from '@/components/quiz/QuizGeneratingScreen';
 import QuizChoiceOptions from '@/components/quiz/QuizChoiceOptions';
 import QuizAnswerFeedback from '@/components/quiz/QuizAnswerFeedback';
+import { PillShimmer } from '@/components';
+import { useSSE } from '@/hooks/useSSE';
 import {
   QUESTION_TYPE_LABELS,
   DEFAULT_OX_OPTIONS,
@@ -21,6 +24,134 @@ import {
 const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded', 'closed']);
 
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
+
+function AnimatedText({ text, baseDelay = 0 }: { text: string; baseDelay?: number }) {
+  const words = text.split(/(\s+)/);
+  let wordIndex = 0;
+  return (
+    <>
+      {words.map((word, i) => {
+        const delay = baseDelay + Math.min(wordIndex * 40, 800);
+        if (!/\s/.test(word)) wordIndex++;
+        return (
+          <span
+            key={`${i}-${word}`}
+            className="coaching-word-fade"
+            style={{ animationDelay: `${delay}ms` }}
+          >
+            {word}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+const STAGE_LABELS: Record<string, string> = {
+  analyzing: '학습 자료를 분석하고 있습니다...',
+  generating: 'AI가 문항을 생성하고 있습니다...',
+  streaming_questions: '문항을 불러오고 있습니다...',
+};
+
+interface QuizStreamingViewProps {
+  stage: string | null;
+  items: QuizItemDetail[];
+  total: number;
+  onCancel: () => void;
+}
+
+function QuizStreamingView({ stage, items, total, onCancel }: QuizStreamingViewProps) {
+  const isStreamingQuestions = stage === 'streaming_questions';
+  const progressPct = total > 0 ? (items.length / total) * 100 : 0;
+
+  return (
+    <div className="max-w-4xl mx-auto py-8 space-y-12 animate-fade-in">
+      <header className="space-y-4">
+        <div className="flex items-end justify-between">
+          <div className="space-y-1">
+            <div className="text-xs font-medium text-content-muted">
+              {isStreamingQuestions ? '문항 생성 중' : '준비 중'}
+            </div>
+            {isStreamingQuestions ? (
+              <div className="text-3xl font-semibold tabular-nums text-white">
+                <span className="text-white font-semibold">{items.length}</span>
+                <span className="text-content-secondary text-2xl font-normal"> / {total}</span>
+              </div>
+            ) : (
+              <div className="text-3xl font-semibold text-white">...</div>
+            )}
+          </div>
+          <button
+            onClick={onCancel}
+            className="flex items-center justify-center h-9 px-4 bg-surface border border-white/[0.05] rounded-xl text-sm text-content-secondary hover:bg-surface-hover hover:text-white transition-colors"
+          >
+            취소
+          </button>
+        </div>
+        <div className="h-2 bg-surface rounded-full overflow-hidden border border-white/[0.05]">
+          <div
+            className="h-full bg-brand-500 transition-all duration-500 ease-out"
+            style={{ width: isStreamingQuestions ? `${progressPct}%` : '0%' }}
+          />
+        </div>
+      </header>
+
+      {!isStreamingQuestions ? (
+        <div className="space-y-8">
+          <div className="flex flex-col items-start gap-2.5 animate-fade-in-up stagger-1">
+            <PillShimmer width={220} />
+            <PillShimmer width={160} delay={0.3} opacity={0.75} />
+            <PillShimmer width={200} delay={0.55} opacity={0.55} />
+            <PillShimmer width={120} delay={0.8} opacity={0.38} />
+            <PillShimmer width={80} delay={1.0} opacity={0.22} />
+          </div>
+          {stage && (
+            <p className="text-base text-content-secondary animate-fade-in">
+              {STAGE_LABELS[stage] ?? stage}
+            </p>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {items.map((item, idx) => {
+            const qType = typeof item.question_type === 'string' ? item.question_type : null;
+            const typeLabel = qType ? (QUESTION_TYPE_LABELS[qType] ?? qType.replace('_', ' ')) : '문항';
+            const cardDelay = Math.min(idx * 60, 600);
+            return (
+              <div
+                key={item.id}
+                className="bg-surface border border-white/[0.05] rounded-2xl px-6 py-5 space-y-3 coaching-word-fade"
+                style={{ animationDelay: `${cardDelay}ms` }}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2.5 py-1 rounded-md border border-brand-500/20">
+                    {typeLabel}
+                  </span>
+                  <span className="text-xs font-medium text-content-muted tabular-nums">
+                    {idx + 1}
+                  </span>
+                </div>
+                <p className="text-base font-medium text-content-primary leading-relaxed">
+                  <AnimatedText text={item.question_text} baseDelay={cardDelay + 80} />
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div className="pt-4">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="text-sm text-content-muted underline underline-offset-2 transition-colors hover:text-white"
+        >
+          취소하고 돌아가기
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function formatCorrectAnswerLabel(
   correctAnswer: Record<string, unknown> | null | undefined,
@@ -115,14 +246,21 @@ export default function QuizTake() {
   const justCompletedRef = useRef(false);
   const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
 
+  const [streamedItems, setStreamedItems] = useState<QuizItemDetail[]>([]);
+  const [streamStage, setStreamStage] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamTotal, setStreamTotal] = useState(0);
+
   const { data: sessionData, isLoading: sessionLoading, isError: sessionIsError, error: sessionError } = useQuery({
     queryKey: ['quizSession', sessionId],
     queryFn: () => quizApi.getQuizSession(sessionId || ''),
     enabled: !!sessionId,
     refetchInterval: (query) =>
-      query.state.data?.status === 'generating' || query.state.data?.status === 'draft'
-        ? QUIZ_REFRESH_INTERVAL_MS
-        : false,
+      shouldStream || isStreaming
+        ? false
+        : query.state.data?.status === 'generating' || query.state.data?.status === 'draft'
+          ? QUIZ_REFRESH_INTERVAL_MS
+          : false,
   });
 
   useEffect(() => {
@@ -149,6 +287,10 @@ export default function QuizTake() {
         return false;
       }
 
+      if (shouldStream || isStreaming) {
+        return false;
+      }
+
       if (sessionData.status === 'draft' || sessionData.status === 'generating') {
         return QUIZ_REFRESH_INTERVAL_MS;
       }
@@ -160,6 +302,39 @@ export default function QuizTake() {
       return false;
     },
   });
+
+  const shouldStream = !!sessionData && sessionData.status === 'draft' && !!sessionId && !itemsData?.length;
+
+  const { close: closeSSE } = useSSE(
+    `/quiz-sessions/${sessionId}/generate/stream`,
+    {
+      enabled: shouldStream,
+      onMessage: (data: unknown) => {
+        const msg = data as { type: string; stage?: string; total?: number; item?: QuizItemDetail; index?: number };
+        if (msg.type === 'stage') {
+          setStreamStage(msg.stage ?? null);
+          if (msg.stage === 'streaming_questions' && msg.total) {
+            setStreamTotal(msg.total);
+          }
+          setIsStreaming(true);
+        } else if (msg.type === 'question' && msg.item) {
+          setStreamedItems(prev => [...prev, msg.item!]);
+        }
+      },
+      onDone: () => {
+        setIsStreaming(false);
+        setStreamStage(null);
+        queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] });
+        queryClient.invalidateQueries({ queryKey: ['quizItems', sessionId] });
+      },
+      onError: () => {
+        setIsStreaming(false);
+        setStreamStage(null);
+        queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] });
+        queryClient.invalidateQueries({ queryKey: ['quizItems', sessionId] });
+      },
+    }
+  );
 
   const isCompleted = !!sessionData && COMPLETED_STATUSES.has(sessionData.status);
   const isInProgress = !!sessionData && sessionData.status === 'in_progress';
@@ -491,7 +666,21 @@ export default function QuizTake() {
     );
   }
 
-  if (sessionData.status === 'draft' || sessionData.status === 'generating') {
+  if (shouldStream || isStreaming) {
+    return (
+      <QuizStreamingView
+        stage={streamStage}
+        items={streamedItems}
+        total={streamTotal}
+        onCancel={() => {
+          closeSSE();
+          navigate('/quiz/new');
+        }}
+      />
+    );
+  }
+
+  if (sessionData.status === 'generating') {
     return <QuizGeneratingScreen onCancel={() => navigate('/quiz/new')} />;
   }
 
