@@ -127,6 +127,7 @@ export function useSSE(url: string, options: SSEOptions = {}): SSEResult {
       });
 
       es.addEventListener('done', () => {
+        closedManuallyRef.current = true;
         setSseStatus('closed');
         onDoneRef.current?.();
         cleanup();
