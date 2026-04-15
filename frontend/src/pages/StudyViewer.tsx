@@ -1,6 +1,6 @@
 import { useState, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, FileText, FileX2, X, Circle, Loader2, Check, AlertTriangle } from 'lucide-react';
+import { ChevronLeft, FileText, FileX2, X, Circle, Loader2, Check, AlertTriangle, Pencil } from 'lucide-react';
 import { PdfViewer } from '@/components/study/PdfViewer';
 import { useStudyStatus } from '@/api/study';
 import { API_BASE_URL } from '@/api/createApiClient';
@@ -194,6 +194,14 @@ export default function StudyViewer() {
                   </button>
                 );
               })}
+              <div className="flex-1" />
+              <button
+                onClick={() => navigate('/quiz/new', { state: { preSelectedFileId: fileId } })}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-300 hover:text-white bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 rounded-lg transition-colors shrink-0"
+              >
+                <Pencil size={12} />
+                퀴즈 만들러 가기
+              </button>
             </div>
           </div>
 

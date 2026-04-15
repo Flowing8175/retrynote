@@ -116,7 +116,7 @@ export default function QuizNew() {
   const noSourceModal = useModalState();
   const [noSourceConfirmed, setNoSourceConfirmed] = useState(false);
   const location = useLocation();
-  const locationState = location.state as { inputError?: string; inputSourceMode?: string } | null;
+  const locationState = location.state as { inputError?: string; inputSourceMode?: string; preSelectedFileId?: string } | null;
   const [topic, setTopic] = useState('');
   const [topicError, setTopicError] = useState<string | null>(() => {
     if (locationState?.inputSourceMode === 'no_source' && locationState.inputError) {
@@ -191,6 +191,19 @@ export default function QuizNew() {
 
   const folders = useMemo(() => (Array.isArray(foldersData) ? foldersData : []), [foldersData]);
   const allFiles = useMemo(() => (Array.isArray(filesData?.files) ? filesData.files : []), [filesData?.files]);
+
+  const preSelectedApplied = useRef(false);
+  useEffect(() => {
+    const preId = locationState?.preSelectedFileId;
+    if (!preId || preSelectedApplied.current || allFiles.length === 0) return;
+    const match = allFiles.find((f) => f.id === preId);
+    if (match) {
+      setSelectedFileIds([preId]);
+      setSourceMode('document_based');
+      preSelectedApplied.current = true;
+      window.history.replaceState({}, '');
+    }
+  }, [allFiles, locationState?.preSelectedFileId]);
 
   const createQuizMutation = useMutation({
     mutationFn: () => {
