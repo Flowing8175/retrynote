@@ -4,6 +4,7 @@ let initialized = false;
 let initPromise: Promise<void> | null = null;
 let scriptPromise: Promise<void> | null = null;
 let checkoutCloseCallback: (() => void) | null = null;
+let checkoutCompleteCallback: (() => void) | null = null;
 
 function loadScript(): Promise<void> {
   if (window.Paddle) return Promise.resolve();
@@ -34,6 +35,10 @@ async function doInit(): Promise<void> {
     token: config.clientToken,
     ...(config.environment === 'sandbox' ? { environment: 'sandbox' as const } : {}),
     eventCallback: (event) => {
+      if (event.name === 'checkout.completed' && checkoutCompleteCallback) {
+        checkoutCompleteCallback();
+        checkoutCompleteCallback = null;
+      }
       if (event.name === 'checkout.closed' && checkoutCloseCallback) {
         checkoutCloseCallback();
         checkoutCloseCallback = null;
@@ -57,9 +62,11 @@ async function ensureInitialized(): Promise<void> {
 export async function openPaddleCheckout(
   transactionId: string,
   onClose?: () => void,
+  onComplete?: () => void,
 ): Promise<void> {
   await ensureInitialized();
   checkoutCloseCallback = onClose ?? null;
+  checkoutCompleteCallback = onComplete ?? null;
   window.Paddle!.Checkout.open({
     transactionId,
     settings: {

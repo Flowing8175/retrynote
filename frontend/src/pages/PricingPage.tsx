@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { billingApi } from '@/api/billing';
 import { openPaddleCheckout } from '@/lib/paddle';
 import { useAuthStore } from '@/stores/authStore';
@@ -79,12 +80,20 @@ const TIERS: UserTier[] = ['free', 'lite', 'standard', 'pro'];
 
 export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
+  const queryClient = useQueryClient();
   const [loadingTier, setLoadingTier] = useState<'lite' | 'standard' | 'pro' | null>(null);
   const [loadingCredit, setLoadingCredit] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const user = useAuthStore((s) => s.user);
   const usageStatus = useAuthStore((s) => s.usageStatus);
+
+  const invalidateAfterCheckout = useCallback(() => {
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['usageStatus'] });
+    }, 2000);
+  }, [queryClient]);
 
   const currentTier: UserTier | null = user ? (usageStatus?.tier ?? 'free') : null;
 
@@ -93,7 +102,11 @@ export default function PricingPage() {
     setCheckoutError(null);
     try {
       const result = await billingApi.checkoutSubscription(tier, billingCycle);
-      await openPaddleCheckout(result.transactionId, () => setLoadingTier(null));
+      await openPaddleCheckout(
+        result.transactionId,
+        () => setLoadingTier(null),
+        invalidateAfterCheckout,
+      );
     } catch (err) {
       console.error('[Paddle checkout]', err);
       setCheckoutError('결제 창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.');
@@ -106,7 +119,11 @@ export default function PricingPage() {
     setCheckoutError(null);
     try {
       const result = await billingApi.checkoutCredits(creditType, packSize);
-      await openPaddleCheckout(result.transactionId, () => setLoadingCredit(null));
+      await openPaddleCheckout(
+        result.transactionId,
+        () => setLoadingCredit(null),
+        invalidateAfterCheckout,
+      );
     } catch (err) {
       console.error('[Paddle checkout]', err);
       setCheckoutError('결제 창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.');

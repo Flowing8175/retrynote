@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, CreditCard, HardDrive, CheckCircle } from 'lucide-react';
@@ -206,8 +206,16 @@ export default function BillingPage() {
   useEffect(() => {
     if (isSuccess) {
       queryClient.invalidateQueries({ queryKey: ['usageStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['subscription'] });
     }
   }, [isSuccess, queryClient]);
+
+  const invalidateAfterCheckout = useCallback(() => {
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      queryClient.invalidateQueries({ queryKey: ['usageStatus'] });
+    }, 2000);
+  }, [queryClient]);
 
   const { data: usageData, isLoading: usageLoading } = useUsageStatus();
 
@@ -249,7 +257,11 @@ export default function BillingPage() {
     setCheckoutError(null);
     try {
       const result = await billingApi.checkoutCredits(pack.creditType, pack.packSize);
-      await openPaddleCheckout(result.transactionId, () => setPurchasingPack(null));
+      await openPaddleCheckout(
+        result.transactionId,
+        () => setPurchasingPack(null),
+        invalidateAfterCheckout,
+      );
     } catch (err) {
       console.error('[Paddle checkout]', err);
       setCheckoutError('결제 창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.');
