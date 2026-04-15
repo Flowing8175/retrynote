@@ -220,9 +220,6 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
               className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-surface border border-white/[0.05] rounded-3xl shadow-xl cursor-pointer hover:border-brand-500/30 transition-colors"
               style={{ backfaceVisibility: 'hidden' }}
             >
-              <span className="text-xs font-semibold uppercase tracking-widest text-brand-400 mb-4">
-                질문
-              </span>
               <p className="text-xl font-semibold text-content-primary text-center leading-relaxed">
                 {currentCard?.front}
               </p>
@@ -238,9 +235,6 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
                 transform: 'rotateY(180deg)',
               }}
             >
-              <span className="text-xs font-semibold uppercase tracking-widest text-semantic-success mb-4">
-                답변
-              </span>
               <p className="text-lg text-content-primary text-center leading-relaxed">
                 {currentCard?.back}
               </p>
