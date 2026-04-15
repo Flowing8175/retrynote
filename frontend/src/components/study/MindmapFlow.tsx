@@ -75,11 +75,9 @@ const HANDLE_STYLE: React.CSSProperties = {
 function MindmapNode({ data }: { data: { label: string; depth: number } }) {
   return (
     <div style={getNodeStyle(data.depth)}>
-      <Handle type="target" position={Position.Left} id="tl" style={HANDLE_STYLE} />
-      <Handle type="target" position={Position.Right} id="tr" style={HANDLE_STYLE} />
+      <Handle type="target" position={Position.Top} style={HANDLE_STYLE} />
       <span style={{ wordBreak: 'break-word' }}>{data.label}</span>
-      <Handle type="source" position={Position.Left} id="sl" style={HANDLE_STYLE} />
-      <Handle type="source" position={Position.Right} id="sr" style={HANDLE_STYLE} />
+      <Handle type="source" position={Position.Bottom} style={HANDLE_STYLE} />
     </div>
   );
 }
@@ -90,6 +88,11 @@ interface MindmapFlowProps {
   nodes: MindmapFlowNode[];
   edges: MindmapFlowEdge[];
 }
+
+const DEFAULT_EDGE_OPTIONS = {
+  type: 'smoothstep' as const,
+  style: { stroke: '#4B5563', strokeWidth: 1.5 },
+};
 
 export default function MindmapFlow({ nodes, edges }: MindmapFlowProps) {
   return (
@@ -105,6 +108,7 @@ export default function MindmapFlow({ nodes, edges }: MindmapFlowProps) {
       zoomOnScroll
       nodeTypes={NODE_TYPES}
       nodeOrigin={[0.5, 0.5]}
+      defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
       proOptions={{ hideAttribution: true }}
       style={{ background: '#111827', width: '100%', height: '100%' }}
     >

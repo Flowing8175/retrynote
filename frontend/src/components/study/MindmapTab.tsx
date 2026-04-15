@@ -7,8 +7,8 @@ import type { MindmapFlowNode, MindmapFlowEdge } from './MindmapFlow';
 
 const MindmapFlow = lazy(() => import('./MindmapFlow'));
 
-// BFS depth computation — needed because backend nodes lack `depth` but
-// MindmapFlow's getNodeStyle() requires it for visual hierarchy styling.
+// Subtree-width-aware tree layout — computes depth and positions so that
+// sibling subtrees never overlap and children are centered under parents.
 function enrichWithDepth(
   rawNodes: StudyMindmapNode[],
   rawEdges: StudyMindmapEdge[],
@@ -36,10 +36,75 @@ function enrichWithDepth(
     }
   }
 
+  // Node widths per depth (must match MindmapFlow getNodeStyle maxWidth + padding)
+  const NODE_WIDTHS = [220, 180, 160];
+  const H_GAP = 40;
+  const V_SPACING = 160;
+
+  function nodeWidth(nodeId: string): number {
+    const d = depthMap.get(nodeId) ?? 0;
+    return NODE_WIDTHS[Math.min(d, NODE_WIDTHS.length - 1)];
+  }
+
+  // Bottom-up: compute how wide each subtree needs to be
+  const subtreeW = new Map<string, number>();
+
+  function calcWidth(nodeId: string): number {
+    if (subtreeW.has(nodeId)) return subtreeW.get(nodeId)!;
+    const children = childrenMap.get(nodeId) ?? [];
+    if (children.length === 0) {
+      const w = nodeWidth(nodeId);
+      subtreeW.set(nodeId, w);
+      return w;
+    }
+    let total = 0;
+    for (const c of children) total += calcWidth(c);
+    total += (children.length - 1) * H_GAP;
+    const w = Math.max(nodeWidth(nodeId), total);
+    subtreeW.set(nodeId, w);
+    return w;
+  }
+
+  // Top-down: place each node centered in its allocated space
+  const positions = new Map<string, { x: number; y: number }>();
+
+  function place(nodeId: string, centerX: number) {
+    if (positions.has(nodeId)) return; // guard against multi-parent DAGs
+    const d = depthMap.get(nodeId) ?? 0;
+    positions.set(nodeId, { x: centerX, y: d * V_SPACING });
+
+    const children = childrenMap.get(nodeId) ?? [];
+    if (children.length === 0) return;
+
+    let totalW = 0;
+    for (const c of children) totalW += (subtreeW.get(c) ?? 0);
+    totalW += (children.length - 1) * H_GAP;
+
+    let x = centerX - totalW / 2;
+    for (const c of children) {
+      const cw = subtreeW.get(c) ?? 0;
+      place(c, x + cw / 2);
+      x += cw + H_GAP;
+    }
+  }
+
+  for (const r of roots) calcWidth(r.id);
+
+  let totalRoots = 0;
+  for (const r of roots) totalRoots += (subtreeW.get(r.id) ?? 0);
+  totalRoots += Math.max(0, roots.length - 1) * H_GAP;
+
+  let rx = -totalRoots / 2;
+  for (const r of roots) {
+    const rw = subtreeW.get(r.id) ?? 0;
+    place(r.id, rx + rw / 2);
+    rx += rw + H_GAP;
+  }
+
   const nodes: MindmapFlowNode[] = rawNodes.map((n) => ({
     id: n.id,
     type: n.type ?? 'mindmap',
-    position: n.position,
+    position: positions.get(n.id) ?? n.position,
     data: { label: String(n.data?.label ?? n.id), depth: depthMap.get(n.id) ?? 0 },
   }));
 
