@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { adminApi } from '@/api';
 import type { AdminJobItem, AdminTabProps } from '@/types';
@@ -49,6 +49,8 @@ function SpinnerIcon() {
 export default function AdminJobsTab({ isVerified, activeTab }: AdminTabProps) {
   const [statusFilter, setStatusFilter] = useState('');
   const [jobTypeFilter, setJobTypeFilter] = useState('');
+  const [isTailMode, setIsTailMode] = useState(false);
+  const [localJobs, setLocalJobs] = useState<AdminJobItem[]>([]);
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-jobs', statusFilter, jobTypeFilter],
@@ -56,6 +58,33 @@ export default function AdminJobsTab({ isVerified, activeTab }: AdminTabProps) {
     enabled: isVerified && activeTab === 'jobs',
     refetchInterval: 10_000,
   });
+
+  useEffect(() => {
+    if (data?.jobs) {
+      setLocalJobs(data.jobs);
+    }
+  }, [data]);
+
+  useEffect(() => {
+    if (!isTailMode) return;
+    const id = setInterval(async () => {
+      try {
+        const fresh = await adminApi.listJobs(statusFilter || undefined, jobTypeFilter || undefined);
+        setLocalJobs((prev) => {
+          const existingIds = new Set(prev.map((j) => j.id));
+          const newJobs = fresh.jobs.filter((j) => !existingIds.has(j.id));
+          const updatedPrev = prev.map((j) => {
+            const freshJob = fresh.jobs.find((fj) => fj.id === j.id);
+            return freshJob ?? j;
+          });
+          return newJobs.length > 0 ? [...newJobs, ...updatedPrev] : updatedPrev;
+        });
+      } catch {
+        void 0;
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [isTailMode, statusFilter, jobTypeFilter]);
 
   const retryMutation = useMutationWithInvalidation(
     ['admin-jobs'],
@@ -67,8 +96,8 @@ export default function AdminJobsTab({ isVerified, activeTab }: AdminTabProps) {
     (id: string) => adminApi.cancelJob(id),
   );
 
-  const jobs = data?.jobs ?? [];
-  const total = data?.total ?? 0;
+  const jobs = localJobs;
+  const total = data?.total ?? localJobs.length;
 
   return (
     <section className="space-y-3">
@@ -102,6 +131,21 @@ export default function AdminJobsTab({ isVerified, activeTab }: AdminTabProps) {
             ))}
           </select>
         </div>
+
+        <label className="ml-3 flex cursor-pointer items-center gap-2">
+          <input
+            type="checkbox"
+            checked={isTailMode}
+            onChange={(e) => setIsTailMode(e.target.checked)}
+            className="h-3.5 w-3.5 rounded border-white/20 bg-surface accent-brand-500"
+          />
+          <span className={`text-xs font-medium ${isTailMode ? 'text-brand-300' : 'text-content-muted'}`}>
+            실시간 테일 모드
+          </span>
+          {isTailMode && (
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-semantic-success" />
+          )}
+        </label>
 
         <span className="ml-auto font-mono text-xs text-content-muted">{total}건</span>
         {isLoading && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-400" />}
