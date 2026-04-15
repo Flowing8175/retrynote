@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
-import { BookOpen, Sparkles, ChevronRight, AlertTriangle, NotebookPen } from 'lucide-react';
+import { BookOpen, Sparkles, ChevronRight, AlertTriangle, NotebookPen, Check } from 'lucide-react';
 import { retryApi, wrongNotesApi } from '@/api';
 import { OptionGroup } from '@/components/ui';
 import { QuestionCountPicker } from '@/components/quiz/QuestionCountPicker';
@@ -35,7 +35,7 @@ export default function Retry() {
   const [autoCount, setAutoCount] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [creditError, setCreditError] = useState(false);
-  const [selectedManualConceptKey, setSelectedManualConceptKey] = useState('');
+  const [selectedManualConceptKeys, setSelectedManualConceptKeys] = useState<Set<string>>(new Set());
   const [selectedFileGroup, setSelectedFileGroup] = useState<string | null>(null);
   const { ref: section2Ref, capture: captureSection2 } = useFlip<HTMLElement>();
 
@@ -128,31 +128,32 @@ export default function Retry() {
 
   useEffect(() => {
     if (fileGroupConcepts.length === 0) {
-      if (selectedManualConceptKey !== '') {
-        setSelectedManualConceptKey('');
+      if (selectedManualConceptKeys.size > 0) {
+        setSelectedManualConceptKeys(new Set());
       }
       return;
     }
 
-    const hasSelectedOption = fileGroupConcepts.some(({ key }) => key === selectedManualConceptKey);
+    const validKeys = new Set(fileGroupConcepts.map(({ key }) => key));
+    const filtered = new Set([...selectedManualConceptKeys].filter((k) => validKeys.has(k)));
 
-    if (!hasSelectedOption) {
-      setSelectedManualConceptKey(fileGroupConcepts[0].key);
+    if (filtered.size !== selectedManualConceptKeys.size) {
+      setSelectedManualConceptKeys(filtered.size > 0 ? filtered : new Set([fileGroupConcepts[0].key]));
     }
-  }, [fileGroupConcepts, selectedManualConceptKey]);
+  }, [fileGroupConcepts, selectedManualConceptKeys]);
 
   const createRetryMutation = useMutation({
     mutationFn: () => {
       const source =
         conceptMode === 'ai'
           ? 'dashboard_recommendation'
-          : selectedManualConceptKey
+          : selectedManualConceptKeys.size > 0
             ? 'concept_manual'
             : 'wrong_notes';
 
       return retryApi.createRetrySet({
         source,
-        concept_keys: conceptMode === 'manual' && selectedManualConceptKey ? [selectedManualConceptKey] : null,
+        concept_keys: conceptMode === 'manual' && selectedManualConceptKeys.size > 0 ? [...selectedManualConceptKeys] : null,
         size: autoCount ? null : Math.max(1, Math.min(questionCount, 20)),
       });
     },
@@ -242,7 +243,7 @@ export default function Retry() {
                     setSelectedFileGroup(
                       sv === '__all__' ? (fileGroupsForConcepts[0]?.fileId ?? '__ai__') : sv
                     );
-                    setSelectedManualConceptKey('');
+                    setSelectedManualConceptKeys(new Set());
                   }}
                   size="sm"
                   layout="wrap"
@@ -259,7 +260,7 @@ export default function Retry() {
             <div className="space-y-2">
               {fileGroupConcepts.length > 0 ? (
                 fileGroupConcepts.map((concept) => {
-                  const isSelected = selectedManualConceptKey === concept.key;
+                  const isSelected = selectedManualConceptKeys.has(concept.key);
                   return (
                     <div
                       key={concept.key}
@@ -268,8 +269,27 @@ export default function Retry() {
                           ? 'bg-brand-500/5 border-brand-500/30'
                           : 'bg-surface-deep border-white/[0.05] hover:bg-surface-hover'
                       }`}
-                      onClick={() => setSelectedManualConceptKey(concept.key)}
+                      onClick={() => {
+                        setSelectedManualConceptKeys((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(concept.key)) {
+                            next.delete(concept.key);
+                          } else {
+                            next.add(concept.key);
+                          }
+                          return next;
+                        });
+                      }}
                     >
+                      <div
+                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition-colors ${
+                          isSelected
+                            ? 'bg-brand-500 border-brand-500'
+                            : 'border-white/20 group-hover:border-white/40'
+                        }`}
+                      >
+                        {isSelected && <Check size={14} className="text-brand-900" />}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <div
                           className={`text-sm font-medium truncate transition-colors ${
@@ -279,7 +299,6 @@ export default function Retry() {
                           {concept.label}
                         </div>
                       </div>
-
                     </div>
                   );
                 })
