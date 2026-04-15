@@ -14,7 +14,9 @@
 Server: `ubuntu@134.185.101.134` (SSH key: `~/.ssh/oracle.key`)
 **Hardware: Oracle Cloud Always-Free — 2 vCPU, 1 GB RAM. Extremely constrained. Never run memory-heavy operations (large builds, multiple concurrent processes, heavy DB queries) on the server. Build frontend locally and rsync the dist.**
 App dir on server: `/home/retrynote/app`
-Services: `retrynote-api` (uvicorn, port 8001), `retrynote-worker` (celery)
+Services: `retrynote-api` (uvicorn, port 8001, **1 worker**), `retrynote-worker` (celery)
+
+**Critical: uvicorn MUST run with `--workers 1`.** With 2 workers, AI API calls (Gemini/OpenAI SDK imports + HTTP) cause memory pressure on the 1GB server, and the kernel SIGKILL-s worker processes silently. The systemd service file (`/etc/systemd/system/retrynote-api.service`) controls this — the deploy workflow does NOT overwrite it.
 
 ## Secrets & Environment
 
