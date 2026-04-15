@@ -23,6 +23,7 @@ import {
 const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded', 'closed']);
 
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
+const GENERATING_TIMEOUT_MS = 180_000;
 
 function AnimatedText({ text, baseDelay = 0 }: { text: string; baseDelay?: number }) {
   const words = text.split(/(\s+)/);
@@ -247,6 +248,8 @@ export default function QuizTake() {
   const [streamStage, setStreamStage] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamTotal, setStreamTotal] = useState(0);
+  const [streamFailed, setStreamFailed] = useState(false);
+  const [generatingTooLong, setGeneratingTooLong] = useState(false);
 
   const { data: sessionData, isLoading: sessionLoading, isError: sessionIsError, error: sessionError } = useQuery({
     queryKey: ['quizSession', sessionId],
@@ -267,6 +270,16 @@ export default function QuizTake() {
       });
     }
   }, [sessionData?.status, sessionData?.error_message, sessionData?.source_mode, navigate]);
+
+  useEffect(() => {
+    const isGenerating = sessionData?.status === 'generating' || isStreaming;
+    if (!isGenerating) {
+      setGeneratingTooLong(false);
+      return;
+    }
+    const timer = setTimeout(() => setGeneratingTooLong(true), GENERATING_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [sessionData?.status, isStreaming]);
 
   const {
     data: itemsData,
@@ -298,7 +311,7 @@ export default function QuizTake() {
     },
   });
 
-  const shouldStream = !!sessionData && sessionData.status === 'draft' && !!sessionId && !itemsData?.length;
+  const shouldStream = !!sessionData && sessionData.status === 'draft' && !!sessionId && !itemsData?.length && !streamFailed;
 
   const { close: closeSSE } = useSSE(
     `/quiz-sessions/${sessionId}/generate/stream`,
@@ -325,6 +338,7 @@ export default function QuizTake() {
       onError: () => {
         setIsStreaming(false);
         setStreamStage(null);
+        setStreamFailed(true);
         queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] });
         queryClient.invalidateQueries({ queryKey: ['quizItems', sessionId] });
       },
@@ -661,7 +675,7 @@ export default function QuizTake() {
     );
   }
 
-  if (shouldStream || isStreaming) {
+  if ((shouldStream || isStreaming) && !generatingTooLong) {
     return (
       <QuizStreamingView
         stage={streamStage}
@@ -675,16 +689,18 @@ export default function QuizTake() {
     );
   }
 
-  if (sessionData.status === 'generating') {
+  if (sessionData.status === 'generating' && !generatingTooLong) {
     return <QuizGeneratingScreen onCancel={() => navigate('/quiz/new')} />;
   }
 
-  if (sessionData.status === 'generation_failed') {
+  if (sessionData.status === 'generation_failed' || generatingTooLong) {
     return (
       <div className="max-w-3xl mx-auto py-32 text-center space-y-6">
         <AlertCircle size={64} className="mx-auto text-semantic-error" />
         <div className="space-y-3">
-          <h1 className="text-3xl font-semibold text-white">퀴즈 생성에 실패했습니다</h1>
+          <h1 className="text-3xl font-semibold text-white">
+            {generatingTooLong ? '퀴즈 생성이 너무 오래 걸리고 있습니다' : '퀴즈 생성에 실패했습니다'}
+          </h1>
           <p className="text-base text-content-secondary leading-relaxed">
             문항을 준비하지 못했습니다. 다시 생성해 주세요.
           </p>

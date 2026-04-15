@@ -407,11 +407,16 @@ async def _call_gemini_structured(
             kwargs["system_instruction"] = system_message
         return types.GenerateContentConfig(**kwargs)
 
+    _GEMINI_REQUEST_TIMEOUT = 120
+
     try:
-        response = await gemini.aio.models.generate_content(
-            model=model,
-            contents=prompt,
-            config=_build_config(use_cache=True),
+        response = await asyncio.wait_for(
+            gemini.aio.models.generate_content(
+                model=model,
+                contents=prompt,
+                config=_build_config(use_cache=True),
+            ),
+            timeout=_GEMINI_REQUEST_TIMEOUT,
         )
     except Exception as exc:
         if cache_name and _is_cache_not_found_error(exc):
@@ -422,10 +427,13 @@ async def _call_gemini_structured(
             )
             _gemini_cache_registry.evict(model, system_message)
             cache_name = None
-            response = await gemini.aio.models.generate_content(
-                model=model,
-                contents=prompt,
-                config=_build_config(use_cache=False),
+            response = await asyncio.wait_for(
+                gemini.aio.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=_build_config(use_cache=False),
+                ),
+                timeout=_GEMINI_REQUEST_TIMEOUT,
             )
         else:
             raise

@@ -836,6 +836,22 @@ def _serialize_quiz_item(item: QuizItem) -> dict:
     }
 
 
+async def _dispatch_celery_fallback(job_id: str, session_id: str) -> bool:
+    try:
+        from app.workers.celery_app import dispatch_task
+
+        dispatch_task("generate_quiz", [job_id])
+        logger.info(
+            "Dispatched Celery fallback for session %s (job %s)",
+            session_id,
+            job_id,
+        )
+        return True
+    except Exception as exc:
+        logger.error("Failed to dispatch Celery fallback: %s", exc)
+        return False
+
+
 async def stream_quiz_generation(
     db: AsyncSession,
     session: QuizSession,
@@ -843,7 +859,9 @@ async def stream_quiz_generation(
 ) -> AsyncGenerator[str, None]:
     """SSE generator: runs quiz generation and streams items one-by-one."""
     from app.utils.sse import sse_data, sse_error, sse_done
+    from app.config import settings as _cfg
 
+    generation_completed = False
     try:
         session.status = QuizSessionStatus.generating
         await db.commit()
@@ -854,8 +872,9 @@ async def stream_quiz_generation(
 
         yield sse_data({"type": "stage", "stage": "generating"})
 
-        questions, tokens_used, resolved_difficulty = await _run_quiz_generation(
-            db, session, payload
+        questions, tokens_used, resolved_difficulty = await asyncio.wait_for(
+            _run_quiz_generation(db, session, payload),
+            timeout=_cfg.generation_timeout,
         )
 
         items = _persist_quiz_items(db, session, questions, resolved_difficulty)
@@ -865,6 +884,7 @@ async def stream_quiz_generation(
 
         session.status = QuizSessionStatus.ready
         await db.commit()
+        generation_completed = True
 
         for item in items:
             await db.refresh(item)
@@ -899,17 +919,28 @@ async def stream_quiz_generation(
         except Exception:
             pass
         yield sse_error(str(e))
+    except GeneratorExit:
+        raise
     except Exception as e:
         logger.exception(
             "stream_quiz_generation error for session %s: %s", session.id, e
         )
-        if session.status == QuizSessionStatus.generating:
-            session.status = QuizSessionStatus.draft
-        try:
-            await db.commit()
-        except Exception:
-            pass
+        if not generation_completed:
+            dispatched = await _dispatch_celery_fallback(job.id, session.id)
+            if not dispatched:
+                session.status = QuizSessionStatus.generation_failed
+                job.error_message = f"SSE failed and Celery fallback unavailable: {e}"
+            try:
+                await db.commit()
+            except Exception:
+                pass
         yield sse_error(f"Generation failed: {e}")
+    finally:
+        if not generation_completed and session.status == QuizSessionStatus.generating:
+            try:
+                await _dispatch_celery_fallback(job.id, session.id)
+            except Exception:
+                pass
 
 
 async def generate_quiz(job_id: str):
