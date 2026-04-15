@@ -891,6 +891,13 @@ async def stream_quiz_generation(
         yield sse_data({"type": "stage", "stage": "analyzing"})
 
         payload = job.payload_json or {}
+        model_name = session.generation_model_name or _cfg.balanced_generation_model
+        logger.info(
+            "SSE gen starting for session %s (model=%s, q=%s)",
+            session.id,
+            model_name,
+            payload.get("question_count"),
+        )
 
         yield sse_data({"type": "stage", "stage": "generating"})
 
