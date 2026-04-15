@@ -197,6 +197,7 @@ export default function BillingPage() {
 
   const [bannerVisible, setBannerVisible] = useState(isSuccess);
   const [purchasingPack, setPurchasingPack] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [updatingPayment, setUpdatingPayment] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
   const [canceling, setCanceling] = useState(false);
@@ -245,10 +246,13 @@ export default function BillingPage() {
   async function handlePurchasePack(pack: CreditPack) {
     const key = `${pack.creditType}:${pack.packSize}`;
     setPurchasingPack(key);
+    setCheckoutError(null);
     try {
       const result = await billingApi.checkoutCredits(pack.creditType, pack.packSize);
       await openPaddleCheckout(result.transactionId, () => setPurchasingPack(null));
-    } catch {
+    } catch (err) {
+      console.error('[Paddle checkout]', err);
+      setCheckoutError('결제 창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.');
       setPurchasingPack(null);
     }
   }
@@ -259,6 +263,12 @@ export default function BillingPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6 animate-fade-in">
+      {checkoutError && (
+        <div className="rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error">
+          {checkoutError}
+        </div>
+      )}
+
       {bannerVisible && (
         <div className="flex items-start gap-3 rounded-xl border border-brand-500/30 bg-brand-500/10 px-4 py-3 text-sm text-brand-300">
           <CheckCircle size={16} className="mt-0.5 shrink-0 text-brand-400" />

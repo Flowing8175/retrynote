@@ -81,6 +81,7 @@ export default function PricingPage() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
   const [loadingTier, setLoadingTier] = useState<'lite' | 'standard' | 'pro' | null>(null);
   const [loadingCredit, setLoadingCredit] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
   const user = useAuthStore((s) => s.user);
   const usageStatus = useAuthStore((s) => s.usageStatus);
@@ -89,20 +90,26 @@ export default function PricingPage() {
 
   async function handleSubscribe(tier: 'lite' | 'standard' | 'pro') {
     setLoadingTier(tier);
+    setCheckoutError(null);
     try {
       const result = await billingApi.checkoutSubscription(tier, billingCycle);
       await openPaddleCheckout(result.transactionId, () => setLoadingTier(null));
-    } catch {
+    } catch (err) {
+      console.error('[Paddle checkout]', err);
+      setCheckoutError('결제 창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.');
       setLoadingTier(null);
     }
   }
 
   async function handleCreditPurchase(creditType: string, packSize: string, key: string) {
     setLoadingCredit(key);
+    setCheckoutError(null);
     try {
       const result = await billingApi.checkoutCredits(creditType, packSize);
       await openPaddleCheckout(result.transactionId, () => setLoadingCredit(null));
-    } catch {
+    } catch (err) {
+      console.error('[Paddle checkout]', err);
+      setCheckoutError('결제 창을 열 수 없습니다. 잠시 후 다시 시도해 주세요.');
       setLoadingCredit(null);
     }
   }
@@ -165,6 +172,12 @@ export default function PricingPage() {
 
   return (
     <div className="mx-auto max-w-6xl">
+
+      {checkoutError && (
+        <div className="mb-6 rounded-xl border border-semantic-error/30 bg-semantic-error/10 px-4 py-3 text-sm text-semantic-error">
+          {checkoutError}
+        </div>
+      )}
 
       <div className="text-center">
         <p className="text-xs font-bold uppercase tracking-[0.18em] text-brand-300">요금제</p>
