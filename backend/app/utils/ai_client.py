@@ -163,6 +163,28 @@ class _GeminiCacheRegistry:
 _gemini_cache_registry = _GeminiCacheRegistry()
 
 
+_OPTIONS_PROPERTIES = {
+    "a": {"type": "string"},
+    "b": {"type": "string"},
+    "c": {"type": "string"},
+    "d": {"type": "string"},
+    "o": {"type": "string"},
+    "x": {"type": "string"},
+}
+
+_OPTION_DESCRIPTIONS_PROPERTIES = {
+    "a": {"type": "string"},
+    "b": {"type": "string"},
+    "c": {"type": "string"},
+    "d": {"type": "string"},
+}
+
+_CORRECT_ANSWER_PROPERTIES = {
+    "answer": {"type": "string"},
+    "acceptable_answers": {"type": ["array", "null"], "items": {"type": "string"}},
+    "key_points": {"type": ["array", "null"], "items": {"type": "string"}},
+}
+
 GENERATION_SCHEMA = {
     "type": "object",
     "required": ["questions"],
@@ -198,8 +220,19 @@ GENERATION_SCHEMA = {
                         ],
                     },
                     "question_text": {"type": "string"},
-                    "options": {"type": ["object", "null"]},
-                    "correct_answer": {"type": "object"},
+                    "options": {
+                        "type": ["object", "null"],
+                        "properties": _OPTIONS_PROPERTIES,
+                    },
+                    "option_descriptions": {
+                        "type": ["object", "null"],
+                        "properties": _OPTION_DESCRIPTIONS_PROPERTIES,
+                    },
+                    "correct_answer": {
+                        "type": "object",
+                        "properties": _CORRECT_ANSWER_PROPERTIES,
+                        "required": ["answer"],
+                    },
                     "explanation": {"type": "string"},
                     "concept_key": {"type": "string"},
                     "concept_label": {"type": "string"},
@@ -207,7 +240,7 @@ GENERATION_SCHEMA = {
                     "difficulty": {"type": "string"},
                     "source_refs": {
                         "type": ["array", "null"],
-                        "items": {"type": "object"},
+                        "items": {"type": "string"},
                     },
                     "low_confidence_source": {"type": "boolean"},
                 },
@@ -235,8 +268,19 @@ RETRY_GENERATION_SCHEMA = {
             "enum": ["multiple_choice", "ox", "short_answer", "fill_blank", "essay"],
         },
         "question_text": {"type": "string"},
-        "options": {"type": ["object", "null"]},
-        "correct_answer": {"type": "object"},
+        "options": {
+            "type": ["object", "null"],
+            "properties": _OPTIONS_PROPERTIES,
+        },
+        "option_descriptions": {
+            "type": ["object", "null"],
+            "properties": _OPTION_DESCRIPTIONS_PROPERTIES,
+        },
+        "correct_answer": {
+            "type": "object",
+            "properties": _CORRECT_ANSWER_PROPERTIES,
+            "required": ["answer"],
+        },
         "explanation": {"type": "string"},
         "concept_key": {"type": "string"},
         "targeted_error_type": {"type": "string"},
@@ -275,8 +319,19 @@ BATCH_RETRY_GENERATION_SCHEMA = {
                         ],
                     },
                     "question_text": {"type": "string"},
-                    "options": {"type": ["object", "null"]},
-                    "correct_answer": {"type": "object"},
+                    "options": {
+                        "type": ["object", "null"],
+                        "properties": _OPTIONS_PROPERTIES,
+                    },
+                    "option_descriptions": {
+                        "type": ["object", "null"],
+                        "properties": _OPTION_DESCRIPTIONS_PROPERTIES,
+                    },
+                    "correct_answer": {
+                        "type": "object",
+                        "properties": _CORRECT_ANSWER_PROPERTIES,
+                        "required": ["answer"],
+                    },
                     "explanation": {"type": "string"},
                     "concept_key": {"type": "string"},
                     "targeted_error_type": {"type": "string"},

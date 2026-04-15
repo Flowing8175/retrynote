@@ -495,9 +495,10 @@ export default function QuizTake() {
   const isExamMode = currentSession?.mode === 'exam';
   const isChoiceQuestion =
     currentQuestionType === 'multiple_choice' || currentQuestionType === 'ox';
+  const rawOptions = currentItem?.options as Record<string, string> | null | undefined;
+  const hasOptions = rawOptions != null && Object.keys(rawOptions).length > 0;
   const choiceOptions = isChoiceQuestion
-    ? ((currentItem?.options as Record<string, string> | null) ??
-      (currentQuestionType === 'ox' ? DEFAULT_OX_OPTIONS : null))
+    ? (hasOptions ? rawOptions : (currentQuestionType === 'ox' ? DEFAULT_OX_OPTIONS : null))
     : null;
   const optionDescriptions = currentItem?.option_descriptions as Record<string, string> | null;
   const isSkippedAnswer =

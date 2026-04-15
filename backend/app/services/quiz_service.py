@@ -788,6 +788,24 @@ async def _run_quiz_generation(
     return questions, tokens_used, resolved_difficulty or "medium"
 
 
+_DEFAULT_OX_OPTIONS = {"o": "참", "x": "거짓"}
+
+
+def _sanitize_options(options: dict | None, question_type: str) -> dict | None:
+    if question_type in ("short_answer", "fill_blank", "essay"):
+        return None
+    if not options or not isinstance(options, dict):
+        if question_type == "ox":
+            return dict(_DEFAULT_OX_OPTIONS)
+        return options
+    filtered = {k: v for k, v in options.items() if v is not None}
+    if not filtered:
+        if question_type == "ox":
+            return dict(_DEFAULT_OX_OPTIONS)
+        return None
+    return filtered
+
+
 def _persist_quiz_items(
     db: AsyncSession,
     session: QuizSession,
@@ -797,12 +815,13 @@ def _persist_quiz_items(
     """Create QuizItem records from AI output. Returns the created items."""
     items: list[QuizItem] = []
     for i, q in enumerate(questions):
+        qtype = q.get("question_type", "multiple_choice")
         item = QuizItem(
             quiz_session_id=session.id,
             item_order=i + 1,
-            question_type=QuestionType(q.get("question_type", "multiple_choice")),
+            question_type=QuestionType(qtype),
             question_text=q.get("question_text", ""),
-            options_json=q.get("options"),
+            options_json=_sanitize_options(q.get("options"), qtype),
             option_descriptions_json=q.get("option_descriptions"),
             correct_answer_json=q.get("correct_answer"),
             explanation_text=q.get("explanation", ""),

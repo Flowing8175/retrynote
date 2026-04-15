@@ -13,7 +13,9 @@ def normalize_options_payload(value):
             normalized = dict(value)
             normalized["options"] = normalized["choices"]
             return normalized
-        return dict(value)
+        # Gemini returns all schema-defined properties with null for unused keys
+        filtered = {k: v for k, v in value.items() if v is not None}
+        return filtered if filtered else None
     return value
 
 
