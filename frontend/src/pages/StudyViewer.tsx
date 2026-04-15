@@ -1,6 +1,6 @@
 import { useState, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, FileText, FileX2, X } from 'lucide-react';
+import { ChevronLeft, FileText, FileX2, X, Circle, Loader2, Check, AlertTriangle } from 'lucide-react';
 import { PdfViewer } from '@/components/study/PdfViewer';
 import { useStudyStatus } from '@/api/study';
 import { API_BASE_URL } from '@/api/createApiClient';
@@ -23,18 +23,18 @@ type Tab = '요약' | '플래시카드' | '마인드맵' | 'Repla AI';
 
 const TABS: Tab[] = ['요약', '플래시카드', '마인드맵', 'Repla AI'];
 
-const STATUS_LABEL: Record<ContentStatus, string> = {
-  not_generated: '생성 전',
-  generating: '생성 중',
-  completed: '완료',
-  failed: '실패',
+const STATUS_ICON: Record<ContentStatus, React.ReactNode> = {
+  not_generated: <Circle size={12} />,
+  generating: <Loader2 size={12} className="animate-spin" />,
+  completed: <Check size={12} />,
+  failed: <AlertTriangle size={12} />,
 };
 
 const STATUS_COLOR: Record<ContentStatus, string> = {
-  not_generated: 'bg-surface-raised text-content-muted',
-  generating: 'bg-brand-500/10 text-brand-300',
-  completed: 'bg-semantic-success-bg text-semantic-success',
-  failed: 'bg-semantic-error-bg text-semantic-error',
+  not_generated: 'text-content-muted',
+  generating: 'text-brand-300',
+  completed: 'text-semantic-success',
+  failed: 'text-semantic-error',
 };
 
 function tabStatus(tab: Tab, status: ReturnType<typeof useStudyStatus>['data']): ContentStatus {
@@ -187,8 +187,8 @@ export default function StudyViewer() {
                   >
                     {tab}
                     {tab !== 'Repla AI' && (
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${STATUS_COLOR[s]}`}>
-                        {STATUS_LABEL[s]}
+                      <span className={`${STATUS_COLOR[s]}`}>
+                        {STATUS_ICON[s]}
                       </span>
                     )}
                   </button>
