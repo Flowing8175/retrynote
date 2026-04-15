@@ -1,6 +1,6 @@
 import { useState, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ChevronLeft, FileText, X } from 'lucide-react';
+import { ChevronLeft, FileText, FileX2, X } from 'lucide-react';
 import { PdfViewer } from '@/components/study/PdfViewer';
 import { useStudyStatus } from '@/api/study';
 import { API_BASE_URL } from '@/api/createApiClient';
@@ -233,11 +233,21 @@ export default function StudyViewer() {
 
       {isPdf && (
         <button
-          onClick={() => setShowPdfOverlay(true)}
-          className="fixed bottom-6 right-4 z-40 lg:hidden flex items-center gap-2 bg-brand-500 hover:bg-brand-400 active:bg-brand-600 text-content-inverse px-4 py-3 rounded-full shadow-lg transition-colors text-sm font-medium"
+          onClick={() => setShowPdfOverlay((v) => !v)}
+          className={`fixed bottom-6 right-4 lg:hidden flex items-center gap-2 rounded-full shadow-lg transition-colors text-sm font-medium ${
+            showPdfOverlay
+              ? 'z-[60] bg-surface-raised hover:bg-surface-hover text-content-secondary p-3 border border-white/[0.1]'
+              : 'z-40 bg-brand-500 hover:bg-brand-400 active:bg-brand-600 text-content-inverse px-4 py-3'
+          }`}
         >
-          <FileText size={16} />
-          PDF 보기
+          {showPdfOverlay ? (
+            <FileX2 size={20} />
+          ) : (
+            <>
+              <FileText size={16} />
+              PDF 보기
+            </>
+          )}
         </button>
       )}
     </div>
