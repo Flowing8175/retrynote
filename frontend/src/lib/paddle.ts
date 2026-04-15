@@ -2,29 +2,33 @@ import { billingApi } from '@/api/billing';
 
 let initialized = false;
 let initPromise: Promise<void> | null = null;
+let scriptPromise: Promise<void> | null = null;
 let checkoutCloseCallback: (() => void) | null = null;
 
-const SCRIPT_POLL_INTERVAL_MS = 100;
-const SCRIPT_POLL_MAX_ATTEMPTS = 50;
-
-function waitForScript(): Promise<void> {
+function loadScript(): Promise<void> {
   if (window.Paddle) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    let attempts = 0;
-    const timer = setInterval(() => {
-      if (window.Paddle) {
-        clearInterval(timer);
-        resolve();
-      } else if (++attempts >= SCRIPT_POLL_MAX_ATTEMPTS) {
-        clearInterval(timer);
-        reject(new Error('Paddle.js failed to load'));
-      }
-    }, SCRIPT_POLL_INTERVAL_MS);
+  if (scriptPromise) return scriptPromise;
+
+  scriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://cdn.paddle.com/paddle/v2/paddle.js';
+    script.async = true;
+    script.onload = () => {
+      if (window.Paddle) resolve();
+      else reject(new Error('Paddle script loaded but global not found'));
+    };
+    script.onerror = () => {
+      scriptPromise = null;
+      reject(new Error('Failed to load Paddle.js from CDN'));
+    };
+    document.head.appendChild(script);
   });
+
+  return scriptPromise;
 }
 
 async function doInit(): Promise<void> {
-  await waitForScript();
+  await loadScript();
   const config = await billingApi.getPaddleConfig();
   window.Paddle!.Initialize({
     token: config.clientToken,
