@@ -3,7 +3,7 @@ import logging
 import re
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -339,6 +339,11 @@ async def generate_flashcards(
             await db.commit()
             return
 
+        await db.execute(
+            delete(StudyFlashcard).where(
+                StudyFlashcard.flashcard_set_id == flashcard_set.id
+            )
+        )
         db.add_all(flashcards)
         flashcard_set.status = ContentStatus.completed
         flashcard_set.generated_at = datetime.now(timezone.utc)
