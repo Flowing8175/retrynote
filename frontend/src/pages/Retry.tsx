@@ -6,7 +6,6 @@ import { BookOpen, Sparkles, ChevronRight, AlertTriangle, NotebookPen } from 'lu
 import { retryApi, wrongNotesApi } from '@/api';
 import { OptionGroup } from '@/components/ui';
 import { QuestionCountPicker } from '@/components/quiz/QuestionCountPicker';
-import DiagramModal from '@/components/DiagramModal';
 import type { RetryLocationState } from '@/types';
 import { getDetailMessage } from '@/utils/errorMessages';
 import { useFlip } from '@/hooks/useFlip';
@@ -38,8 +37,6 @@ export default function Retry() {
   const [creditError, setCreditError] = useState(false);
   const [selectedManualConceptKey, setSelectedManualConceptKey] = useState('');
   const [selectedFileGroup, setSelectedFileGroup] = useState<string | null>(null);
-  const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
-
   const { ref: section2Ref, capture: captureSection2 } = useFlip<HTMLElement>();
 
   const handleConceptModeChange = (mode: 'manual' | 'ai') => {
@@ -282,16 +279,7 @@ export default function Retry() {
                           {concept.label}
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDiagramModal({ conceptKey: concept.key, conceptLabel: concept.label });
-                        }}
-                        className="shrink-0 text-xs font-medium text-content-muted hover:text-brand-300 transition-colors px-2 py-1 rounded-lg hover:bg-brand-500/10"
-                      >
-                        개념 설명 보기
-                      </button>
+
                     </div>
                   );
                 })
@@ -393,12 +381,6 @@ export default function Retry() {
         </div>
       </section>
 
-      <DiagramModal
-        isOpen={!!diagramModal}
-        onClose={() => setDiagramModal(null)}
-        conceptKey={diagramModal?.conceptKey ?? ''}
-        conceptLabel={diagramModal?.conceptLabel ?? ''}
-      />
     </div>
   );
 }

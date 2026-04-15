@@ -10,7 +10,5 @@ export { searchApi } from './search';
 export { adminApi } from './admin';
 export { announcementsApi } from './announcements';
 export type { PublicAnnouncement } from './announcements';
-export { diagramApi } from './diagram';
-export type { DiagramResponse } from './diagram';
 export { guestApi as guestClientApi } from './guestClient';
 export { default as guestClient } from './guestClient';

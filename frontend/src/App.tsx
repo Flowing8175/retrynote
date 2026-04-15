@@ -30,7 +30,6 @@ const BillingPage = lazyWithRetry(() => import('@/pages/BillingPage'));
 const Terms = lazyWithRetry(() => import('@/pages/Terms'));
 const Privacy = lazyWithRetry(() => import('@/pages/Privacy'));
 const Refund = lazyWithRetry(() => import('@/pages/Refund'));
-const DiagramPage = lazyWithRetry(() => import('@/pages/DiagramPage'));
 const TryQuiz = lazyWithRetry(() => import('@/pages/TryQuiz'));
 const TryQuizTake = lazyWithRetry(() => import('@/pages/TryQuizTake'));
 const TryQuizResults = lazyWithRetry(() => import('@/pages/TryQuizResults'));
@@ -205,15 +204,6 @@ function App() {
               <Layout>
                 <LazyRoute>
                   <Retry />
-                </LazyRoute>
-              </Layout>
-            </ProtectedRoute>
-          } />
-          <Route path="/diagram/:conceptKey" element={
-            <ProtectedRoute>
-              <Layout>
-                <LazyRoute>
-                  <DiagramPage />
                 </LazyRoute>
               </Layout>
             </ProtectedRoute>

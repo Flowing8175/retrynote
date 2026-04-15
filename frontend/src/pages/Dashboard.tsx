@@ -5,7 +5,6 @@ import { ArrowRight } from 'lucide-react';
 import { dashboardApi } from '@/api';
 import CoachingDisplay from '@/components/CoachingDisplay';
 import { SkeletonTransition, SegmentedControl } from '@/components';
-import DiagramModal from '@/components/DiagramModal';
 import type { DashboardResponse, RetryLocationState } from '@/types';
 import { formatPercent, formatQuestionType, formatDateTime } from '@/utils/formatters';
 import { useUsageStatus } from '@/lib/useUsageStatus';
@@ -172,8 +171,6 @@ export default function Dashboard() {
   const [range, setRange] = useState<'7d' | '30d' | 'all'>('7d');
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const [selectedCategoryTag, setSelectedCategoryTag] = useState<string | null>(null);
-  const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
-
   const { data: dashboardData, isLoading, isError } = useQuery({
     queryKey: ['dashboard', range, selectedFileId, selectedCategoryTag],
     queryFn: () => dashboardApi.getDashboard(range, selectedFileId, selectedCategoryTag),
@@ -382,12 +379,7 @@ export default function Dashboard() {
                       <span>부분정답 {concept.partial_count}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => setDiagramModal({ conceptKey: concept.concept_key, conceptLabel: concept.concept_label })}
-                    className="shrink-0 text-xs font-medium text-content-muted hover:text-white transition-colors"
-                  >
-                    복습하기 →
-                  </button>
+
                 </div>
               ))}
             </div>
@@ -506,12 +498,6 @@ export default function Dashboard() {
         </div>
       </section>
     </div>
-    <DiagramModal
-      isOpen={diagramModal !== null}
-      onClose={() => setDiagramModal(null)}
-      conceptKey={diagramModal?.conceptKey ?? ''}
-      conceptLabel={diagramModal?.conceptLabel ?? ''}
-    />
     </>
       )}
       </div>

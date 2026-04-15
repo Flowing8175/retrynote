@@ -6,8 +6,7 @@ import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import type { AnswerLogEntry, AnswerResponse } from '@/types';
 import type { QuizItemDetail } from '@/types/quiz';
-import { ChevronLeft, ChevronRight, AlertCircle, Waypoints } from 'lucide-react';
-import DiagramModal from '@/components/DiagramModal';
+import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { getErrorMessage } from '@/utils/errorMessages';
 import QuizGeneratingScreen from '@/components/quiz/QuizGeneratingScreen';
 import QuizChoiceOptions from '@/components/quiz/QuizChoiceOptions';
@@ -244,8 +243,6 @@ export default function QuizTake() {
   const [furthestAvailableIndex, setFurthestAvailableIndex] = useState(0);
   const suggestedFeedbackRef = useRef<Record<string, string>>({});
   const justCompletedRef = useRef(false);
-  const [diagramModal, setDiagramModal] = useState<{ conceptKey: string; conceptLabel: string } | null>(null);
-
   const [streamedItems, setStreamedItems] = useState<QuizItemDetail[]>([]);
   const [streamStage, setStreamStage] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -802,15 +799,7 @@ export default function QuizTake() {
               <span className="text-xs font-medium text-content-muted">
                 {currentItem.concept_label || '개념'}
               </span>
-              {currentItem.concept_key && (
-                <button
-                  onClick={() => setDiagramModal({ conceptKey: currentItem.concept_key!, conceptLabel: currentItem.concept_label || currentItem.concept_key! })}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-300/80 hover:text-brand-200 bg-brand-500/8 hover:bg-brand-500/15 px-2.5 py-1 rounded-md border border-brand-500/15 hover:border-brand-500/25 transition-colors"
-                >
-                  <Waypoints size={12} />
-                  다이어그램
-                </button>
-              )}
+
             </div>
             <h2 className="text-3xl font-semibold leading-relaxed text-white">
               {currentItem.question_text}
@@ -957,12 +946,6 @@ export default function QuizTake() {
           )}
         </div>
       </footer>
-      <DiagramModal
-        isOpen={diagramModal !== null}
-        onClose={() => setDiagramModal(null)}
-        conceptKey={diagramModal?.conceptKey ?? ''}
-        conceptLabel={diagramModal?.conceptLabel ?? ''}
-      />
     </div>
   );
 }

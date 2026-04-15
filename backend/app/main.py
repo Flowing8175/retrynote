@@ -121,7 +121,6 @@ from app.api import (
     dashboard,
     search,
     admin,
-    diagram,
     guest,
     public,
     study,
@@ -140,7 +139,6 @@ app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
 app.include_router(search.router, prefix="/search", tags=["search"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
 app.include_router(billing_router, prefix="/billing", tags=["billing"])
-app.include_router(diagram.router, prefix="/diagrams", tags=["diagrams"])
 app.include_router(study.router, prefix="/study", tags=["study"])
 
 
