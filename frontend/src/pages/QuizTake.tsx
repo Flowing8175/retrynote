@@ -25,28 +25,6 @@ const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded'
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
 const GENERATING_TIMEOUT_MS = 180_000;
 
-function AnimatedText({ text, baseDelay = 0 }: { text: string; baseDelay?: number }) {
-  const words = text.split(/(\s+)/);
-  let wordIndex = 0;
-  return (
-    <>
-      {words.map((word, i) => {
-        const delay = baseDelay + Math.min(wordIndex * 40, 800);
-        if (!/\s/.test(word)) wordIndex++;
-        return (
-          <span
-            key={`${i}-${word}`}
-            className="coaching-word-fade"
-            style={{ animationDelay: `${delay}ms` }}
-          >
-            {word}
-          </span>
-        );
-      })}
-    </>
-  );
-}
-
 const STAGE_LABELS: Record<string, string> = {
   analyzing: '학습 자료를 분석하고 있습니다...',
   generating: 'AI가 문항을 생성하고 있습니다...',
@@ -57,12 +35,14 @@ interface QuizStreamingViewProps {
   stage: string | null;
   items: QuizItemDetail[];
   total: number;
+  thinkingPhases: { title: string; content: string }[];
   onCancel: () => void;
 }
 
-function QuizStreamingView({ stage, items, total, onCancel }: QuizStreamingViewProps) {
+function QuizStreamingView({ stage, items, total, thinkingPhases, onCancel }: QuizStreamingViewProps) {
   const isStreamingQuestions = stage === 'streaming_questions';
   const progressPct = total > 0 ? (items.length / total) * 100 : 0;
+  const [thinkingOpen, setThinkingOpen] = useState(true);
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-12 animate-fade-in">
@@ -112,31 +92,51 @@ function QuizStreamingView({ stage, items, total, onCancel }: QuizStreamingViewP
           )}
         </div>
       ) : (
-        <div className="space-y-4">
-          {items.map((item, idx) => {
-            const qType = typeof item.question_type === 'string' ? item.question_type : null;
-            const typeLabel = qType ? (QUESTION_TYPE_LABELS[qType] ?? qType.replace('_', ' ')) : '문항';
-            const cardDelay = Math.min(idx * 60, 600);
-            return (
-              <div
-                key={item.id}
-                className="bg-surface border border-white/[0.05] rounded-2xl px-6 py-5 space-y-3 coaching-word-fade"
-                style={{ animationDelay: `${cardDelay}ms` }}
+        <div className="space-y-6">
+          {thinkingPhases.length > 0 && (
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => setThinkingOpen(prev => !prev)}
+                className="flex items-center gap-2 text-sm font-medium text-content-secondary hover:text-white transition-colors"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2.5 py-1 rounded-md border border-brand-500/20">
-                    {typeLabel}
-                  </span>
-                  <span className="text-xs font-medium text-content-muted tabular-nums">
-                    {idx + 1}
-                  </span>
+                <svg
+                  className={`w-4 h-4 text-brand-400 transition-transform duration-200 ${thinkingOpen ? 'rotate-0' : '-rotate-90'}`}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                <span>생각하는 과정 표시</span>
+              </button>
+
+              {thinkingOpen && (
+                <div className="pl-6 border-l-2 border-brand-500/30 space-y-5 animate-fade-in">
+                  {thinkingPhases.map((phase, idx) => {
+                    const entryDelay = Math.min(idx * 80, 600);
+                    return (
+                      <div
+                        key={idx}
+                        className="space-y-1.5 coaching-word-fade"
+                        style={{ animationDelay: `${entryDelay}ms` }}
+                      >
+                        <p className="text-sm font-semibold text-content-primary italic">
+                          {phase.title}
+                        </p>
+                        <p className="text-sm text-content-secondary italic leading-relaxed">
+                          {phase.content}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
-                <p className="text-base font-medium text-content-primary leading-relaxed">
-                  <AnimatedText text={item.question_text} baseDelay={cardDelay + 80} />
-                </p>
-              </div>
-            );
-          })}
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -249,6 +249,7 @@ export default function QuizTake() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamTotal, setStreamTotal] = useState(0);
   const [streamFailed, setStreamFailed] = useState(false);
+  const [thinkingPhases, setThinkingPhases] = useState<{ title: string; content: string }[]>([]);
   const [generatingTooLong, setGeneratingTooLong] = useState(false);
 
   const { data: sessionData, isLoading: sessionLoading, isError: sessionIsError, error: sessionError } = useQuery({
@@ -318,13 +319,15 @@ export default function QuizTake() {
     {
       enabled: shouldStream,
       onMessage: (data: unknown) => {
-        const msg = data as { type: string; stage?: string; total?: number; item?: QuizItemDetail; index?: number };
+        const msg = data as { type: string; stage?: string; total?: number; item?: QuizItemDetail; index?: number; title?: string; content?: string };
         if (msg.type === 'stage') {
           setStreamStage(msg.stage ?? null);
           if (msg.stage === 'streaming_questions' && msg.total) {
             setStreamTotal(msg.total);
           }
           setIsStreaming(true);
+        } else if (msg.type === 'thinking' && msg.title) {
+          setThinkingPhases(prev => [...prev, { title: msg.title!, content: msg.content ?? '' }]);
         } else if (msg.type === 'question' && msg.item) {
           setStreamedItems(prev => [...prev, msg.item!]);
         }
@@ -682,6 +685,7 @@ export default function QuizTake() {
         stage={streamStage}
         items={streamedItems}
         total={streamTotal}
+        thinkingPhases={thinkingPhases}
         onCancel={() => {
           closeSSE();
           navigate('/quiz/new');

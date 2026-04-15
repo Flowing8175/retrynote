@@ -940,7 +940,32 @@ async def stream_quiz_generation(
             }
         )
 
+        _DIFF_LABELS = {"easy": "기초", "medium": "중급", "hard": "심화"}
+        _TYPE_LABELS = {
+            "multiple_choice": "객관식",
+            "ox": "O/X",
+            "short_answer": "단답형",
+            "fill_blank": "빈칸 채우기",
+            "essay": "서술형",
+        }
+
         for i, item in enumerate(items):
+            concept = item.concept_label or item.category_tag or ""
+            qtype = _TYPE_LABELS.get(
+                item.question_type.value if item.question_type else "",
+                "",
+            )
+            diff = _DIFF_LABELS.get(item.difficulty or "", "")
+            parts = [p for p in [concept, diff, qtype] if p]
+            title = concept or f"문항 {i + 1} 분석"
+            content = (
+                f"{' · '.join(parts)} 문항을 구성합니다."
+                if parts
+                else "문항을 구성합니다."
+            )
+            yield sse_data({"type": "thinking", "title": title, "content": content})
+            await asyncio.sleep(0.15)
+
             yield sse_data(
                 {
                     "type": "question",
@@ -950,7 +975,7 @@ async def stream_quiz_generation(
                 }
             )
             if i < len(items) - 1:
-                await asyncio.sleep(0.35)
+                await asyncio.sleep(0.2)
 
         logger.info(
             "SSE streaming done for session %s, yielding done event", session.id
