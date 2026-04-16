@@ -4,9 +4,11 @@ import { isAxiosError } from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
-import type { AnswerLogEntry, AnswerResponse } from '@/types';
+import { gradeLocally } from '@/utils/gradeLocally';
+import type { AnswerLogEntry, AnswerResponse, BatchAnswerSubmit } from '@/types';
+import type { LocalGradeResult } from '@/utils/gradeLocally';
 import type { QuizItemDetail } from '@/types/quiz';
-import { ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, AlertCircle, X } from 'lucide-react';
 import { getErrorMessage } from '@/utils/errorMessages';
 import QuizGeneratingScreen from '@/components/quiz/QuizGeneratingScreen';
 import QuizChoiceOptions from '@/components/quiz/QuizChoiceOptions';
@@ -153,6 +155,25 @@ function QuizStreamingView({ stage, items, total, thinkingPhases, onCancel }: Qu
   );
 }
 
+function buildSyntheticResult(localResult: LocalGradeResult, userAnswer: string): AnswerResponse {
+  return {
+    answer_log_id: '',
+    judgement: localResult.judgement,
+    score_awarded: localResult.score_awarded,
+    max_score: localResult.max_score,
+    grading_confidence: localResult.judgement === 'pending_ai' ? null : 1.0,
+    grading_rationale: null,
+    explanation: localResult.explanation,
+    tips: null,
+    missing_points: null,
+    error_type: localResult.error_type,
+    normalized_user_answer: userAnswer.trim().toLowerCase(),
+    suggested_feedback: null,
+    next_item_id: null,
+    correct_answer: localResult.judgement !== 'correct' ? localResult.correct_answer : null,
+  };
+}
+
 function formatCorrectAnswerLabel(
   correctAnswer: Record<string, unknown> | null | undefined,
   options: Record<string, string> | null,
@@ -244,6 +265,10 @@ export default function QuizTake() {
   const [furthestAvailableIndex, setFurthestAvailableIndex] = useState(0);
   const suggestedFeedbackRef = useRef<Record<string, string>>({});
   const justCompletedRef = useRef(false);
+  const [gradingItemId, setGradingItemId] = useState<string | null>(null);
+  const [isAiGradingDisabled, setIsAiGradingDisabled] = useState(false);
+  const [isAiModalOpen, setIsAiModalOpen] = useState(false);
+  const currentItemIdRef = useRef<string | undefined>(undefined);
   const [streamedItems, setStreamedItems] = useState<QuizItemDetail[]>([]);
   const [streamStage, setStreamStage] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -358,12 +383,6 @@ export default function QuizTake() {
     enabled: !!sessionId && (isCompleted || (isInProgress && !isExamSession)),
   });
 
-  const { data: draftAnswersData } = useQuery({
-    queryKey: ['draftAnswers', sessionId],
-    queryFn: () => quizApi.getDraftAnswers(sessionId || ''),
-    enabled: !!sessionId && isInProgress && isExamSession,
-  });
-
   useEffect(() => {
     if (sessionData) setCurrentSession(sessionData);
     if (itemsData) setCurrentItems(itemsData);
@@ -421,74 +440,80 @@ export default function QuizTake() {
   }, [answerLogsData, itemsData, isCompleted]);
 
   useEffect(() => {
-    if (!draftAnswersData || !itemsData?.length) return;
-    const drafts: Record<string, string> = {};
-    for (const d of draftAnswersData) {
-      drafts[d.item_id] = d.user_answer;
-    }
+    if (!isExamSession || !itemsData?.length || isCompleted) return;
+    const mapCopy = currentAnswerMapRef.current;
+    if (Object.keys(mapCopy).length === 0) return;
+    const drafts = { ...mapCopy };
     setDraftAnswers(drafts);
     setSubmittedAnswers(drafts);
     const answeredCount = Object.keys(drafts).length;
     const nextIndex = Math.min(answeredCount, itemsData.length - 1);
     setFurthestAvailableIndex(nextIndex);
     setCurrentItemIndex(nextIndex);
-    const nextItem = itemsData[nextIndex];
-    setUserAnswer(drafts[nextItem.id] || '');
+    setUserAnswer(drafts[itemsData[nextIndex].id] || '');
     setIsSubmitted(false);
-  }, [draftAnswersData, itemsData]);
+    setAnswerResult(null);
+  }, [isExamSession, itemsData, isCompleted]);
 
-  const submitAnswerMutation = useMutation({
-    mutationFn: (data: { itemId: string; answer: string }) =>
-      quizApi.submitAnswer(sessionId || '', data.itemId, { user_answer: data.answer }),
-    onError: (err) => {
-      if (isAxiosError(err) && err.response?.status === 402) {
-        setCreditError(true);
-      }
-    },
-    onSuccess: (result, variables) => {
-      if (result.suggested_feedback) {
-        suggestedFeedbackRef.current[variables.itemId] = result.suggested_feedback;
-      }
-      setAnswerResult(result);
-      setIsSubmitted(true);
-      setCurrentAnswer(variables.itemId, variables.answer);
-      setDraftAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
-      setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
-      setAnswerResultsByItemId((prev) => ({ ...prev, [variables.itemId]: result }));
-      setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
-      setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
-
-      if (!result.next_item_id && sessionData?.mode === 'normal' && sessionId) {
-        completeQuizMutation.mutate();
-      }
-    },
-  });
-
-  const completeQuizMutation = useMutation({
-    mutationFn: () => quizApi.completeQuizSession(sessionId || ''),
+  const submitBatchMutation = useMutation({
+    mutationFn: (data: BatchAnswerSubmit) =>
+      quizApi.submitBatchAnswers(sessionId || '', data),
     onSuccess: async () => {
-      justCompletedRef.current = true;
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] }),
         queryClient.invalidateQueries({ queryKey: ['quiz-history'] }),
         queryClient.invalidateQueries({ queryKey: ['quiz-history-full'] }),
         queryClient.invalidateQueries({ queryKey: ['wrongNotes'] }),
         queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['answerLogs', sessionId] }),
       ]);
+      navigate(`/quiz/${sessionId}/results`);
+    },
+    onError: (err) => {
+      if (isAxiosError(err) && err.response?.status === 402) {
+        setCreditError(true);
+      }
     },
   });
 
-  const saveDraftAnswerMutation = useMutation({
-    mutationFn: (data: { itemId: string; answer: string }) =>
-      quizApi.saveDraftAnswer(sessionId || '', { item_id: data.itemId, user_answer: data.answer }),
-    onSuccess: (_, variables) => {
-      setCurrentAnswer(variables.itemId, variables.answer);
-      setDraftAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
-      setSubmittedAnswers((prev) => ({ ...prev, [variables.itemId]: variables.answer }));
-      setFurthestAvailableIndex((prev) => Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
-      if (itemsData && currentItemIndex < itemsData.length - 1) {
-        setCurrentItemIndex((prev) => prev + 1);
-        setUserAnswer(draftAnswers[itemsData[currentItemIndex + 1].id] || '');
+  const completeSessionMutation = useMutation({
+    mutationFn: () => quizApi.completeQuizSession(sessionId || ''),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] }),
+        queryClient.invalidateQueries({ queryKey: ['quiz-history'] }),
+        queryClient.invalidateQueries({ queryKey: ['quiz-history-full'] }),
+        queryClient.invalidateQueries({ queryKey: ['wrongNotes'] }),
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] }),
+        queryClient.invalidateQueries({ queryKey: ['answerLogs', sessionId] }),
+      ]);
+      navigate(`/quiz/${sessionId}/results`);
+    },
+    onError: (err) => {
+      if (isAxiosError(err) && err.response?.status === 402) {
+        setCreditError(true);
+      }
+    },
+  });
+
+  const submitAnswerMutation = useMutation({
+    mutationFn: ({ itemId, answer }: { itemId: string; answer: string }) =>
+      quizApi.submitAnswer(sessionId || '', itemId, { user_answer: answer }),
+    onSuccess: (result, variables) => {
+      if (result.suggested_feedback) {
+        suggestedFeedbackRef.current[variables.itemId] = result.suggested_feedback;
+      }
+      setAnswerResultsByItemId((prev) => ({ ...prev, [variables.itemId]: result }));
+      if (currentItemIdRef.current === variables.itemId) {
+        setAnswerResult(result);
+        setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
+      }
+      setGradingItemId((prev) => (prev === variables.itemId ? null : prev));
+    },
+    onError: (_err, variables) => {
+      setGradingItemId((prev) => (prev === variables.itemId ? null : prev));
+      if (isAxiosError(_err) && _err.response?.status === 402) {
+        setCreditError(true);
       }
     },
   });
@@ -504,6 +529,50 @@ export default function QuizTake() {
     ? (hasOptions ? rawOptions : (currentQuestionType === 'ox' ? DEFAULT_OX_OPTIONS : null))
     : null;
   const optionDescriptions = currentItem?.option_descriptions as Record<string, string> | null;
+
+  const handleAnswerGrade = (itemId: string, answer: string, localResult: LocalGradeResult) => {
+    const syntheticResult = buildSyntheticResult(localResult, answer);
+    setAnswerResult(syntheticResult);
+    setIsSubmitted(true);
+    setCurrentAnswer(itemId, answer);
+    setDraftAnswers((prev) => ({ ...prev, [itemId]: answer }));
+    setSubmittedAnswers((prev) => ({ ...prev, [itemId]: answer }));
+    setAnswerResultsByItemId((prev) => ({ ...prev, [itemId]: syntheticResult }));
+    setFurthestAvailableIndex((prev) =>
+      Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1))
+    );
+    if (!isAiGradingDisabled) {
+      if (localResult.judgement === 'pending_ai') {
+        setGradingItemId(itemId);
+      } else {
+        setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
+      }
+      submitAnswerMutation.mutate({ itemId, answer });
+    } else {
+      setTimeout(() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' }), 50);
+    }
+  };
+
+  currentItemIdRef.current = currentItem?.id;
+
+  const applyExamLocalSave = (itemId: string, answer: string) => {
+    setCurrentAnswer(itemId, answer);
+    setDraftAnswers((prev) => ({ ...prev, [itemId]: answer }));
+    setSubmittedAnswers((prev) => ({ ...prev, [itemId]: answer }));
+    setFurthestAvailableIndex((prev) =>
+      Math.min((itemsData?.length || 1) - 1, Math.max(prev, currentItemIndex + 1))
+    );
+    if (itemsData && currentItemIndex < itemsData.length - 1) {
+      slideQuestion(() => {
+        const nextIndex = currentItemIndex + 1;
+        setCurrentItemIndex(nextIndex);
+        setUserAnswer(draftAnswers[itemsData[nextIndex].id] || '');
+        setIsSubmitted(false);
+        setAnswerResult(null);
+      });
+    }
+  };
+
   const isSkippedAnswer =
     !isExamMode &&
     isSubmitted &&
@@ -513,7 +582,7 @@ export default function QuizTake() {
 
   const handleOptionSelect = (optionKey: string) => {
     if (isSubmitted && !isExamMode) return;
-    if (submitAnswerMutation.isPending) return;
+    if (submitBatchMutation.isPending) return;
     setUserAnswer(optionKey);
 
     if (
@@ -522,7 +591,7 @@ export default function QuizTake() {
       currentQuestionType &&
       AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType)
     ) {
-      submitAnswerMutation.mutate({ itemId: currentItem.id, answer: optionKey });
+      handleAnswerGrade(currentItem.id, optionKey, gradeLocally(currentItem, optionKey));
     }
   };
 
@@ -568,7 +637,7 @@ export default function QuizTake() {
 
   const handleSkip = () => {
     if (!itemsData || currentItemIndex >= itemsData.length - 1 || !currentItem) return;
-    if (submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending) return;
+    if (submitBatchMutation.isPending) return;
 
     if (isExamMode) {
       slideQuestion(() => {
@@ -611,7 +680,9 @@ export default function QuizTake() {
     setFurthestAvailableIndex((prev) => Math.min((itemsData.length || 1) - 1, Math.max(prev, currentItemIndex + 1)));
 
     // Also submit to backend for recording (fire-and-forget).
-    submitAnswerMutation.mutate({ itemId: currentItem.id, answer: '' });
+    if (!isAiGradingDisabled) {
+      submitAnswerMutation.mutate({ itemId: currentItem.id, answer: '' });
+    }
   };
 
   const handlePrev = () => {
@@ -625,26 +696,19 @@ export default function QuizTake() {
     });
   };
 
-  const handleViewResults = async () => {
-    if (!sessionId) {
-      return;
+  const handleViewResults = () => {
+    if (!sessionId || !itemsData) return;
+    if (isExamMode || isAiGradingDisabled) {
+      const answers: BatchAnswerSubmit = {
+        answers: itemsData.map((item) => ({
+          item_id: item.id,
+          user_answer: submittedAnswers[item.id] || '',
+        })),
+      };
+      submitBatchMutation.mutate(answers);
+    } else {
+      completeSessionMutation.mutate();
     }
-
-    const shouldFinalizeNormalSession =
-      sessionData?.mode === 'normal' &&
-      sessionData.status !== 'graded' &&
-      sessionData.status !== 'regraded' &&
-      sessionData.status !== 'closed';
-
-    try {
-      if (shouldFinalizeNormalSession) {
-        await completeQuizMutation.mutateAsync();
-      }
-    } catch {
-      return;
-    }
-
-    navigate(`/quiz/${sessionId}/results`);
   };
 
   if (sessionLoading || (!sessionData && !sessionIsError)) {
@@ -820,7 +884,18 @@ export default function QuizTake() {
               <span className="text-xs font-medium text-content-muted">
                 {currentItem.concept_label || '개념'}
               </span>
-
+              {!isExamMode && !isCompleted && (
+                <button
+                  onClick={() => setIsAiModalOpen(true)}
+                  className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-md border transition-colors ${
+                    isAiGradingDisabled
+                      ? 'text-content-muted bg-white/[0.04] border-white/[0.08]'
+                      : 'text-blue-400 bg-blue-500/10 border-blue-500/20 hover:bg-blue-500/15'
+                  }`}
+                >
+                  AI채점
+                </button>
+              )}
             </div>
             <h2 className="text-3xl font-semibold leading-relaxed text-white">
               {currentItem.question_text}
@@ -853,15 +928,14 @@ export default function QuizTake() {
                       e.preventDefault();
                       if (
                         !userAnswer.trim() ||
-                        submitAnswerMutation.isPending ||
-                        saveDraftAnswerMutation.isPending ||
+                        submitBatchMutation.isPending ||
                         (isSubmitted && !isExamMode) ||
                         isCompleted
                       ) return;
                       if (isExamMode) {
-                        saveDraftAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                        applyExamLocalSave(currentItem.id, userAnswer);
                       } else {
-                        submitAnswerMutation.mutate({ itemId: currentItem!.id, answer: userAnswer });
+                        handleAnswerGrade(currentItem.id, userAnswer, gradeLocally(currentItem, userAnswer));
                       }
                     }
                   }}
@@ -873,17 +947,26 @@ export default function QuizTake() {
             )}
           </div>
 
-          {isSubmitted && !isExamMode && answerResult && (
-            <QuizAnswerFeedback
-              judgement={answerResult.judgement}
-              headline={isSkippedAnswer ? '건너뛰었습니다' : undefined}
-              correctAnswerLabel={formatCorrectAnswerLabel(answerResult.correct_answer, choiceOptions)}
-              feedbackText={
-                isSkippedAnswer
-                  ? answerResult.explanation || answerResult.suggested_feedback
-                  : answerResult.suggested_feedback || answerResult.explanation
-              }
-            />
+          {isSubmitted && !isExamMode && (
+            gradingItemId === currentItem.id ? (
+              <div className="animate-fade-in-up p-6 rounded-2xl border border-brand-500/20 bg-brand-500/5">
+                <div className="flex items-center gap-3 text-sm text-content-secondary">
+                  <div className="w-4 h-4 border-2 border-brand-400/40 border-t-brand-400 rounded-full animate-spin flex-shrink-0" />
+                  AI 채점 중...
+                </div>
+              </div>
+            ) : answerResult ? (
+              <QuizAnswerFeedback
+                judgement={answerResult.judgement}
+                headline={isSkippedAnswer ? '건너뛰었습니다' : undefined}
+                correctAnswerLabel={formatCorrectAnswerLabel(answerResult.correct_answer, choiceOptions)}
+                feedbackText={
+                  isSkippedAnswer
+                    ? answerResult.explanation || answerResult.suggested_feedback
+                    : answerResult.suggested_feedback || answerResult.explanation
+                }
+              />
+            ) : null
           )}
         </section>
       )}
@@ -920,9 +1003,9 @@ export default function QuizTake() {
            {(!isSubmitted || isExamMode) && !isCompleted ? (
              <div className="flex items-center gap-3 w-full sm:w-auto">
                {currentItemIndex < (itemsData?.length || 1) - 1 && !isSubmitted && (
-                 <button
-                   onClick={handleSkip}
-                   disabled={submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending}
+                  <button
+                    onClick={handleSkip}
+                    disabled={submitBatchMutation.isPending}
                    className="flex-1 sm:flex-none h-12 px-6 bg-surface border border-white/[0.08] rounded-xl text-sm font-medium text-content-secondary hover:bg-surface-hover hover:text-white transition-colors disabled:opacity-30 group relative"
                  >
                    <span className="inline-block opacity-100 group-hover:opacity-0 transition-opacity duration-200">모르겠어요</span>
@@ -933,16 +1016,16 @@ export default function QuizTake() {
                 onClick={() => {
                   if (!currentItem) return;
                   if (isExamMode) {
-                    saveDraftAnswerMutation.mutate({ itemId: currentItem.id, answer: userAnswer });
+                    applyExamLocalSave(currentItem.id, userAnswer);
                   } else {
-                    submitAnswerMutation.mutate({ itemId: currentItem.id, answer: userAnswer });
+                    handleAnswerGrade(currentItem.id, userAnswer, gradeLocally(currentItem, userAnswer));
                   }
                 }}
                 hidden={!isExamMode && !!currentQuestionType && AUTO_SUBMIT_QUESTION_TYPES.has(currentQuestionType)}
-                disabled={!userAnswer.trim() || submitAnswerMutation.isPending || saveDraftAnswerMutation.isPending}
+                disabled={!userAnswer.trim() || submitBatchMutation.isPending}
                 className="flex-1 sm:flex-none w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0"
               >
-                {isExamMode ? '저장 후 다음' : '정답 제출'}
+                {isExamMode ? '다음' : '정답 제출'}
               </button>
             </div>
           ) : (
@@ -955,18 +1038,60 @@ export default function QuizTake() {
               </button>
             ) : (
               <button
-                onClick={() => {
-                  void handleViewResults();
-                }}
-                disabled={completeQuizMutation.isPending}
+                onClick={handleViewResults}
+                disabled={submitBatchMutation.isPending || completeSessionMutation.isPending}
                 className="w-full sm:w-auto bg-brand-500 text-brand-900 px-10 h-12 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5"
               >
-                {completeQuizMutation.isPending ? '결과 정리 중...' : '결과 보기'}
+                {(submitBatchMutation.isPending || completeSessionMutation.isPending) ? '채점 중...' : '결과 보기'}
               </button>
             )
           )}
         </div>
       </footer>
+
+      {isAiModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          onClick={() => setIsAiModalOpen(false)}
+        >
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-sm bg-surface-raised rounded-2xl border border-white/[0.08] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
+              <h2 className="text-base font-semibold text-white">AI채점 비활성화</h2>
+              <button
+                onClick={() => setIsAiModalOpen(false)}
+                className="flex items-center justify-center w-7 h-7 rounded-lg text-content-muted hover:text-white hover:bg-white/[0.06] transition-colors"
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <div className="px-5 py-5 space-y-4">
+              <p className="text-sm text-content-secondary leading-relaxed">
+                크레딧 사용을 절감하기 위해 AI 채점을<br />임시적으로 비활성화할 수 있습니다.
+              </p>
+              <p className="text-sm text-semantic-error leading-relaxed">
+                답안과 정확히 일치하지 않으면<br />채점 결과에 오류가 있을 수 있습니다.
+              </p>
+              <button
+                onClick={() => {
+                  setIsAiGradingDisabled((v) => !v);
+                  setIsAiModalOpen(false);
+                }}
+                className={`w-full h-11 rounded-xl text-sm font-semibold transition-transform hover:-translate-y-0.5 active:translate-y-0 ${
+                  isAiGradingDisabled
+                    ? 'bg-brand-500 text-brand-900'
+                    : 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/15'
+                }`}
+              >
+                {isAiGradingDisabled ? '다시 활성화하기' : '비활성화하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
