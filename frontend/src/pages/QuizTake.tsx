@@ -884,7 +884,7 @@ export default function QuizTake() {
               <span className="text-xs font-medium text-content-muted">
                 {currentItem.concept_label || '개념'}
               </span>
-              {!isExamMode && !isCompleted && (
+              {!isExamMode && !isCompleted && currentQuestionType !== null && FREE_TEXT_QUESTION_TYPES.has(currentQuestionType) && (
                 <button
                   onClick={() => setIsAiModalOpen(true)}
                   className={`inline-flex items-center text-xs font-medium px-2.5 py-1 rounded-md border transition-colors ${
