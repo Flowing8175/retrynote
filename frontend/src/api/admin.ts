@@ -170,6 +170,11 @@ export const adminApi = {
     return response.data;
   },
 
+  deleteUser: async (userId: string): Promise<ApiStatusResponse> => {
+    const response = await apiClient.delete<ApiStatusResponse>(`/admin/users/${userId}`);
+    return response.data;
+  },
+
   exportUsers: async (isActive?: boolean): Promise<Blob> => {
     const params: Record<string, string> = {};
     if (isActive !== undefined) params.is_active = String(isActive);

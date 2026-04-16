@@ -6,7 +6,7 @@ import uuid
 from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select, func, text, cast, Integer
+from sqlalchemy import select, func, text, cast, Integer, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -21,6 +21,7 @@ from app.schemas.admin import (
     MasterPasswordVerify,
     AdminUserItem,
     AdminUserListResponse,
+    AdminStatusResponse,
     AdminUserStatusUpdate,
     AdminUserRoleUpdate,
     AdminLogResponse,
@@ -64,6 +65,7 @@ from app.middleware.auth import (
 )
 from app.utils.db_helpers import paginate
 from app.workers.celery_app import celery_app, dispatch_task
+from app.models.search import RefreshToken
 
 router = APIRouter()
 
@@ -269,6 +271,65 @@ async def update_user_role(
         is_active=user.is_active,
         role=user.role.value,
     )
+
+
+@router.delete("/users/{user_id}", response_model=AdminStatusResponse)
+async def delete_user(
+    user_id: str,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin_verified),
+):
+    if admin.id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+
+    user_result = await db.execute(
+        select(User).where(User.id == user_id, User.deleted_at.is_(None))
+    )
+    user = user_result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.role == UserRole.super_admin and user.is_active:
+        active_sa_result = await db.execute(
+            select(func.count())
+            .select_from(User)
+            .where(
+                User.role == UserRole.super_admin,
+                User.is_active.is_(True),
+                User.deleted_at.is_(None),
+            )
+        )
+        active_sa_count = active_sa_result.scalar() or 0
+        if active_sa_count <= 1:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot delete the last active super_admin",
+            )
+
+    now = datetime.now(timezone.utc)
+    await db.execute(
+        update(RefreshToken)
+        .where(
+            RefreshToken.user_id == user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+        .values(revoked_at=now)
+    )
+    user.is_active = False
+    user.status = "deleted"
+    user.deleted_at = now
+    await log_audit(
+        db,
+        admin.id,
+        "delete_user",
+        request,
+        target_user_id=user_id,
+        payload={"status": "deleted"},
+    )
+    await db.commit()
+
+    return AdminStatusResponse(status="deleted")
 
 
 @router.get("/logs")

@@ -593,18 +593,20 @@ async def delete_account(
     if not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=400, detail="비밀번호가 올바르지 않습니다.")
 
+    now = datetime.now(timezone.utc)
+
     await db.execute(
         update(RefreshToken)
         .where(
             RefreshToken.user_id == user.id,
             RefreshToken.revoked_at.is_(None),
         )
-        .values(revoked_at=datetime.now(timezone.utc))
+        .values(revoked_at=now)
     )
 
     user.is_active = False
     user.status = "deleted"
-    user.deleted_at = datetime.now(timezone.utc)
+    user.deleted_at = now
 
     await db.commit()
     return {"status": "ok"}

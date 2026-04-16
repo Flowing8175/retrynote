@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, patch
 from httpx import AsyncClient
 
@@ -8,6 +9,7 @@ from app.models import (
     AdminSettings,
     ImpersonationSession,
 )
+from app.models.search import RefreshToken
 from app.middleware.auth import hash_password, create_access_token
 
 
@@ -1140,6 +1142,61 @@ class TestDbDiagnostics:
 
 
 class TestUserManagement:
+    async def test_delete_user(
+        self, db_session, verified_admin_client: AsyncClient, test_user
+    ):
+        refresh_token = RefreshToken(
+            id=str(uuid.uuid4()),
+            user_id=test_user.id,
+            expires_at=datetime.now(timezone.utc),
+        )
+        db_session.add(refresh_token)
+        await db_session.commit()
+
+        resp = await verified_admin_client.delete(f"/admin/users/{test_user.id}")
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "deleted"}
+
+        await db_session.refresh(test_user)
+        assert test_user.deleted_at is not None
+        assert test_user.is_active is False
+        assert test_user.status == "deleted"
+
+        refresh_token_result = await db_session.get(RefreshToken, refresh_token.id)
+        assert refresh_token_result is not None
+        assert refresh_token_result.revoked_at is not None
+
+    async def test_delete_user_requires_verified_admin(
+        self, admin_client: AsyncClient, test_user
+    ):
+        resp = await admin_client.delete(f"/admin/users/{test_user.id}")
+        assert resp.status_code == 403
+        assert "verification required" in resp.json()["detail"].lower()
+
+    async def test_admin_cannot_delete_own_account(
+        self, verified_admin_client: AsyncClient, admin_user
+    ):
+        resp = await verified_admin_client.delete(f"/admin/users/{admin_user.id}")
+        assert resp.status_code == 400
+        assert "own account" in resp.json()["detail"]
+
+    async def test_delete_last_active_super_admin_returns_400(
+        self, verified_admin_client: AsyncClient, super_admin_user
+    ):
+        resp = await verified_admin_client.delete(f"/admin/users/{super_admin_user.id}")
+        assert resp.status_code == 400
+        assert "last active super_admin" in resp.json()["detail"]
+
+    async def test_delete_already_deleted_user_returns_404(
+        self, db_session, verified_admin_client: AsyncClient, test_user
+    ):
+        test_user.deleted_at = datetime.now(timezone.utc)
+        await db_session.commit()
+
+        resp = await verified_admin_client.delete(f"/admin/users/{test_user.id}")
+        assert resp.status_code == 404
+        assert resp.json()["detail"] == "User not found"
+
     async def test_deactivate_user(
         self, db_session, verified_admin_client: AsyncClient, test_user
     ):

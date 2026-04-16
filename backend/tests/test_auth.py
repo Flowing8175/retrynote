@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from httpx import AsyncClient
 
+from app.models.search import RefreshToken
+
 
 @pytest.fixture(autouse=True)
 def _mock_turnstile():
@@ -256,6 +258,47 @@ class TestGetMe:
     async def test_get_me_unauthenticated(self, client: AsyncClient):
         resp = await client.get("/auth/me")
         assert resp.status_code == 401
+
+
+class TestDeleteAccount:
+    async def test_delete_account_soft_deletes_and_revokes_tokens(
+        self, db_session, auth_client: AsyncClient, test_user
+    ):
+        refresh_token = RefreshToken(
+            id=str(uuid.uuid4()),
+            user_id=test_user.id,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+        )
+        db_session.add(refresh_token)
+        await db_session.commit()
+
+        resp = await auth_client.request(
+            "DELETE",
+            "/auth/me",
+            json={"password": "TestPass123!"},
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "ok"}
+
+        await db_session.refresh(test_user)
+        assert test_user.deleted_at is not None
+        assert test_user.is_active is False
+        assert test_user.status == "deleted"
+
+        refresh_token_result = await db_session.get(RefreshToken, refresh_token.id)
+        assert refresh_token_result is not None
+        assert refresh_token_result.revoked_at is not None
+
+    async def test_delete_account_rejects_wrong_password(
+        self, auth_client: AsyncClient
+    ):
+        resp = await auth_client.request(
+            "DELETE",
+            "/auth/me",
+            json={"password": "WrongPassword!"},
+        )
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "비밀번호가 올바르지 않습니다."
 
 
 class TestRoleBasedAccess:

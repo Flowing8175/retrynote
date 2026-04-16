@@ -31,6 +31,10 @@ class AdminUserListResponse(BaseModel):
     total: int
 
 
+class AdminStatusResponse(BaseModel):
+    status: str
+
+
 class AdminLogQuery(BaseModel):
     page: int = 1
     size: int = 20

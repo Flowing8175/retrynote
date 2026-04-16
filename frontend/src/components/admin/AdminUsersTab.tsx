@@ -1,7 +1,10 @@
 import { useState } from 'react';
+import type { AxiosError } from 'axios';
+import { Trash2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/api';
-import { StatusBadge } from '@/components';
+import { Modal, StatusBadge } from '@/components';
+import { useModalState } from '@/hooks/useModalState';
 import type { AdminUserListResponse, AdminUserItemWithRole } from '@/types';
 import { formatDateTime, formatRelative } from './adminUtils';
 
@@ -22,11 +25,15 @@ const ROLE_RANK: Record<string, number> = {
   super_admin: 2,
 };
 
+type DeleteUserModalValue = Pick<AdminUserItemWithRole, 'id' | 'username'>;
+
 export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersTabProps) {
   const queryClient = useQueryClient();
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [rowSuccess, setRowSuccess] = useState<Record<string, string>>({});
   const [isExporting, setIsExporting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteUserModal = useModalState<DeleteUserModalValue>();
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -65,6 +72,12 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
     }, 2000);
   };
 
+  const closeDeleteModal = () => {
+    if (deleteUserMutation.isPending) return;
+    deleteUserModal.close();
+    setDeleteError(null);
+  };
+
   const toggleStatusMutation = useMutation({
     mutationFn: ({ userId, isActive }: { userId: string; isActive: boolean }) =>
       adminApi.toggleUserStatus(userId, { is_active: isActive }),
@@ -86,6 +99,20 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
     },
     onError: (_, variables) => {
       setRowError(variables.userId, '역할 변경에 실패했습니다.');
+    },
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: ({ userId }: { userId: string }) => adminApi.deleteUser(userId),
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      setRowSuccessMsg(variables.userId, '삭제됨');
+      closeDeleteModal();
+    },
+    onError: (error: AxiosError<{ detail?: string }>, variables) => {
+      const message = error.response?.data?.detail ?? '사용자 삭제에 실패했습니다.';
+      setDeleteError(message);
+      setRowError(variables.userId, message);
     },
   });
 
@@ -134,6 +161,9 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
             const rolePending =
               changeRoleMutation.isPending &&
               changeRoleMutation.variables?.userId === user.id;
+            const deletePending =
+              deleteUserMutation.isPending &&
+              deleteUserMutation.variables?.userId === user.id;
             const rowError = rowErrors[user.id];
             const rowSuccessText = rowSuccess[user.id];
             const storageMB = user.storage_used_bytes / 1024 / 1024;
@@ -180,7 +210,7 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
                   <div className="flex flex-col gap-2 min-w-[10rem]">
                     <div className="flex items-center gap-2">
                       <button
-                        disabled={isSelf || statusPending}
+                        disabled={isSelf || statusPending || deletePending}
                         onClick={() =>
                           toggleStatusMutation.mutate({
                             userId: user.id,
@@ -219,7 +249,7 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
                       </button>
 
                       <select
-                        disabled={isSelf || rolePending}
+                        disabled={isSelf || rolePending || deletePending}
                         value={currentRole}
                         onChange={(e) => {
                           const newRole = e.target.value as 'user' | 'admin' | 'super_admin';
@@ -239,6 +269,42 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
                         <option value="admin">관리자</option>
                         <option value="super_admin">최고관리자</option>
                       </select>
+
+                      <button
+                        type="button"
+                        disabled={isSelf || statusPending || rolePending || deletePending}
+                        onClick={() => {
+                          setDeleteError(null);
+                          deleteUserModal.open({ id: user.id, username: user.username });
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-semantic-error-bg px-3 py-1.5 text-xs font-medium text-semantic-error transition-colors hover:bg-semantic-error-bg/80 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {deletePending ? (
+                          <svg
+                            className="h-3 w-3 animate-spin"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                            />
+                          </svg>
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                        {deletePending ? '삭제 중...' : '삭제'}
+                      </button>
 
                       {rolePending && (
                         <svg
@@ -265,10 +331,10 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
                     </div>
 
                     {isSelf && (
-                      <span className="text-[11px] text-content-muted">본인 계정 — 변경 불가</span>
+                      <span className="text-[11px] text-content-muted">본인 계정 — 변경/삭제 불가</span>
                     )}
-                     {rowError && (
-                       <span className="text-[11px] text-semantic-error">{rowError}</span>
+                      {rowError && (
+                        <span className="text-[11px] text-semantic-error">{rowError}</span>
                      )}
                      {rowSuccessText && (
                        <span className="text-[11px] text-semantic-success">{rowSuccessText}</span>
@@ -281,6 +347,43 @@ export default function AdminUsersTab({ usersData, currentAdminId }: AdminUsersT
         </tbody>
       </table>
     </section>
+
+      <Modal isOpen={deleteUserModal.isOpen} onClose={closeDeleteModal} title="사용자 삭제 확인" size="md">
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-white/[0.05] bg-surface-deep p-5">
+            <p className="text-sm text-content-secondary">
+              <span className="font-medium text-content-primary">{deleteUserModal.value?.username}</span> 계정을 완전히
+              삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+            </p>
+          </div>
+
+          {deleteError && <p className="text-sm text-semantic-error">{deleteError}</p>}
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={closeDeleteModal}
+              disabled={deleteUserMutation.isPending}
+              className="flex-1 rounded-xl border border-white/[0.05] bg-surface py-2.5 text-sm font-medium text-content-secondary hover:bg-surface-hover disabled:opacity-50"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!deleteUserModal.value || deleteUserModal.value.id === currentAdminId) {
+                  return;
+                }
+                deleteUserMutation.mutate({ userId: deleteUserModal.value.id });
+              }}
+              disabled={deleteUserMutation.isPending}
+              className="flex-1 rounded-xl bg-semantic-error py-2.5 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {deleteUserMutation.isPending ? '삭제 중...' : '삭제하기'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
