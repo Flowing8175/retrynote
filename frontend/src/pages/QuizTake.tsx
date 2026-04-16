@@ -37,14 +37,22 @@ interface QuizStreamingViewProps {
   stage: string | null;
   items: QuizItemDetail[];
   total: number;
-  thinkingPhases: { title: string; content: string }[];
+  thinkingText: string;
+  thinkingActive: boolean;
   onCancel: () => void;
 }
 
-function QuizStreamingView({ stage, items, total, thinkingPhases, onCancel }: QuizStreamingViewProps) {
+function QuizStreamingView({ stage, items, total, thinkingText, thinkingActive, onCancel }: QuizStreamingViewProps) {
   const isStreamingQuestions = stage === 'streaming_questions';
   const progressPct = total > 0 ? (items.length / total) * 100 : 0;
   const [thinkingOpen, setThinkingOpen] = useState(true);
+  const hasThinking = thinkingText.length > 0;
+
+  const headerLabel = isStreamingQuestions
+    ? '문항 생성 중'
+    : thinkingActive
+      ? '생각 중'
+      : '준비 중';
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-12 animate-fade-in">
@@ -52,7 +60,7 @@ function QuizStreamingView({ stage, items, total, thinkingPhases, onCancel }: Qu
         <div className="flex items-end justify-between">
           <div className="space-y-1">
             <div className="text-xs font-medium text-content-muted">
-              {isStreamingQuestions ? '문항 생성 중' : '준비 중'}
+              {headerLabel}
             </div>
             {isStreamingQuestions ? (
               <div className="text-3xl font-semibold tabular-nums text-white">
@@ -78,7 +86,45 @@ function QuizStreamingView({ stage, items, total, thinkingPhases, onCancel }: Qu
         </div>
       </header>
 
-      {!isStreamingQuestions ? (
+      {hasThinking ? (
+        <div className="space-y-4">
+          <button
+            type="button"
+            onClick={() => setThinkingOpen(prev => !prev)}
+            className="flex items-center gap-2 text-sm font-medium text-content-secondary hover:text-white transition-colors"
+          >
+            <svg
+              className={`w-4 h-4 text-brand-400 transition-transform duration-200 ${thinkingOpen ? 'rotate-0' : '-rotate-90'}`}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+            <span>{thinkingActive ? '생각하는 과정' : '생각한 과정'}</span>
+          </button>
+
+          <div
+            className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              thinkingOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+            }`}
+          >
+            <div className="overflow-hidden min-h-0">
+              <div className="pl-6 border-l-2 border-brand-500/30">
+                <p className="text-sm text-content-secondary italic leading-relaxed whitespace-pre-wrap">
+                  {thinkingText}
+                  {thinkingActive && (
+                    <span className="thinking-cursor" aria-hidden="true">▊</span>
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : !isStreamingQuestions ? (
         <div className="space-y-8">
           <div className="flex flex-col items-start gap-2.5 animate-fade-in-up stagger-1">
             <PillShimmer width={220} />
@@ -93,60 +139,7 @@ function QuizStreamingView({ stage, items, total, thinkingPhases, onCancel }: Qu
             </p>
           )}
         </div>
-      ) : (
-        <div className="space-y-6">
-          {thinkingPhases.length > 0 && (
-            <div className="space-y-4">
-              <button
-                type="button"
-                onClick={() => setThinkingOpen(prev => !prev)}
-                className="flex items-center gap-2 text-sm font-medium text-content-secondary hover:text-white transition-colors"
-              >
-                <svg
-                  className={`w-4 h-4 text-brand-400 transition-transform duration-200 ${thinkingOpen ? 'rotate-0' : '-rotate-90'}`}
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-                <span>생각하는 과정 표시</span>
-              </button>
-
-              <div
-                className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-                  thinkingOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-                }`}
-              >
-                <div className="overflow-hidden min-h-0">
-                  <div className="pl-6 border-l-2 border-brand-500/30 space-y-5">
-                    {thinkingPhases.map((phase, idx) => {
-                      const entryDelay = Math.min(idx * 80, 600);
-                      return (
-                        <div
-                          key={idx}
-                          className="space-y-1.5 coaching-word-fade"
-                          style={{ animationDelay: `${entryDelay}ms` }}
-                        >
-                          <p className="text-sm font-semibold text-content-primary italic">
-                            {phase.title}
-                          </p>
-                          <p className="text-sm text-content-secondary italic leading-relaxed">
-                            {phase.content}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
+      ) : null}
 
       <div className="pt-4">
         <button
@@ -280,7 +273,8 @@ export default function QuizTake() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamTotal, setStreamTotal] = useState(0);
   const [streamFailed, setStreamFailed] = useState(false);
-  const [thinkingPhases, setThinkingPhases] = useState<{ title: string; content: string }[]>([]);
+  const [thinkingText, setThinkingText] = useState<string>('');
+  const [thinkingActive, setThinkingActive] = useState<boolean>(false);
   const [generatingTooLong, setGeneratingTooLong] = useState(false);
 
   const { data: sessionData, isLoading: sessionLoading, isError: sessionIsError, error: sessionError } = useQuery({
@@ -350,15 +344,27 @@ export default function QuizTake() {
     {
       enabled: shouldStream,
       onMessage: (data: unknown) => {
-        const msg = data as { type: string; stage?: string; total?: number; item?: QuizItemDetail; index?: number; title?: string; content?: string };
+        const msg = data as {
+          type: string;
+          stage?: string;
+          total?: number;
+          item?: QuizItemDetail;
+          index?: number;
+          text?: string;
+        };
         if (msg.type === 'stage') {
           setStreamStage(msg.stage ?? null);
           if (msg.stage === 'streaming_questions' && msg.total) {
             setStreamTotal(msg.total);
           }
           setIsStreaming(true);
-        } else if (msg.type === 'thinking' && msg.title) {
-          setThinkingPhases(prev => [...prev, { title: msg.title!, content: msg.content ?? '' }]);
+        } else if (msg.type === 'thinking_start') {
+          setThinkingActive(true);
+          setThinkingText('');
+        } else if (msg.type === 'thinking_chunk' && msg.text) {
+          setThinkingText(prev => prev + msg.text);
+        } else if (msg.type === 'thinking_end') {
+          setThinkingActive(false);
         } else if (msg.type === 'question' && msg.item) {
           setStreamedItems(prev => [...prev, msg.item!]);
         }
@@ -366,12 +372,14 @@ export default function QuizTake() {
       onDone: () => {
         setIsStreaming(false);
         setStreamStage(null);
+        setThinkingActive(false);
         queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] });
         queryClient.invalidateQueries({ queryKey: ['quizItems', sessionId] });
       },
       onError: () => {
         setIsStreaming(false);
         setStreamStage(null);
+        setThinkingActive(false);
         setStreamFailed(true);
         queryClient.invalidateQueries({ queryKey: ['quizSession', sessionId] });
         queryClient.invalidateQueries({ queryKey: ['quizItems', sessionId] });
@@ -755,7 +763,8 @@ export default function QuizTake() {
         stage={streamStage}
         items={streamedItems}
         total={streamTotal}
-        thinkingPhases={thinkingPhases}
+        thinkingText={thinkingText}
+        thinkingActive={thinkingActive}
         onCancel={() => {
           closeSSE();
           navigate('/quiz/new');

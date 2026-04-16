@@ -290,6 +290,20 @@ textarea:focus-visible,
   animation: coaching-word-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* ── Streaming thinking cursor ── */
+
+@keyframes thinking-cursor-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.thinking-cursor {
+  display: inline-block;
+  margin-left: 2px;
+  color: oklch(0.72 0.17 160 / 0.85);
+  animation: thinking-cursor-blink 1s steps(1, end) infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-mode-switch,
   .animate-fade-in-up,
@@ -306,6 +320,10 @@ textarea:focus-visible,
   .animate-gentle-float {
     animation: none;
     opacity: 1;
+  }
+  .thinking-cursor {
+    animation: none;
+    opacity: 0.85;
   }
 }
 
