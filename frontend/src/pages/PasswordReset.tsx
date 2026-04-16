@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { authApi } from '@/api';
 import { getDetailMessage } from '@/utils/errorMessages';
 import { useAsyncAction } from '@/hooks/useAsyncAction';
@@ -8,9 +8,11 @@ import { AuthPageShell } from '@/components/auth/AuthPageShell';
 
 export default function PasswordReset() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<'request' | 'confirm'>('request');
+  const [searchParams] = useSearchParams();
+  const urlToken = searchParams.get('token');
+  const [step, setStep] = useState<'request' | 'confirm'>(urlToken ? 'confirm' : 'request');
   const [email, setEmail] = useState('');
-  const [token, setToken] = useState('');
+  const [token, setToken] = useState(urlToken ?? '');
   const [newPassword, setNewPassword] = useState('');
   const [success, setSuccess] = useState('');
   const { loading, error, setError, run } = useAsyncAction();
