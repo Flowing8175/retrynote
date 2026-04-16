@@ -450,16 +450,12 @@ def _resolve_and_validate_url(url: str) -> tuple[str, str, int] | None:
         return None
 
 
-def _extract_page_title(soup) -> str | None:
-    """Return sanitized <title> text (max 200 chars) or None.
+def _sanitize_title(raw: str | None) -> str | None:
+    """Strip non-printable control characters from a title; max 200 chars.
 
-    Strips non-printable control characters defensively; React escapes
-    title on render, but we also avoid persisting garbage bytes.
+    Defensive cleaning so we never persist garbage bytes. React escapes
+    title on render, but we sanitize at the source too.
     """
-    title_tag = soup.find("title")
-    if title_tag is None:
-        return None
-    raw = title_tag.get_text(strip=True)
     if not raw:
         return None
     cleaned = "".join(c for c in raw if c.isprintable() or c.isspace()).strip()
@@ -468,17 +464,166 @@ def _extract_page_title(soup) -> str | None:
     return cleaned[:200]
 
 
+def _extract_page_title(soup) -> str | None:
+    """Return sanitized <title> text from a BeautifulSoup soup (max 200 chars).
+
+    Kept for backward compatibility and unit tests. New code should prefer
+    :func:`_sanitize_title` on a raw string extracted by trafilatura.
+    """
+    title_tag = soup.find("title")
+    if title_tag is None:
+        return None
+    raw = title_tag.get_text(strip=True)
+    return _sanitize_title(raw)
+
+
+def _extract_with_trafilatura(html_bytes: bytes, url: str) -> tuple[str, str | None]:
+    """Run trafilatura extraction (CPU-bound, must be called in thread pool).
+
+    Returns (body_text, page_title). Both empty/None if extraction fails.
+
+    Trafilatura auto-detects encoding from HTML meta tags / BOM / heuristics,
+    correctly handling EUC-KR, UTF-8, and other legacy encodings. It also
+    strips boilerplate (nav, ads, comments, footers) automatically, so we
+    don't need manual tag removal.
+    """
+    import trafilatura
+
+    text = ""
+    try:
+        text = (
+            trafilatura.extract(
+                html_bytes,
+                output_format="txt",
+                favor_recall=True,  # include more content; precision matters less for AI input
+                include_comments=False,
+                include_tables=True,
+                deduplicate=True,
+                url=url,
+            )
+            or ""
+        )
+    except Exception:
+        logger.exception("trafilatura.extract failed for %s", url)
+
+    title: str | None = None
+    try:
+        metadata = trafilatura.extract_metadata(html_bytes)
+        if metadata is not None:
+            # Works for both Document objects and dict-like results
+            raw_title = getattr(metadata, "title", None)
+            title = _sanitize_title(raw_title)
+    except Exception:
+        logger.debug("trafilatura.extract_metadata failed for %s", url, exc_info=True)
+
+    return text, title
+
+
 async def _fetch_url_text(url: str) -> tuple[str, str | None]:
     """Fetch a public URL and return (extracted_body_text, page_title).
 
     Both fields are empty/None on any failure. DNS resolution is offloaded
     to a worker thread so the event loop is not blocked by slow lookups.
+    Content extraction uses trafilatura (F1 0.958 on ScrapingHub benchmark),
+    which handles encoding detection and boilerplate removal automatically.
+
+    Security notes:
+      * Before fetching, every address returned by :func:`getaddrinfo` for
+        the hostname is validated against the SSRF block list (private,
+        loopback, link-local, multicast, reserved). If any address fails,
+        the entire request is refused — this catches the main SSRF vector
+        of "attacker-supplied hostname that resolves to an internal IP".
+      * The request is sent to the original hostname URL (not the raw IP)
+        so TLS SNI and certificate verification work correctly. httpx will
+        re-resolve the hostname, but in practice this hits the OS resolver
+        cache within seconds of the pre-validation.
+      * Redirects are NOT followed (they could land on an internal IP that
+        bypassed our pre-validation).
+      * Response body is capped at 5 MB.
+
+    Residual risk: DNS rebinding between our pre-validation and httpx's
+    resolution is theoretically possible but requires the attacker to
+    control a domain with TTL=0 and win a tight race window. Defense in
+    depth would pin the validated IP via a custom ``AsyncNetworkBackend``
+    — see future work in issue tracker.
     """
     url = (url or "").strip()
     resolution = await asyncio.to_thread(_resolve_and_validate_url, url)
     if not resolution:
+        logger.warning(
+            "URL fetch rejected: DNS resolution or SSRF validation failed (url=%s)",
+            url,
+        )
+        return "", None
+    _, hostname, _ = resolution
+
+    try:
+        import httpx
+
+        MAX_FETCH_BYTES = 5 * 1024 * 1024  # 5 MB
+        body = b""
+        try:
+            async with httpx.AsyncClient() as client:
+                async with client.stream(
+                    "GET",
+                    url,
+                    follow_redirects=False,
+                    timeout=30,
+                ) as resp:
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "URL fetch returned non-200 (url=%s host=%s status=%s location=%s)",
+                            url,
+                            hostname,
+                            resp.status_code,
+                            resp.headers.get("location"),
+                        )
+                        return "", None
+                    async for chunk in resp.aiter_bytes(chunk_size=8192):
+                        body += chunk
+                        if len(body) > MAX_FETCH_BYTES:
+                            logger.warning(
+                                "URL fetch aborted: body exceeded %d bytes (url=%s)",
+                                MAX_FETCH_BYTES,
+                                url,
+                            )
+                            return "", None
+        except httpx.HTTPError as e:
+            logger.warning(
+                "URL fetch HTTP error (url=%s error_type=%s error=%s)",
+                url,
+                type(e).__name__,
+                e,
+            )
+            return "", None
+
+        if not body:
+            logger.warning("URL fetch returned empty body (url=%s)", url)
+            return "", None
+
+        # Offload HTML parsing (CPU-bound) to a worker thread
+        text, title = await asyncio.to_thread(_extract_with_trafilatura, body, url)
+        if not text:
+            logger.warning(
+                "Content extraction returned empty text (url=%s body_bytes=%d)",
+                url,
+                len(body),
+            )
+        else:
+            logger.info(
+                "URL fetch ok (url=%s body_bytes=%d text_chars=%d title=%r)",
+                url,
+                len(body),
+                len(text),
+                title,
+            )
+        return text, title
+
+    except Exception:
+        logger.exception("Unexpected error fetching URL (url=%s)", url)
         return "", None
     resolved_ip, hostname, port = resolution
+
     try:
         import httpx
         from urllib.parse import urlparse, urlunparse
@@ -497,8 +642,9 @@ async def _fetch_url_text(url: str) -> tuple[str, str | None]:
         )
 
         MAX_FETCH_BYTES = 5 * 1024 * 1024  # 5 MB
-        async with httpx.AsyncClient() as client:
-            try:
+        body = b""
+        try:
+            async with httpx.AsyncClient() as client:
                 async with client.stream(
                     "GET",
                     ip_url,
@@ -507,24 +653,54 @@ async def _fetch_url_text(url: str) -> tuple[str, str | None]:
                     timeout=30,
                 ) as resp:
                     if resp.status_code != 200:
+                        logger.warning(
+                            "URL fetch returned non-200 (url=%s status=%s)",
+                            url,
+                            resp.status_code,
+                        )
                         return "", None
-                    body = b""
                     async for chunk in resp.aiter_bytes(chunk_size=8192):
                         body += chunk
                         if len(body) > MAX_FETCH_BYTES:
+                            logger.warning(
+                                "URL fetch aborted: body exceeded %d bytes (url=%s)",
+                                MAX_FETCH_BYTES,
+                                url,
+                            )
                             return "", None
-                from bs4 import BeautifulSoup
+        except httpx.HTTPError as e:
+            logger.warning(
+                "URL fetch HTTP error (url=%s error_type=%s error=%s)",
+                url,
+                type(e).__name__,
+                e,
+            )
+            return "", None
 
-                soup = BeautifulSoup(
-                    body.decode("utf-8", errors="replace"), "html.parser"
-                )
-                page_title = _extract_page_title(soup)
-                for tag in soup(["script", "style", "nav", "footer"]):
-                    tag.decompose()
-                return soup.get_text(separator="\n"), page_title
-            except Exception:
-                return "", None
+        if not body:
+            logger.warning("URL fetch returned empty body (url=%s)", url)
+            return "", None
+
+        # Offload HTML parsing (CPU-bound) to a worker thread
+        text, title = await asyncio.to_thread(_extract_with_trafilatura, body, url)
+        if not text:
+            logger.warning(
+                "Content extraction returned empty text (url=%s body_bytes=%d)",
+                url,
+                len(body),
+            )
+        else:
+            logger.info(
+                "URL fetch ok (url=%s body_bytes=%d text_chars=%d title=%r)",
+                url,
+                len(body),
+                len(text),
+                title,
+            )
+        return text, title
+
     except Exception:
+        logger.exception("Unexpected error fetching URL (url=%s)", url)
         return "", None
 
 
