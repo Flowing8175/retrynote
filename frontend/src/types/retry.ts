@@ -9,6 +9,10 @@ export interface RetrySetCreate {
   concept_keys: string[] | null;
   size: number | null;
   quiz_session_id?: string | null;
+  mode?: 'normal' | 'exam';
+  difficulty?: string | null;
+  question_types?: string[];
+  preferred_model?: string | null;
 }
 
 export interface RetrySetResponse {

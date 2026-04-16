@@ -6,7 +6,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.schemas.billing import LimitExceededError
 from app.services.usage_service import UsageService
-from app.tier_config import TIER_LIMITS, UserTier, TIER_ESTIMATES, MODEL_BALANCED
+from app.tier_config import (
+    TIER_LIMITS,
+    UserTier,
+    TIER_ESTIMATES,
+    MODEL_ECO,
+    MODEL_BALANCED,
+    MODEL_PERFORMANCE,
+)
 from app.models.quiz import (
     QuizSession,
     QuizSessionStatus,
@@ -129,9 +136,20 @@ async def create_retry_set(
     if not concept_keys:
         raise HTTPException(status_code=400, detail="No weak concepts found for retry")
 
+    from app.config import settings as cfg
+
+    preferred = req.preferred_model or cfg.balanced_generation_model
+    model_tier_label = None
+    if preferred == cfg.eco_generation_model:
+        model_tier_label = MODEL_ECO
+    elif preferred == cfg.balanced_generation_model:
+        model_tier_label = MODEL_BALANCED
+    elif preferred == cfg.performance_generation_model:
+        model_tier_label = MODEL_PERFORMANCE
+    estimate = TIER_ESTIMATES.get(model_tier_label, 1.0) if model_tier_label else 1.0
+
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    estimate = TIER_ESTIMATES[MODEL_BALANCED]
     allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", estimate)
     if not allowed:
         raise HTTPException(
@@ -149,11 +167,13 @@ async def create_retry_set(
 
     session = QuizSession(
         user_id=user.id,
-        mode=QuizMode.normal,
+        mode=QuizMode(req.mode),
         source_mode=SourceMode.document_based,
         status=QuizSessionStatus.draft,
         question_count=effective_size,
+        difficulty=req.difficulty,
         generation_priority="retry",
+        generation_model_name=preferred,
     )
     db.add(session)
     await db.flush()
@@ -168,6 +188,8 @@ async def create_retry_set(
             "concept_keys": concept_keys,
             "size": effective_size,
             "source": req.source,
+            "difficulty": req.difficulty,
+            "question_types": req.question_types,
             "credit_estimate": estimate,
         },
     )

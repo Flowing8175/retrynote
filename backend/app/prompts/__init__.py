@@ -20,7 +20,11 @@ from .generation import (
 from .grading_short import SYSTEM_PROMPT_GRADING_SHORT
 from .grading_essay import SYSTEM_PROMPT_GRADING_ESSAY
 from .objection import SYSTEM_PROMPT_OBJECTION_REVIEW
-from .retry_generation import SYSTEM_PROMPT_RETRY_GENERATION, build_batch_retry_prompt
+from .retry_generation import (
+    SYSTEM_PROMPT_RETRY_GENERATION,
+    build_batch_retry_prompt,
+    get_retry_system_prompt,
+)
 from .study import (
     STUDY_MODEL,
     SUMMARY_PROMPT,
@@ -41,6 +45,7 @@ __all__ = [
     "SYSTEM_PROMPT_OBJECTION_REVIEW",
     "SYSTEM_PROMPT_RETRY_GENERATION",
     "build_batch_retry_prompt",
+    "get_retry_system_prompt",
     "STUDY_MODEL",
     "SUMMARY_PROMPT",
     "FLASHCARD_PROMPT",

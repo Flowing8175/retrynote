@@ -32,8 +32,8 @@ from app.prompts import (
 )
 from app.prompts.generation import build_generation_prompt
 from app.prompts.retry_generation import (
-    SYSTEM_PROMPT_RETRY_GENERATION,
     build_batch_retry_prompt,
+    get_retry_system_prompt,
 )
 from app.utils.ai_client import call_ai_with_fallback, OBJECTION_REVIEW_SCHEMA
 from app.config import settings as cfg
@@ -1054,6 +1054,8 @@ async def generate_quiz(job_id: str):
                 if job.job_type == "retry_generation":
                     concept_keys = payload.get("concept_keys", [])
                     question_count = payload.get("size", session.question_count)
+                    user_difficulty = payload.get("difficulty")
+                    user_question_types = payload.get("question_types", [])
 
                     if not concept_keys:
                         session.status = QuizSessionStatus.generation_failed
@@ -1109,15 +1111,22 @@ async def generate_quiz(job_id: str):
                         session.status = QuizSessionStatus.generation_failed
                         raise JobFailure("No retry questions could be generated")
 
-                    batch_prompt = build_batch_retry_prompt(batch_items)
+                    batch_prompt = build_batch_retry_prompt(
+                        batch_items,
+                        difficulty=user_difficulty,
+                        question_types=user_question_types,
+                    )
+                    resolved_retry_difficulty = user_difficulty or "medium"
                     batch_result, tokens_used = await call_ai_with_fallback(
                         batch_prompt,
                         BATCH_RETRY_GENERATION_SCHEMA,
                         primary_model=session.generation_model_name
                         or cfg.balanced_generation_model,
                         fallback_model=cfg.eco_generation_model,
-                        system_message=SYSTEM_PROMPT_RETRY_GENERATION,
-                        cache_key="retry_gen_v1",
+                        system_message=get_retry_system_prompt(
+                            resolved_retry_difficulty
+                        ),
+                        cache_key=f"retry_gen_{resolved_retry_difficulty}_v1",
                         max_tokens=16384,
                     )
 
@@ -1149,7 +1158,9 @@ async def generate_quiz(job_id: str):
                             concept_key=concept_key,
                             concept_label=quiz_item.concept_label,
                             category_tag=quiz_item.category_tag,
-                            difficulty=quiz_item.difficulty or "medium",
+                            difficulty=user_difficulty
+                            or quiz_item.difficulty
+                            or "medium",
                             source_refs_json=None,
                             options_json=ai_result.get("options"),
                             option_descriptions_json=ai_result.get(

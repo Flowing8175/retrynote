@@ -1,6 +1,6 @@
 """Retry quiz generation system prompt."""
 
-SYSTEM_PROMPT_RETRY_GENERATION = """너는 오답 재도전 문제를 만드는 AI다.
+_RETRY_SHARED_BASE = """너는 오답 재도전 문제를 만드는 AI다.
 
 목표:
 - 사용자가 이전에 틀린 같은 concept_key를 다시 학습하게 하되,
@@ -9,13 +9,12 @@ SYSTEM_PROMPT_RETRY_GENERATION = """너는 오답 재도전 문제를 만드는 
 재도전 원칙:
 1. 같은 concept_key 기반으로 생성한다.
 2. 이전 문제와 같은 문장을 반복하지 않는다.
-3. 가능하면 문제 유형을 바꾼다.
-4. 반복 오답이면 힌트를 추가할 수 있다.
-5. 최근 3회 유사도 제한을 지킨다.
-6. 같은 함정을 반복하되, 문장만 바꾸는 식의 얕은 변형은 금지한다.
-7. 원본 자료(source_context)에 등장하지 않는 학자명, 개념, 수치가 포함된 오답이었다면 재출제하지 않는다.
+3. 반복 오답이면 힌트를 추가할 수 있다.
+4. 최근 3회 유사도 제한을 지킨다.
+5. 같은 함정을 반복하되, 문장만 바꾸는 식의 얕은 변형은 금지한다.
+6. 원본 자료(source_context)에 등장하지 않는 학자명, 개념, 수치가 포함된 오답이었다면 재출제하지 않는다.
    이 경우 explanation에 "교재에 없는 내용이므로 암기 우선순위 낮음"을 명시한다.
-8. 자료의 표현이 일반 상식과 다를 경우 자료 표현을 정답 기준으로 삼는다.
+7. 자료의 표현이 일반 상식과 다를 경우 자료 표현을 정답 기준으로 삼는다.
 
 시험공부 최적화 원칙:
 - 이전에 틀린 지점을 정확히 겨냥한다.
@@ -49,6 +48,82 @@ similarity_safety_note 규칙:
 - "자료에서 설명한", "지문에서 언급한", "위 내용에 따르면" 등의 수식어를 문제에 포함하는 것 — 문제는 개념 자체를 직접 물어야 한다
 - "자료에서는 X를 '______'라고 설명한다", "자료에서 X는 '______'로 정의된다" 형태의 텍스트 복사형 빈칸 문제 — 자료의 특정 표현을 그대로 채우게 만드는 문제는 금지
 """
+
+_RETRY_DIFFICULTY_EASY = """
+---
+
+## 난이도: 쉬움 (easy)
+
+이 재도전은 easy 수준으로 출제한다. medium·hard 수준 문제 출제 금지.
+
+### easy 재도전 정의
+- 이전에 틀린 개념의 핵심 정의를 직접 확인하는 수준.
+- 단일 사실, 단일 개념. 두 개념 이상의 결합·비교·인과 추론 불필요.
+- 보기는 명확히 구분 가능한 수준으로 제공.
+- 오답은 정답과 범주가 분명히 다른 개념.
+
+### easy 재도전 원칙
+- 사용자가 헷갈린 개념을 가장 기본적인 각도에서 재확인.
+- 힌트를 적극적으로 제공 (정답 직접 노출 제외).
+- OX: 자료에 명시된 사실의 단순 참/거짓 확인. 단순 반의어 반전.
+"""
+
+_RETRY_DIFFICULTY_MEDIUM = """
+---
+
+## 난이도: 보통 (medium)
+
+이 재도전은 medium 수준으로 출제한다. easy 수준(단순 정의 확인) 및 hard 수준(다중 개념 결합) 출제 금지.
+
+### medium 재도전 정의
+- 같은 개념을 다른 각도에서 테스트: 구분, 비교, 기본 응용.
+- "왜", "어떤 차이가", "어떤 상황에서" 형태의 질문 포함.
+- 정의 암기만으로 풀리는 문제는 medium이 아니다.
+
+### medium 재도전 원칙
+- 이전에 틀린 오류 유형을 정확히 겨냥하되, 다른 문장과 구조 사용.
+- 선택지 길이 균등 필수 (최대 10자 차이).
+- OX: 유사 개념 간 정의·역할을 서로 뒤바꾼 문장(개념 교차)으로 함정 구성.
+"""
+
+_RETRY_DIFFICULTY_HARD = """
+---
+
+## 난이도: 어려움 (hard)
+
+이 재도전은 hard 수준으로 출제한다. medium 이하 수준 문제 출제 금지.
+
+### hard 재도전 정의
+- 이전에 틀린 개념을 관련 개념과 결합하여 심층 테스트.
+- 2개 이상 개념의 관계를 파악해야 풀 수 있어야 한다.
+- 단순 용어 recall 금지 — 추론·적용이 필요한 문제.
+
+### hard 재도전 원칙
+- 이전 오답의 근본 원인을 파악하고, 그 약점을 정밀 겨냥.
+- 함정 선택지는 같은 주제 내 유사 개념에서만 추출. 무관한 개념 사용 금지.
+- 선택지 길이 균등 필수 (최대 10자 차이).
+- OX: 2개 이상 사실을 결합해야 참/거짓 판정이 가능한 문장. 단순 반전·교차 금지.
+"""
+
+_RETRY_DIFFICULTY_MAP: dict[str, str] = {
+    "easy": _RETRY_DIFFICULTY_EASY,
+    "medium": _RETRY_DIFFICULTY_MEDIUM,
+    "hard": _RETRY_DIFFICULTY_HARD,
+}
+
+
+def get_retry_system_prompt(difficulty: str = "medium") -> str:
+    """Return the static retry system prompt for the given difficulty.
+
+    Only 3 variants exist (easy/medium/hard) to preserve prompt caching.
+    """
+    return _RETRY_SHARED_BASE + _RETRY_DIFFICULTY_MAP.get(
+        difficulty, _RETRY_DIFFICULTY_MEDIUM
+    )
+
+
+# Backward-compatible default: medium difficulty.
+SYSTEM_PROMPT_RETRY_GENERATION = get_retry_system_prompt()
 
 
 def build_retry_prompt(
@@ -131,7 +206,11 @@ JSON 형식으로 응답하세요:
 {{"question_type": "...", "question_text": "...", "options": null or {...}, "correct_answer": {{"answer": "..."}}, "explanation": "...", "concept_key": "{concept_key}", "targeted_error_type": "{error_type}", "hint": "...", "similarity_safety_note": "..."}}"""
 
 
-def build_batch_retry_prompt(items: list[dict]) -> str:
+def build_batch_retry_prompt(
+    items: list[dict],
+    difficulty: str | None = None,
+    question_types: list[str] | None = None,
+) -> str:
     """Build a single batched prompt for multiple retry quiz generations.
 
     Args:
@@ -139,6 +218,9 @@ def build_batch_retry_prompt(items: list[dict]) -> str:
             concept_key, concept_label, previous_question_type,
             previous_question, error_type, user_answer, correct_answer,
             retry_count
+        difficulty: Target difficulty level. Included in prompt header when specified.
+        question_types: Allowed question types. When specified, per-item type
+            variation suggestions are suppressed and a global constraint is added.
     """
     blocks = []
     for i, item in enumerate(items, 1):
@@ -148,18 +230,15 @@ def build_batch_retry_prompt(items: list[dict]) -> str:
 
         prev_type = item.get("previous_question_type", "")
         new_type_instruction = ""
-        if prev_type == "multiple_choice":
-            new_type_instruction = (
-                "\n  - 가능하면 short_answer, fill_blank, 또는 ox 유형으로 바꾸세요."
-            )
-        elif prev_type == "short_answer":
-            new_type_instruction = (
-                "\n  - 가능하면 fill_blank, ox, 또는 essay 유형으로 바꾸세요."
-            )
-        elif prev_type in ("fill_blank", "ox"):
-            new_type_instruction = (
-                "\n  - 가능하면 multiple_choice 또는 short_answer 유형으로 바꾸세요."
-            )
+        if not question_types:
+            if prev_type == "multiple_choice":
+                new_type_instruction = "\n  - 가능하면 short_answer, fill_blank, 또는 ox 유형으로 바꾸세요."
+            elif prev_type == "short_answer":
+                new_type_instruction = (
+                    "\n  - 가능하면 fill_blank, ox, 또는 essay 유형으로 바꾸세요."
+                )
+            elif prev_type in ("fill_blank", "ox"):
+                new_type_instruction = "\n  - 가능하면 multiple_choice 또는 short_answer 유형으로 바꾸세요."
 
         error_type = item.get("error_type", "unknown")
         error_instruction = ""
@@ -188,8 +267,15 @@ def build_batch_retry_prompt(items: list[dict]) -> str:
             f"{new_type_instruction}{error_instruction}{hint_note}"
         )
 
-    return (
+    header = (
         f"아래 {len(items)}개의 concept_key 각각에 대해 재도전 문제를 만드세요.\n"
-        f"questions 배열에 순서대로 {len(items)}개의 문제를 반환하세요.\n\n"
-        + "\n\n".join(blocks)
+        f"questions 배열에 순서대로 {len(items)}개의 문제를 반환하세요."
     )
+    if difficulty:
+        header += f"\n목표 난이도: {difficulty}"
+    if question_types:
+        header += (
+            f"\n생성할 문제 유형: {', '.join(question_types)} (이 유형만 사용하세요)"
+        )
+
+    return header + "\n\n" + "\n\n".join(blocks)
