@@ -1,16 +1,17 @@
 import asyncio
+import json as json_mod
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import AsyncGenerator
+
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-logger = logging.getLogger(__name__)
-
+from app.config import settings as cfg
 from app.database import async_session
-from app.utils.job_runner import JobFailure, JobRunner
 from app.models.file import File, FileStatus, ParsedDocument, DocumentChunk
+from app.models.objection import Objection, ObjectionStatus, WeakPoint
 from app.models.quiz import (
     QuizSession,
     QuizSessionFile,
@@ -21,11 +22,8 @@ from app.models.quiz import (
     Judgement,
     ErrorType,
 )
-from app.models.objection import Objection, ObjectionStatus, WeakPoint
 from app.models.search import Job, DraftAnswer
-from app.utils.normalize import normalize_answer, normalize_concept_key
 from app.prompts import (
-    SYSTEM_PROMPT_QUIZ_GENERATION,
     SYSTEM_PROMPT_DIFFICULTY_SELECTION,
     SYSTEM_PROMPT_OBJECTION_REVIEW,
     get_generation_system_prompt,
@@ -36,8 +34,10 @@ from app.prompts.retry_generation import (
     get_retry_system_prompt,
 )
 from app.utils.ai_client import call_ai_with_fallback, OBJECTION_REVIEW_SCHEMA
-from app.config import settings as cfg
-import json as json_mod
+from app.utils.job_runner import JobFailure, JobRunner
+from app.utils.normalize import normalize_answer, normalize_concept_key
+
+logger = logging.getLogger(__name__)
 
 _MAX_URL_SOURCE_CHARS = 15000
 
@@ -1354,7 +1354,6 @@ async def generate_quiz(job_id: str):
 
                 from app.utils.ai_client import (
                     call_ai_with_fallback,
-                    GENERATION_SCHEMA,
                     BATCH_RETRY_GENERATION_SCHEMA,
                 )
                 from app.config import settings as cfg
