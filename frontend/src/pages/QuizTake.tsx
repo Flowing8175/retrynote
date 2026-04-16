@@ -887,9 +887,11 @@ export default function QuizTake() {
               <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2.5 py-1 rounded-md border border-brand-500/20">
                 {currentQuestionType ? (QUESTION_TYPE_LABELS[currentQuestionType] ?? currentQuestionType.replace('_', ' ')) : '문항'}
               </span>
-              <span className="text-xs font-medium text-content-muted">
-                {currentItem.concept_label || '개념'}
-              </span>
+              {currentQuestionType !== 'short_answer' && (
+                <span className="text-xs font-medium text-content-muted">
+                  {currentItem.concept_label || '개념'}
+                </span>
+              )}
               {!isExamMode && !isCompleted && currentQuestionType !== null && FREE_TEXT_QUESTION_TYPES.has(currentQuestionType) && (
                 <button
                   onClick={() => setIsAiModalOpen(true)}
