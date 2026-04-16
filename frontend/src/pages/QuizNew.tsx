@@ -3,7 +3,7 @@ import { useFlip } from '@/hooks/useFlip';
 import { useModalState } from '@/hooks/useModalState';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles } from 'lucide-react';
+import { History, ChevronRight, AlertTriangle, BookOpen, Sparkles, PenLine } from 'lucide-react';
 import { filesApi, quizApi } from '@/api';
 import { Modal, StatusBadge, SkeletonTransition } from '@/components';
 import { OptionGroup } from '@/components/ui';
@@ -40,6 +40,8 @@ const DIFFICULTY_OPTIONS = [
 ];
 
 const isUrl = (text: string): boolean => /^https?:\/\//i.test(text.trim());
+
+type UISourceMode = 'document_based' | 'no_source' | 'topic_based';
 
 function QuizNewSkeleton() {
   return (
@@ -93,8 +95,17 @@ function QuizNewSkeleton() {
 
 export default function QuizNew() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const locationState = location.state as { inputError?: string; inputSourceMode?: string; preSelectedFileId?: string } | null;
 
-  const [sourceMode, setSourceMode] = useState<'document_based' | 'no_source'>('document_based');
+  const [sourceMode, setSourceMode] = useState<UISourceMode>(() => {
+    // Returning from QuizTake after INVALID_INPUT on a no_source session means
+    // the user had supplied a topic/URL — restore them to topic_based mode.
+    if (locationState?.inputSourceMode === 'no_source' && locationState.inputError) {
+      return 'topic_based';
+    }
+    return 'document_based';
+  });
   const [selectedFileIds, setSelectedFileIds] = useState<string[]>([]);
   const [mode, setMode] = useState<'normal' | 'exam'>('normal');
   const [questionCount, setQuestionCount] = useState(5);
@@ -117,8 +128,6 @@ export default function QuizNew() {
   };
   const noSourceModal = useModalState();
   const [noSourceConfirmed, setNoSourceConfirmed] = useState(false);
-  const location = useLocation();
-  const locationState = location.state as { inputError?: string; inputSourceMode?: string; preSelectedFileId?: string } | null;
   const [topic, setTopic] = useState('');
   const [topicError, setTopicError] = useState<string | null>(() => {
     if (locationState?.inputSourceMode === 'no_source' && locationState.inputError) {
@@ -143,9 +152,12 @@ export default function QuizNew() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const { ref: section2Ref, capture: captureSection2 } = useFlip<HTMLElement>();
-  const handleSourceModeChange = (v: 'document_based' | 'no_source') => {
+  const handleSourceModeChange = (v: UISourceMode) => {
     captureSection2();
     setSourceMode(v);
+    setTopicError(null);
+    setFileError(null);
+    setFormMessage(null);
   };
 
   const { data: quizConfig } = useQuery({
@@ -211,7 +223,9 @@ export default function QuizNew() {
     mutationFn: () => {
       abortControllerRef.current = new AbortController();
       const trimmedTopic = topic.trim();
-      const detectedUrl = sourceMode === 'no_source' && isUrl(trimmedTopic);
+      const detectedUrl = sourceMode === 'topic_based' && isUrl(trimmedTopic);
+      const backendSourceMode: 'document_based' | 'no_source' =
+        sourceMode === 'document_based' ? 'document_based' : 'no_source';
       return quizApi.createQuizSession(
         {
           mode,
@@ -222,8 +236,8 @@ export default function QuizNew() {
           question_types: selectedQuestionTypes,
           generation_priority: null,
           preferred_model: activeModel,
-          source_mode: sourceMode,
-          topic: sourceMode === 'no_source' && !detectedUrl ? (trimmedTopic || null) : null,
+          source_mode: backendSourceMode,
+          topic: sourceMode === 'topic_based' && !detectedUrl ? (trimmedTopic || null) : null,
           source_url: detectedUrl ? trimmedTopic : null,
           idempotency_key: crypto.randomUUID(),
           stream: true,
@@ -252,6 +266,7 @@ export default function QuizNew() {
   }, [allFiles, selectedFolderId]);
 
   const canSubmitDocumentBased = sourceMode === 'document_based' && selectedFileIds.length > 0;
+  const canSubmitTopicBased = sourceMode === 'topic_based' && topic.trim().length > 0;
   const primaryActionLabel = createQuizMutation.isPending ? '생성 중...' : '퀴즈 생성하기';
 
   const handleFileToggle = (fileId: string) => {
@@ -290,19 +305,28 @@ export default function QuizNew() {
 
   const handleSubmit = () => {
     setFormMessage(null);
-    if (sourceMode === 'document_based' && selectedFileIds.length === 0) {
-      setFormMessage('최소 하나의 학습 자료를 선택해 주세요.');
+    if (sourceMode === 'document_based') {
+      if (selectedFileIds.length === 0) {
+        setFormMessage('최소 하나의 학습 자료를 선택해 주세요.');
+        return;
+      }
+      void createQuiz();
       return;
     }
-    if (sourceMode === 'no_source') {
-      if (isUrl(topic)) {
+    if (sourceMode === 'topic_based') {
+      const trimmed = topic.trim();
+      if (!trimmed) {
+        setTopicError('주제 또는 URL을 입력해 주세요.');
+        return;
+      }
+      if (isUrl(trimmed)) {
         void createQuiz();
         return;
       }
       noSourceModal.open();
       return;
     }
-    void createQuiz();
+    noSourceModal.open();
   };
 
   const handleConfirmNoSource = () => {
@@ -350,12 +374,13 @@ export default function QuizNew() {
         <OptionGroup
           options={[
             { value: 'document_based' as const, label: '내 자료에서 출제', description: '업로드한 문서나 PDF를 바탕으로 퀴즈를 만듭니다. 가장 정확하고 권장되는 방식입니다.', icon: <BookOpen size={20} /> },
-            { value: 'no_source' as const, label: 'AI 배경지식 출제', description: '자료 없이 AI가 가진 지식만으로 주제를 선택해 퀴즈를 냅니다.', icon: <Sparkles size={20} /> },
+            { value: 'topic_based' as const, label: '주제 직접 입력하기', description: '원하는 주제나 URL을 직접 입력해 맞춤 퀴즈를 생성합니다.', icon: <PenLine size={20} /> },
+            { value: 'no_source' as const, label: 'AI 배경지식 출제', description: '자료 없이 AI가 흥미로운 주제를 무작위로 골라 퀴즈를 냅니다.', icon: <Sparkles size={20} /> },
           ]}
           value={sourceMode}
-          onChange={(v) => handleSourceModeChange(v as 'document_based' | 'no_source')}
+          onChange={(v) => handleSourceModeChange(v as UISourceMode)}
           size="lg"
-          layout="grid-2"
+          layout="grid-3"
         />
 
         <div className="relative grid transition-[grid-template-rows] duration-400 ease-[cubic-bezier(0.16,1,0.3,1)]"
@@ -446,17 +471,27 @@ export default function QuizNew() {
           </div>
 
           <div
-            aria-hidden={sourceMode !== 'no_source'}
+            aria-hidden={sourceMode !== 'topic_based'}
             className={`transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-              sourceMode === 'no_source'
+              sourceMode === 'topic_based'
                 ? 'opacity-100 translate-y-0 pointer-events-auto'
                 : 'opacity-0 translate-y-1 pointer-events-none absolute inset-x-0 top-0'
             }`}
           >
             <div className="space-y-4 bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
-              <label htmlFor="topic-input" className="block text-sm font-medium text-content-primary">
-                학습하고 싶은 주제를 입력하세요
-              </label>
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-300">
+                  <PenLine size={20} />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <label htmlFor="topic-input" className="block text-sm font-semibold text-white">
+                    주제 또는 URL 입력
+                  </label>
+                  <p className="text-xs text-content-secondary leading-relaxed">
+                    공부하고 싶은 주제를 직접 입력하거나 참고할 웹 페이지의 URL을 붙여넣어 주세요.
+                  </p>
+                </div>
+              </div>
               <input
                 id="topic-input"
                 type="text"
@@ -468,8 +503,31 @@ export default function QuizNew() {
               {topicError ? (
                 <p className="text-xs text-semantic-error">{topicError}</p>
               ) : (
-                <p className="text-xs text-content-muted">주제를 입력하거나 URL을 붙여넣으면 해당 내용으로 퀴즈가 생성됩니다. 비워두면 무작위로 흥미로운 상식 퀴즈가 생성됩니다.</p>
+                <p className="text-xs text-content-muted">URL을 붙여넣으면 해당 페이지 내용으로 퀴즈가 생성되고, 일반 주제는 AI 배경지식을 기반으로 출제됩니다.</p>
               )}
+            </div>
+          </div>
+
+          <div
+            aria-hidden={sourceMode !== 'no_source'}
+            className={`transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+              sourceMode === 'no_source'
+                ? 'opacity-100 translate-y-0 pointer-events-auto'
+                : 'opacity-0 translate-y-1 pointer-events-none absolute inset-x-0 top-0'
+            }`}
+          >
+            <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-300">
+                  <Sparkles size={20} />
+                </div>
+                <div className="flex-1 space-y-1">
+                  <h3 className="text-sm font-semibold text-white">AI가 주제를 무작위로 선택합니다</h3>
+                  <p className="text-xs text-content-secondary leading-relaxed">
+                    AI 배경지식을 기반으로 흥미로운 상식 퀴즈가 자동으로 출제됩니다. 어떤 문제가 나올지 기대해 보세요.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -625,7 +683,11 @@ export default function QuizNew() {
           
           <button
             onClick={handleSubmit}
-            disabled={createQuizMutation.isPending || (sourceMode === 'document_based' && !canSubmitDocumentBased)}
+            disabled={
+              createQuizMutation.isPending ||
+              (sourceMode === 'document_based' && !canSubmitDocumentBased) ||
+              (sourceMode === 'topic_based' && !canSubmitTopicBased)
+            }
             className="group relative w-full sm:w-auto bg-brand-500 text-brand-900 px-10 py-4 rounded-2xl text-base font-semibold transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
           >
             <div className="flex items-center justify-center gap-2">

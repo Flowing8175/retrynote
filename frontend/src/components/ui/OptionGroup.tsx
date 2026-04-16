@@ -23,7 +23,7 @@ export interface OptionGroupProps<T extends string> {
 const LAYOUT_CLASS: Record<string, string> = {
   row: 'flex gap-2',
   'grid-2': 'grid grid-cols-2 gap-2',
-  'grid-3': 'grid grid-cols-3 gap-2',
+  'grid-3': 'grid grid-cols-1 sm:grid-cols-3 gap-2',
   wrap: 'flex flex-wrap gap-2',
 };
 
