@@ -20,8 +20,9 @@ function getBarColor(pct: number): string {
   return 'oklch(0.72 0.18 160)';                 // green
 }
 
-function fmtCredits(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+function fmtRemaining(remaining: number, resourceType: string): string {
+  const clamped = Math.max(0, remaining);
+  return resourceType === 'quiz' ? clamped.toFixed(1) : String(Math.floor(clamped));
 }
 
 function formatStorageBytes(bytes: number): string {
@@ -160,12 +161,12 @@ export default function UsageBar({ expanded = true }: UsageBarProps) {
                 <span className="text-xs text-content-muted truncate">{label}</span>
                  <span className="text-xs text-content-secondary font-medium shrink-0">
                    {win.resourceType === 'storage'
-                     ? isUnlimited
-                       ? '무제한'
-                       : `${formatStorageBytes(win.consumed)} / ${formatStorageBytes(win.limit)}`
-                     : isUnlimited
-                       ? '무제한'
-                       : `${fmtCredits(win.consumed)} / ${fmtCredits(win.limit)} 크레딧`}
+                      ? isUnlimited
+                        ? '무제한'
+                        : `${formatStorageBytes(win.consumed)} / ${formatStorageBytes(win.limit)}`
+                      : isUnlimited
+                        ? '무제한'
+                        : `${fmtRemaining(win.limit - win.consumed, win.resourceType)} 남음`}
                  </span>
               </div>
               {!isUnlimited && (
