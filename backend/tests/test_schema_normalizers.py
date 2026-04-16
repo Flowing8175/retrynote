@@ -37,9 +37,11 @@ class TestNormalizeOptionsPayload:
         result = normalize_options_payload([])
         assert result == {"options": []}
 
-    async def test_empty_dict_returns_empty_dict(self):
+    async def test_empty_dict_returns_none(self):
+        # Gemini sometimes returns all-null property dicts; after filtering
+        # out None values an empty dict is treated as "no options".
         result = normalize_options_payload({})
-        assert result == {}
+        assert result is None
 
 
 class TestNormalizeCorrectAnswerPayload:

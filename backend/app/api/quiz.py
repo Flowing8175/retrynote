@@ -408,7 +408,7 @@ async def get_quiz_items(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await get_owned_or_raise(
+    session = await get_owned_or_raise(
         db,
         QuizSession,
         session_id,
@@ -424,6 +424,11 @@ async def get_quiz_items(
     )
     items = result.scalars().all()
 
+    hide_answers = session.mode == QuizMode.exam and session.status in (
+        QuizSessionStatus.ready,
+        QuizSessionStatus.in_progress,
+    )
+
     return [
         QuizItemResponse(
             id=i.id,
@@ -436,8 +441,8 @@ async def get_quiz_items(
             concept_label=i.concept_label,
             category_tag=i.category_tag,
             concept_key=i.concept_key,
-            correct_answer=i.correct_answer_json,
-            explanation=i.explanation_text,
+            correct_answer=None if hide_answers else i.correct_answer_json,
+            explanation=None if hide_answers else i.explanation_text,
             tips=i.tips_text,
         )
         for i in items

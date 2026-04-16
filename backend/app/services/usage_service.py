@@ -13,6 +13,13 @@ from app.tier_config import TIER_LIMITS, WINDOW_DAYS, UserTier
 from app.utils.db_helpers import get_or_create_credit_balance
 
 
+def _ensure_aware(dt: datetime) -> datetime:
+    """SQLite returns naive datetimes even from TIMESTAMP WITH TIME ZONE
+    columns; normalize to UTC so comparisons against tz-aware `now` work
+    uniformly across Postgres (prod) and SQLite (tests)."""
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+
+
 class UsageService:
     async def _get_or_create_credit_balance(
         self, db: AsyncSession, user_id: str
@@ -47,7 +54,7 @@ class UsageService:
             )
             db.add(record)
             await db.flush()
-        elif now > record.window_end:
+        elif now > _ensure_aware(record.window_end):
             record.window_start = now
             record.window_end = now + timedelta(days=WINDOW_DAYS)
             record.consumed = 0
@@ -160,10 +167,10 @@ class UsageService:
             consumed = 0
             window_start = now
             window_end = now + timedelta(days=WINDOW_DAYS)
-            if record and now <= record.window_end:
+            if record and now <= _ensure_aware(record.window_end):
                 consumed = record.consumed
-                window_start = record.window_start
-                window_end = record.window_end
+                window_start = _ensure_aware(record.window_start)
+                window_end = _ensure_aware(record.window_end)
 
             windows.append(
                 UsageWindowSchema(

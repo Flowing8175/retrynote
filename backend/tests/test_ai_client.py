@@ -20,6 +20,7 @@ def _make_mock_response(content_dict: dict) -> MagicMock:
     choice.message = message
     response = MagicMock()
     response.choices = [choice]
+    response.usage = None
     return response
 
 
@@ -30,6 +31,7 @@ def _make_none_response() -> MagicMock:
     choice.message = message
     response = MagicMock()
     response.choices = [choice]
+    response.usage = None
     return response
 
 
@@ -96,7 +98,7 @@ class TestCallAiStructured:
         )
 
         with patch("app.utils.ai_client.client", mock_client):
-            result = await call_ai_structured(
+            result, tokens = await call_ai_structured(
                 prompt="generate",
                 schema=GENERATION_SCHEMA,
                 system_message="You are a quiz generator",
@@ -104,6 +106,7 @@ class TestCallAiStructured:
             )
 
         assert result == payload
+        assert tokens == 0
 
     async def test_max_completion_tokens_for_gpt5(self):
         mock_client = MagicMock()
@@ -168,7 +171,7 @@ class TestCallAiWithFallback:
         )
 
         with patch("app.utils.ai_client.client", mock_client):
-            result = await call_ai_with_fallback(
+            result, tokens = await call_ai_with_fallback(
                 prompt="test",
                 schema={},
                 primary_model="gpt-4o",
@@ -177,6 +180,7 @@ class TestCallAiWithFallback:
             )
 
         assert result == payload
+        assert tokens == 0
 
     async def test_primary_fails_falls_back(self):
         primary_payload = {"result": "fallback"}
@@ -194,7 +198,7 @@ class TestCallAiWithFallback:
         mock_client.chat.completions.create = AsyncMock(side_effect=side_effect)
 
         with patch("app.utils.ai_client.client", mock_client):
-            result = await call_ai_with_fallback(
+            result, tokens = await call_ai_with_fallback(
                 prompt="test",
                 schema={},
                 primary_model="gpt-4o",
@@ -203,6 +207,7 @@ class TestCallAiWithFallback:
             )
 
         assert result == primary_payload
+        assert tokens == 0
         assert call_count == 2
 
     async def test_both_fail_raises_fallback_exception(self):

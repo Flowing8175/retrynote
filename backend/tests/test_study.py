@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 import pytest
 import pytest_asyncio
@@ -14,6 +14,7 @@ from app.models.study import (
     StudyMindmap,
     StudySummary,
 )
+from app.tier_config import STUDY_CREDIT_ESTIMATE
 
 
 @pytest.fixture(autouse=True)
@@ -272,7 +273,7 @@ class TestGenerateSummary:
         assert resp.status_code == 200
         assert resp.json() == {"status": "dispatched"}
         mock_study_dispatch_task.assert_called_once_with(
-            "generate_study_summary", [ready_file.id]
+            "generate_study_summary", [ready_file.id, ANY, STUDY_CREDIT_ESTIMATE]
         )
 
     async def test_409_already_generating(
@@ -384,7 +385,7 @@ class TestGenerateFlashcards:
         assert resp.status_code == 200
         assert resp.json() == {"status": "dispatched"}
         mock_study_dispatch_task.assert_called_once_with(
-            "generate_study_flashcards", [ready_file.id]
+            "generate_study_flashcards", [ready_file.id, ANY, STUDY_CREDIT_ESTIMATE]
         )
 
     async def test_409_already_generating(
@@ -502,7 +503,7 @@ class TestGenerateMindmap:
         assert resp.status_code == 200
         assert resp.json() == {"status": "dispatched"}
         mock_study_dispatch_task.assert_called_once_with(
-            "generate_study_mindmap", [ready_file.id]
+            "generate_study_mindmap", [ready_file.id, ANY, STUDY_CREDIT_ESTIMATE]
         )
 
     async def test_409_already_generating(

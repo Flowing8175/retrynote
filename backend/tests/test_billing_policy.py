@@ -35,8 +35,8 @@ def _make_user(tier: str = "free") -> User:
 
 
 class TestTierConfig:
-    def test_free_quota_is_20(self):
-        assert TIER_LIMITS[UserTier.free].quiz_per_window == 20
+    def test_free_quiz_quota(self):
+        assert TIER_LIMITS[UserTier.free].quiz_per_window == 5.0
 
     def test_free_ocr_quota_is_5(self):
         assert TIER_LIMITS[UserTier.free].ocr_pages_per_window == 5
@@ -70,7 +70,7 @@ class TestUsageServiceQuota:
         )
         assert allowed is True
         assert source == "tier"
-        assert remaining == 19
+        assert remaining == 4
 
     async def test_free_user_exactly_at_quota(self, db_session):
         user = _make_user("free")
@@ -79,9 +79,7 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        allowed, remaining, _ = await svc.check_and_consume(
-            db_session, user, "quiz", 20
-        )
+        allowed, remaining, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
         assert allowed is True
         assert remaining == 0
 
@@ -92,7 +90,7 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 21)
+        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 6)
         assert allowed is False
 
     async def test_quota_accumulates_across_calls(self, db_session):
@@ -102,7 +100,7 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        for _ in range(20):
+        for _ in range(5):
             allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 1)
             assert allowed is True
 
@@ -117,9 +115,8 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        for _ in range(6):
-            allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 3)
-            assert allowed is True
+        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 3)
+        assert allowed is True
 
         allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 3)
         assert allowed is False
@@ -131,9 +128,8 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        for _ in range(4):
-            allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
-            assert allowed is True
+        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
+        assert allowed is True
 
         allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
         assert allowed is False
@@ -145,7 +141,7 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 20)
+        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
         assert allowed is True
 
         result = await db_session.execute(
@@ -160,7 +156,7 @@ class TestUsageServiceQuota:
 
         allowed, remaining, _ = await svc.check_and_consume(db_session, user, "quiz", 1)
         assert allowed is True
-        assert remaining == 19
+        assert remaining == 4
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +192,7 @@ class TestUsageStatusSchema:
             (w for w in status.windows if w.resource_type == "quiz"), None
         )
         assert quiz_window is not None
-        assert quiz_window.limit == 20
+        assert quiz_window.limit == 5.0
         assert quiz_window.consumed == 0
 
     async def test_usage_status_consumed_reflects_actual_use(self, db_session):
@@ -211,7 +207,7 @@ class TestUsageStatusSchema:
 
         quiz_window = next(w for w in status.windows if w.resource_type == "quiz")
         assert quiz_window.consumed == 3
-        assert quiz_window.limit == 20
+        assert quiz_window.limit == 5.0
 
 
 # ---------------------------------------------------------------------------
@@ -235,10 +231,31 @@ async def free_auth_client(client, free_user):
     return client
 
 
+@pytest_asyncio.fixture
+async def free_user_ready_file(db_session, free_user):
+    from app.models.file import File, FileSourceType, FileStatus
+
+    file = File(
+        id=str(uuid.uuid4()),
+        user_id=free_user.id,
+        original_filename="free_user_test.pdf",
+        file_type="pdf",
+        file_size_bytes=1024,
+        source_type=FileSourceType.upload,
+        status=FileStatus.ready,
+        is_searchable=True,
+        is_quiz_eligible=True,
+    )
+    db_session.add(file)
+    await db_session.commit()
+    await db_session.refresh(file)
+    return file
+
+
 @pytest.mark.asyncio
 class TestQuizCreationPolicy:
     async def test_free_user_can_create_with_eco_model(
-        self, free_auth_client: AsyncClient, ready_file
+        self, free_auth_client: AsyncClient, free_user_ready_file
     ):
         """Free user must be able to use ECO model without restriction."""
         from app.config import settings
@@ -247,7 +264,7 @@ class TestQuizCreationPolicy:
             "/quiz-sessions",
             json={
                 "mode": "normal",
-                "selected_file_ids": [ready_file.id],
+                "selected_file_ids": [free_user_ready_file.id],
                 "question_count": 3,
                 "source_mode": "document_based",
                 "preferred_model": settings.eco_generation_model,
@@ -256,7 +273,7 @@ class TestQuizCreationPolicy:
         assert resp.status_code == 200
 
     async def test_free_user_can_create_with_balanced_model(
-        self, free_auth_client: AsyncClient, ready_file
+        self, free_auth_client: AsyncClient, free_user_ready_file
     ):
         """Free user must be able to use BALANCED model — no tier gating."""
         from app.config import settings
@@ -265,7 +282,7 @@ class TestQuizCreationPolicy:
             "/quiz-sessions",
             json={
                 "mode": "normal",
-                "selected_file_ids": [ready_file.id],
+                "selected_file_ids": [free_user_ready_file.id],
                 "question_count": 3,
                 "source_mode": "document_based",
                 "preferred_model": settings.balanced_generation_model,
@@ -274,7 +291,7 @@ class TestQuizCreationPolicy:
         assert resp.status_code == 200
 
     async def test_free_user_can_create_with_performance_model(
-        self, free_auth_client: AsyncClient, ready_file
+        self, free_auth_client: AsyncClient, free_user_ready_file
     ):
         """Free user must be able to use PERFORMANCE model — no tier gating."""
         from app.config import settings
@@ -283,7 +300,7 @@ class TestQuizCreationPolicy:
             "/quiz-sessions",
             json={
                 "mode": "normal",
-                "selected_file_ids": [ready_file.id],
+                "selected_file_ids": [free_user_ready_file.id],
                 "question_count": 3,
                 "source_mode": "document_based",
                 "preferred_model": settings.performance_generation_model,
@@ -304,7 +321,7 @@ class TestQuizCreationPolicy:
             resource_type="quiz",
             window_start=now,
             window_end=now + timedelta(days=30),
-            consumed=20,  # fully exhausted
+            consumed=5,  # fully exhausted against 5.0 quiz_per_window quota
         )
         db_session.add(record)
         await db_session.commit()
@@ -321,17 +338,18 @@ class TestQuizCreationPolicy:
         data = resp.json()
         assert data["detail"]["limit_type"] == "quiz"
 
-    async def test_eco_model_costs_1(
-        self, free_auth_client: AsyncClient, free_user, db_session, ready_file
+    async def test_eco_model_cost(
+        self, free_auth_client: AsyncClient, free_user, db_session, free_user_ready_file
     ):
-        """ECO model should deduct 1 from quota."""
+        """ECO model should deduct TIER_ESTIMATES[MODEL_ECO] from quota."""
         from app.config import settings
+        from app.tier_config import TIER_ESTIMATES, MODEL_ECO
 
         await free_auth_client.post(
             "/quiz-sessions",
             json={
                 "mode": "normal",
-                "selected_file_ids": [ready_file.id],
+                "selected_file_ids": [free_user_ready_file.id],
                 "question_count": 3,
                 "source_mode": "document_based",
                 "preferred_model": settings.eco_generation_model,
@@ -347,19 +365,20 @@ class TestQuizCreationPolicy:
         )
         record = result.scalar_one_or_none()
         assert record is not None
-        assert record.consumed == 1
+        assert record.consumed == TIER_ESTIMATES[MODEL_ECO]
 
-    async def test_balanced_model_costs_3(
-        self, free_auth_client: AsyncClient, free_user, db_session, ready_file
+    async def test_balanced_model_cost(
+        self, free_auth_client: AsyncClient, free_user, db_session, free_user_ready_file
     ):
-        """BALANCED model should deduct 3 from quota."""
+        """BALANCED model should deduct TIER_ESTIMATES[MODEL_BALANCED] from quota."""
         from app.config import settings
+        from app.tier_config import TIER_ESTIMATES, MODEL_BALANCED
 
         await free_auth_client.post(
             "/quiz-sessions",
             json={
                 "mode": "normal",
-                "selected_file_ids": [ready_file.id],
+                "selected_file_ids": [free_user_ready_file.id],
                 "question_count": 3,
                 "source_mode": "document_based",
                 "preferred_model": settings.balanced_generation_model,
@@ -375,19 +394,20 @@ class TestQuizCreationPolicy:
         )
         record = result.scalar_one_or_none()
         assert record is not None
-        assert record.consumed == 3
+        assert record.consumed == TIER_ESTIMATES[MODEL_BALANCED]
 
-    async def test_performance_model_costs_5(
-        self, free_auth_client: AsyncClient, free_user, db_session, ready_file
+    async def test_performance_model_cost(
+        self, free_auth_client: AsyncClient, free_user, db_session, free_user_ready_file
     ):
-        """PERFORMANCE model should deduct 5 from quota."""
+        """PERFORMANCE model should deduct TIER_ESTIMATES[MODEL_PERFORMANCE] from quota."""
         from app.config import settings
+        from app.tier_config import TIER_ESTIMATES, MODEL_PERFORMANCE
 
         await free_auth_client.post(
             "/quiz-sessions",
             json={
                 "mode": "normal",
-                "selected_file_ids": [ready_file.id],
+                "selected_file_ids": [free_user_ready_file.id],
                 "question_count": 3,
                 "source_mode": "document_based",
                 "preferred_model": settings.performance_generation_model,
@@ -403,4 +423,4 @@ class TestQuizCreationPolicy:
         )
         record = result.scalar_one_or_none()
         assert record is not None
-        assert record.consumed == 5
+        assert record.consumed == TIER_ESTIMATES[MODEL_PERFORMANCE]

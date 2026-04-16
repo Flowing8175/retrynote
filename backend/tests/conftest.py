@@ -32,11 +32,22 @@ from app.middleware.auth import hash_password, create_access_token, create_admin
 
 import app.services as _app_services_pkg
 
+
+async def _empty_stream():
+    if False:
+        yield b""
+
+
 if not hasattr(_app_services_pkg, "storage"):
     _storage_stub = types.ModuleType("app.services.storage")
     setattr(_storage_stub, "upload_file", AsyncMock())
     setattr(_storage_stub, "delete_file", AsyncMock())
     setattr(_storage_stub, "download_file", AsyncMock(return_value=b""))
+    setattr(
+        _storage_stub,
+        "download_file_stream",
+        MagicMock(side_effect=lambda _key: _empty_stream()),
+    )
     sys.modules["app.services.storage"] = _storage_stub
     setattr(_app_services_pkg, "storage", _storage_stub)
 del _app_services_pkg
@@ -61,6 +72,19 @@ def _enable_sqlite_fk(dbapi_connection, _connection_record):
 TestingSessionLocal = async_sessionmaker(
     engine_test, class_=AsyncSession, expire_on_commit=False
 )
+
+# Several call-sites (search API "all" scope, async AI logging, etc.) construct
+# sessions via app.database.async_session directly instead of going through
+# FastAPI's get_db dependency. Re-bind that reference on every module that
+# imports it with "from ..." so those sessions see the in-memory SQLite test
+# DB instead of prod Postgres. Modules that re-import inside a function pick
+# up the app.database patch automatically and don't need listing here.
+import app.database as _app_database  # noqa: E402
+import app.api.search as _app_search  # noqa: E402
+
+_app_database.async_session = TestingSessionLocal
+_app_search.async_session = TestingSessionLocal
+del _app_database, _app_search
 
 
 @pytest_asyncio.fixture(autouse=True)
@@ -469,6 +493,9 @@ def mock_redis_state():
 
 @pytest_asyncio.fixture(autouse=True)
 async def mock_storage_service():
+    async def _pdf_bytes_stream(_key=None):
+        yield b"%PDF-1.4\n%%EOF"
+
     with (
         patch("app.services.storage.upload_file", new_callable=AsyncMock),
         patch("app.services.storage.delete_file", new_callable=AsyncMock),
@@ -476,6 +503,10 @@ async def mock_storage_service():
             "app.services.storage.download_file",
             new_callable=AsyncMock,
             return_value=b"",
+        ),
+        patch(
+            "app.services.storage.download_file_stream",
+            MagicMock(side_effect=lambda key: _pdf_bytes_stream(key)),
         ),
     ):
         yield

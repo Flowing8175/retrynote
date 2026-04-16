@@ -1,5 +1,8 @@
 import uuid
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
+
+import pytest
 from httpx import AsyncClient
 
 from app.models.quiz import (
@@ -15,6 +18,46 @@ from app.models.quiz import (
 )
 from app.models.objection import WeakPoint
 from app.models.file import File, FileSourceType, FileStatus
+
+
+def _stub_coaching_stream(text: str):
+    async def _gen(*_args, **_kwargs):
+        yield text
+
+    return _gen
+
+
+@pytest.fixture
+def mock_coaching_high():
+    with patch(
+        "app.api.dashboard.stream_ai_text",
+        side_effect=_stub_coaching_stream(
+            "정답률이 매우 우수합니다. 이 흐름을 유지하며 실전 연습을 이어가세요."
+        ),
+    ):
+        yield
+
+
+@pytest.fixture
+def mock_coaching_medium():
+    with patch(
+        "app.api.dashboard.stream_ai_text",
+        side_effect=_stub_coaching_stream(
+            "취약 개념이 일부 보입니다. 오답 노트를 중심으로 보강 학습을 진행하세요."
+        ),
+    ):
+        yield
+
+
+@pytest.fixture
+def mock_coaching_low():
+    with patch(
+        "app.api.dashboard.stream_ai_text",
+        side_effect=_stub_coaching_stream(
+            "정답률이 낮습니다. 기초 개념 개선을 위한 복습이 시급합니다."
+        ),
+    ):
+        yield
 
 
 class TestGetDashboard:
@@ -395,7 +438,7 @@ class TestGetDashboard:
         assert len(data["accuracy_by_type"]) >= 1
 
     async def test_dashboard_coaching_summary_high(
-        self, auth_client: AsyncClient, db_session, test_user
+        self, auth_client: AsyncClient, db_session, test_user, mock_coaching_high
     ):
         # Create all-correct answers (>=80% accuracy)
         session = QuizSession(
@@ -445,7 +488,7 @@ class TestGetDashboard:
         assert "우수" in data["coaching_summary"]
 
     async def test_dashboard_coaching_summary_medium(
-        self, auth_client: AsyncClient, db_session, test_user
+        self, auth_client: AsyncClient, db_session, test_user, mock_coaching_medium
     ):
         # Create mixed answers (50-79% accuracy)
         session = QuizSession(
@@ -497,7 +540,7 @@ class TestGetDashboard:
         assert "취약" in data["coaching_summary"]
 
     async def test_dashboard_coaching_summary_low(
-        self, auth_client: AsyncClient, db_session, test_user
+        self, auth_client: AsyncClient, db_session, test_user, mock_coaching_low
     ):
         # Create all-incorrect answers (<50% accuracy)
         session = QuizSession(

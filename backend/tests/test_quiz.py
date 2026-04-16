@@ -218,8 +218,8 @@ class TestQuizItems:
         assert resp.status_code == 200
         data = resp.json()
         for item in data:
-            assert "correct_answer" not in item
-            assert "explanation" not in item
+            assert item.get("correct_answer") is None
+            assert item.get("explanation") is None
 
 
 class TestNormalModeAnswer:
