@@ -9,6 +9,7 @@ export interface QuizSessionCreate {
   preferred_model: string | null;
   source_mode: 'document_based' | 'no_source';
   topic: string | null;
+  source_url: string | null;
   idempotency_key: string | null;
   stream?: boolean;
 }

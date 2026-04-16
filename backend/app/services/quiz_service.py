@@ -39,6 +39,38 @@ from app.utils.ai_client import call_ai_with_fallback, OBJECTION_REVIEW_SCHEMA
 from app.config import settings as cfg
 import json as json_mod
 
+_MAX_URL_SOURCE_CHARS = 15000
+
+_BLOCKED_URL_HOSTS = frozenset(
+    {
+        "localhost",
+        "127.0.0.1",
+        "0.0.0.0",
+        "::1",
+        "metadata.google.internal",
+        "169.254.169.254",
+    }
+)
+
+
+def validate_source_url_syntax(url: str) -> str | None:
+    from urllib.parse import urlparse
+
+    url = (url or "").strip()
+    if not url:
+        return "URL이 비어있습니다."
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return "URL 형식이 올바르지 않습니다."
+    if parsed.scheme not in ("http", "https"):
+        return "URL은 http:// 또는 https://로 시작해야 합니다."
+    if not parsed.hostname:
+        return "URL에 호스트가 없습니다."
+    if parsed.hostname.lower() in _BLOCKED_URL_HOSTS:
+        return "접근할 수 없는 호스트입니다."
+    return None
+
 
 async def process_file(job_id: str):
     async with async_session() as db:
@@ -375,15 +407,7 @@ def _resolve_and_validate_url(url: str) -> tuple[str, str, int] | None:
     if not hostname:
         return None
 
-    blocked_hosts = {
-        "localhost",
-        "127.0.0.1",
-        "0.0.0.0",
-        "::1",
-        "metadata.google.internal",
-        "169.254.169.254",
-    }
-    if hostname.lower() in blocked_hosts:
+    if hostname.lower() in _BLOCKED_URL_HOSTS:
         return None
 
     port = parsed.port or (443 if parsed.scheme == "https" else 80)
@@ -404,6 +428,7 @@ def _resolve_and_validate_url(url: str) -> tuple[str, str, int] | None:
 
 
 async def _fetch_url_text(url: str) -> str:
+    url = (url or "").strip()
     resolution = _resolve_and_validate_url(url)
     if not resolution:
         return ""
@@ -717,15 +742,26 @@ async def _run_quiz_generation(
         for c in recent_concepts:
             concept_counts[c] = concept_counts.get(c, 0) + 1
 
-    source_context = (
-        "\n\n".join(source_texts[:3])
-        if source_texts
-        else "No source material provided."
-    )
-    if not source_texts and session.source_mode.value == "document_based":
-        raise JobFailure("No source material available")
+    source_url = payload.get("source_url") or None
 
-    is_no_source = session.source_mode.value == "no_source"
+    if source_url:
+        url_text = await _fetch_url_text(source_url)
+        if not url_text:
+            raise JobFailure(
+                "INVALID_INPUT:URL을 불러올 수 없습니다. 주소가 올바른지, 공개된 페이지인지 확인해 주세요."
+            )
+        source_context = _normalize_text(url_text)[:_MAX_URL_SOURCE_CHARS]
+        is_no_source = False
+    else:
+        source_context = (
+            "\n\n".join(source_texts[:3])
+            if source_texts
+            else "No source material provided."
+        )
+        if not source_texts and session.source_mode.value == "document_based":
+            raise JobFailure("No source material available")
+        is_no_source = session.source_mode.value == "no_source"
+
     topic = payload.get("topic") or None
 
     resolved_difficulty = difficulty

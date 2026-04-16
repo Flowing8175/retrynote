@@ -233,6 +233,18 @@ async def create_quiz_session(
     if req.source_mode == SourceMode.document_based.value:
         await _validate_file_access(db, user.id, req.selected_file_ids)
 
+    if req.source_url:
+        if req.source_mode != SourceMode.no_source.value:
+            raise HTTPException(
+                status_code=400,
+                detail="URL 입력은 AI 배경지식 출제 모드에서만 사용할 수 있습니다.",
+            )
+        from app.services.quiz_service import validate_source_url_syntax
+
+        url_error = validate_source_url_syntax(req.source_url)
+        if url_error:
+            raise HTTPException(status_code=400, detail=url_error)
+
     from app.config import settings as cfg
 
     model_name, generation_cost = _resolve_model_and_cost(req, cfg)
@@ -254,7 +266,7 @@ async def create_quiz_session(
 
     session = QuizSession(
         user_id=user.id,
-        title=req.topic or None,
+        title=req.source_url or req.topic or None,
         mode=QuizMode(req.mode),
         source_mode=SourceMode(req.source_mode),
         status=QuizSessionStatus.draft,
@@ -296,6 +308,7 @@ async def create_quiz_session(
             "question_types": req.question_types,
             "source_mode": req.source_mode,
             "topic": req.topic,
+            "source_url": req.source_url,
             "credit_estimate": generation_cost,
         },
     )

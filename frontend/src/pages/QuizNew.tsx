@@ -39,6 +39,8 @@ const DIFFICULTY_OPTIONS = [
   { value: 'hard', label: '어려움' },
 ];
 
+const isUrl = (text: string): boolean => /^https?:\/\//i.test(text.trim());
+
 function QuizNewSkeleton() {
   return (
     <div className="max-w-4xl mx-auto space-y-16 py-8 animate-pulse" aria-hidden="true">
@@ -208,6 +210,8 @@ export default function QuizNew() {
   const createQuizMutation = useMutation({
     mutationFn: () => {
       abortControllerRef.current = new AbortController();
+      const trimmedTopic = topic.trim();
+      const detectedUrl = sourceMode === 'no_source' && isUrl(trimmedTopic);
       return quizApi.createQuizSession(
         {
           mode,
@@ -219,7 +223,8 @@ export default function QuizNew() {
           generation_priority: null,
           preferred_model: activeModel,
           source_mode: sourceMode,
-          topic: sourceMode === 'no_source' ? (topic.trim() || null) : null,
+          topic: sourceMode === 'no_source' && !detectedUrl ? (trimmedTopic || null) : null,
+          source_url: detectedUrl ? trimmedTopic : null,
           idempotency_key: crypto.randomUUID(),
           stream: true,
         },
@@ -290,6 +295,10 @@ export default function QuizNew() {
       return;
     }
     if (sourceMode === 'no_source') {
+      if (isUrl(topic)) {
+        void createQuiz();
+        return;
+      }
       noSourceModal.open();
       return;
     }
@@ -453,13 +462,13 @@ export default function QuizNew() {
                 type="text"
                 value={topic}
                 onChange={(e) => { setTopic(e.target.value); setTopicError(null); }}
-                placeholder="예: 양자역학, 서양미술사, 파이썬 기초..."
+                placeholder="예: 양자역학, https://ko.wikipedia.org/wiki/..."
                 className={`w-full bg-surface-deep rounded-xl text-base px-5 py-4 placeholder:text-content-muted focus:outline-none transition-shadow ${topicError ? 'border border-semantic-error focus:ring-2 focus:ring-semantic-error/50' : 'border border-white/[0.05] focus:ring-2 focus:ring-brand-500'}`}
               />
               {topicError ? (
                 <p className="text-xs text-semantic-error">{topicError}</p>
               ) : (
-                <p className="text-xs text-content-muted">주제를 비워두면 무작위로 흥미로운 상식 퀴즈가 생성됩니다.</p>
+                <p className="text-xs text-content-muted">주제를 입력하거나 URL을 붙여넣으면 해당 내용으로 퀴즈가 생성됩니다. 비워두면 무작위로 흥미로운 상식 퀴즈가 생성됩니다.</p>
               )}
             </div>
           </div>

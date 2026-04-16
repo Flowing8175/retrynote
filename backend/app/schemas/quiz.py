@@ -16,6 +16,7 @@ class QuizSessionCreate(BaseModel):
     preferred_model: str | None = Field(default=None, max_length=100)
     source_mode: Literal["document_based", "no_source"]
     topic: str | None = Field(default=None, max_length=200)
+    source_url: str | None = Field(default=None, max_length=2000)
     idempotency_key: str | None = Field(default=None, max_length=255)
     stream: bool = False
 
