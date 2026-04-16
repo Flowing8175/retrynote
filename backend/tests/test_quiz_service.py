@@ -5,6 +5,8 @@ from app.services.quiz_service import (
     _normalize_text,
     _create_chunks,
     _update_weak_point,
+    _validate_ip,
+    _extract_page_title,
 )
 from app.models.quiz import QuizItem, QuestionType, Judgement
 from app.models.objection import WeakPoint
@@ -227,3 +229,122 @@ class TestUpdateWeakPoint:
 
         count = await db_session.execute(select(func.count()).select_from(WeakPoint))
         assert count.scalar() == 0
+
+
+class TestValidateIp:
+    def test_public_ipv4_allowed(self):
+        assert _validate_ip("8.8.8.8") is True
+        assert _validate_ip("1.1.1.1") is True
+
+    def test_public_ipv6_allowed(self):
+        assert _validate_ip("2606:4700:4700::1111") is True
+        assert _validate_ip("2607:f8b0:4004::1") is True
+
+    def test_ipv4_loopback_rejected(self):
+        assert _validate_ip("127.0.0.1") is False
+        assert _validate_ip("127.255.255.254") is False
+
+    def test_ipv4_private_ranges_rejected(self):
+        assert _validate_ip("10.0.0.1") is False
+        assert _validate_ip("172.16.0.1") is False
+        assert _validate_ip("192.168.1.1") is False
+
+    def test_ipv4_link_local_rejected(self):
+        assert _validate_ip("169.254.169.254") is False
+
+    def test_ipv4_unspecified_rejected(self):
+        assert _validate_ip("0.0.0.0") is False
+
+    def test_ipv4_multicast_rejected(self):
+        assert _validate_ip("224.0.0.1") is False
+        assert _validate_ip("239.255.255.255") is False
+
+    def test_ipv6_loopback_rejected(self):
+        assert _validate_ip("::1") is False
+
+    def test_ipv6_unspecified_rejected(self):
+        assert _validate_ip("::") is False
+
+    def test_ipv6_link_local_rejected(self):
+        assert _validate_ip("fe80::1") is False
+
+    def test_ipv6_unique_local_rejected(self):
+        assert _validate_ip("fc00::1") is False
+        assert _validate_ip("fd00::1") is False
+
+    def test_ipv6_multicast_rejected(self):
+        assert _validate_ip("ff02::1") is False
+        assert _validate_ip("ff00::1") is False
+
+    def test_ipv4_mapped_loopback_rejected(self):
+        assert _validate_ip("::ffff:127.0.0.1") is False
+
+    def test_ipv4_mapped_full_form_rejected(self):
+        assert _validate_ip("0:0:0:0:0:ffff:7f00:1") is False
+
+    def test_ipv4_mapped_imds_rejected(self):
+        assert _validate_ip("::ffff:169.254.169.254") is False
+
+    def test_ipv4_mapped_private_rejected(self):
+        assert _validate_ip("::ffff:10.0.0.1") is False
+        assert _validate_ip("::ffff:192.168.1.1") is False
+
+    def test_ipv4_mapped_public_allowed(self):
+        assert _validate_ip("::ffff:8.8.8.8") is True
+
+    def test_ipv4_compatible_deprecated_rejected(self):
+        assert _validate_ip("::127.0.0.1") is False
+        assert _validate_ip("::10.0.0.1") is False
+
+    def test_6to4_private_rejected(self):
+        assert _validate_ip("2002:7f00:1::") is False
+
+    def test_teredo_private_rejected(self):
+        assert _validate_ip("2001:0::1") is False
+
+    def test_invalid_input_rejected(self):
+        assert _validate_ip("not an ip") is False
+        assert _validate_ip("") is False
+        assert _validate_ip("999.999.999.999") is False
+
+
+class TestExtractPageTitle:
+    def _soup(self, html: str):
+        from bs4 import BeautifulSoup
+
+        return BeautifulSoup(html, "html.parser")
+
+    def test_basic_title(self):
+        soup = self._soup("<html><head><title>Hello</title></head></html>")
+        assert _extract_page_title(soup) == "Hello"
+
+    def test_title_stripped(self):
+        soup = self._soup("<title>  padded  \n title  </title>")
+        assert _extract_page_title(soup) == "padded  \n title"
+
+    def test_no_title_returns_none(self):
+        soup = self._soup("<html><body>hi</body></html>")
+        assert _extract_page_title(soup) is None
+
+    def test_empty_title_returns_none(self):
+        soup = self._soup("<title></title>")
+        assert _extract_page_title(soup) is None
+
+    def test_whitespace_only_title_returns_none(self):
+        soup = self._soup("<title>   \n\t  </title>")
+        assert _extract_page_title(soup) is None
+
+    def test_long_title_truncated(self):
+        long = "A" * 500
+        soup = self._soup(f"<title>{long}</title>")
+        result = _extract_page_title(soup)
+        assert result is not None
+        assert len(result) == 200
+
+    def test_control_characters_stripped(self):
+        soup = self._soup("<title>Hello\x00World\x07Test</title>")
+        result = _extract_page_title(soup)
+        assert "\x00" not in (result or "")
+        assert "\x07" not in (result or "")
+        assert "Hello" in (result or "")
+        assert "World" in (result or "")

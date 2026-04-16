@@ -119,7 +119,7 @@ async def process_file(job_id: str):
                 elif file.source_type.value == "url":
                     if not file.source_url:
                         raise ValueError("URL source missing source_url")
-                    text = await _fetch_url_text(file.source_url)
+                    text, _ = await _fetch_url_text(file.source_url)
 
                 file.status = FileStatus.parsed
                 await db.commit()
@@ -374,16 +374,39 @@ def _extract_images_from_document(data: bytes, file_type: str) -> list[bytes]:
 
 
 def _validate_ip(addr: str) -> bool:
-    """Check if a resolved IP address is safe (not private/internal)."""
+    """Check if a resolved IP address is safe (not private/internal/special).
+
+    Defensively unwraps IPv4-embedded IPv6 forms (``::ffff:a.b.c.d`` and the
+    deprecated ``::a.b.c.d``) before evaluating flags, because Python
+    <3.12.4 does NOT delegate ``is_loopback``/``is_link_local``/``is_reserved``
+    to the underlying IPv4 address on ``IPv6Address`` instances — only
+    ``is_private`` is consistent. Without unwrapping, an IPv4-mapped SSRF
+    attempt like ``::ffff:169.254.169.254`` (AWS IMDS) is only caught by
+    accident of ``::/8`` being reserved on some versions. Unwrapping makes
+    validation explicit and version-independent.
+    """
     import ipaddress
 
     try:
         ip = ipaddress.ip_address(addr)
-        return not (
-            ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
-        )
     except ValueError:
         return False
+
+    if isinstance(ip, ipaddress.IPv6Address):
+        mapped = ip.ipv4_mapped
+        if mapped is not None:
+            ip = mapped
+        elif (int(ip) >> 32) == 0:
+            return False
+
+    return not (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
 
 
 def _resolve_and_validate_url(url: str) -> tuple[str, str, int] | None:
@@ -427,11 +450,34 @@ def _resolve_and_validate_url(url: str) -> tuple[str, str, int] | None:
         return None
 
 
-async def _fetch_url_text(url: str) -> str:
+def _extract_page_title(soup) -> str | None:
+    """Return sanitized <title> text (max 200 chars) or None.
+
+    Strips non-printable control characters defensively; React escapes
+    title on render, but we also avoid persisting garbage bytes.
+    """
+    title_tag = soup.find("title")
+    if title_tag is None:
+        return None
+    raw = title_tag.get_text(strip=True)
+    if not raw:
+        return None
+    cleaned = "".join(c for c in raw if c.isprintable() or c.isspace()).strip()
+    if not cleaned:
+        return None
+    return cleaned[:200]
+
+
+async def _fetch_url_text(url: str) -> tuple[str, str | None]:
+    """Fetch a public URL and return (extracted_body_text, page_title).
+
+    Both fields are empty/None on any failure. DNS resolution is offloaded
+    to a worker thread so the event loop is not blocked by slow lookups.
+    """
     url = (url or "").strip()
-    resolution = _resolve_and_validate_url(url)
+    resolution = await asyncio.to_thread(_resolve_and_validate_url, url)
     if not resolution:
-        return ""
+        return "", None
     resolved_ip, hostname, port = resolution
     try:
         import httpx
@@ -461,24 +507,25 @@ async def _fetch_url_text(url: str) -> str:
                     timeout=30,
                 ) as resp:
                     if resp.status_code != 200:
-                        return ""
+                        return "", None
                     body = b""
                     async for chunk in resp.aiter_bytes(chunk_size=8192):
                         body += chunk
                         if len(body) > MAX_FETCH_BYTES:
-                            return ""
+                            return "", None
                 from bs4 import BeautifulSoup
 
                 soup = BeautifulSoup(
                     body.decode("utf-8", errors="replace"), "html.parser"
                 )
+                page_title = _extract_page_title(soup)
                 for tag in soup(["script", "style", "nav", "footer"]):
                     tag.decompose()
-                return soup.get_text(separator="\n")
+                return soup.get_text(separator="\n"), page_title
             except Exception:
-                return ""
+                return "", None
     except Exception:
-        return ""
+        return "", None
 
 
 def _normalize_text(text: str) -> str:
@@ -745,13 +792,15 @@ async def _run_quiz_generation(
     source_url = payload.get("source_url") or None
 
     if source_url:
-        url_text = await _fetch_url_text(source_url)
+        url_text, page_title = await _fetch_url_text(source_url)
         if not url_text:
             raise JobFailure(
                 "INVALID_INPUT:URL을 불러올 수 없습니다. 주소가 올바른지, 공개된 페이지인지 확인해 주세요."
             )
         source_context = _normalize_text(url_text)[:_MAX_URL_SOURCE_CHARS]
         is_no_source = False
+        if page_title:
+            session.title = page_title
     else:
         source_context = (
             "\n\n".join(source_texts[:3])
@@ -892,6 +941,54 @@ async def _adjust_generation_credits(
         await UsageService().adjust_credit(db, str(session.user_id), "quiz", delta)
 
 
+async def _refund_quiz_credits_on_invalid_input(
+    db: AsyncSession,
+    job: Job,
+    session: QuizSession,
+    error: Exception,
+) -> None:
+    """Refund pre-charged quiz credits when generation fails with
+    ``JobFailure("INVALID_INPUT:...")`` — i.e. user-input errors
+    (bad URL, AI rejection) rather than system errors.
+
+    Idempotent via a ``credits_refunded`` flag on ``job.payload_json``
+    so that Celery acks_late redelivery or any future retry path
+    cannot double-refund. Swallows all exceptions — a refund failure
+    must never mask the original generation failure the caller is
+    about to surface to the user.
+    """
+    try:
+        from sqlalchemy.orm.attributes import flag_modified
+
+        if not str(error).startswith("INVALID_INPUT:"):
+            return
+        payload = job.payload_json or {}
+        if payload.get("credits_refunded"):
+            return
+        estimate = float(payload.get("credit_estimate") or 0.0)
+        if estimate <= 0 or not session.user_id:
+            return
+
+        from app.services.usage_service import UsageService
+
+        await UsageService().adjust_credit(db, str(session.user_id), "quiz", -estimate)
+        payload["credits_refunded"] = True
+        job.payload_json = payload
+        flag_modified(job, "payload_json")
+        logger.info(
+            "Refunded %.2f quiz credits to user %s for failed job %s",
+            estimate,
+            session.user_id,
+            job.id,
+        )
+    except Exception as exc:
+        logger.exception(
+            "Credit refund failed for job %s (original error not masked): %s",
+            job.id,
+            exc,
+        )
+
+
 def _serialize_quiz_item(item: QuizItem) -> dict:
     """Serialize QuizItem to match QuizItemResponse shape for SSE streaming."""
     return {
@@ -1021,6 +1118,7 @@ async def stream_quiz_generation(
     except JobFailure as e:
         session.status = QuizSessionStatus.generation_failed
         job.error_message = str(e)
+        await _refund_quiz_credits_on_invalid_input(db, job, session, e)
         try:
             await db.commit()
         except Exception:
@@ -1243,7 +1341,8 @@ async def generate_quiz(job_id: str):
 
                 session.status = QuizSessionStatus.ready
 
-            except JobFailure:
+            except JobFailure as e:
+                await _refund_quiz_credits_on_invalid_input(db, job, session, e)
                 raise
             except Exception:
                 session.status = QuizSessionStatus.generation_failed
