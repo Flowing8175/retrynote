@@ -26,8 +26,6 @@ from app.models.search import Job, DraftAnswer
 from app.prompts import (
     SYSTEM_PROMPT_DIFFICULTY_SELECTION,
     SYSTEM_PROMPT_OBJECTION_REVIEW,
-    SYSTEM_PROMPT_QUIZ_THINKING,
-    build_thinking_prompt,
     get_generation_system_prompt,
 )
 from app.prompts.generation import build_generation_prompt
@@ -37,7 +35,7 @@ from app.prompts.retry_generation import (
 )
 from app.utils.ai_client import (
     call_ai_with_fallback,
-    stream_ai_text,
+    stream_ai_structured_with_thinking,
     OBJECTION_REVIEW_SCHEMA,
 )
 from app.utils.job_runner import JobFailure, JobRunner
@@ -1244,12 +1242,12 @@ async def stream_quiz_generation(
     session: QuizSession,
     job: Job,
 ) -> AsyncGenerator[str, None]:
-    """SSE generator: streams model reasoning while quiz generation runs, then streams items."""
+    """SSE generator: streams the quiz model's native Chain-of-Thought, then the generated items."""
     from app.utils.sse import sse_data, sse_error, sse_done
+    from app.utils.ai_client import GENERATION_SCHEMA
     from app.config import settings as _cfg
 
     generation_completed = False
-    generation_task: asyncio.Task[tuple[list[dict], int, str]] | None = None
     try:
         session.status = QuizSessionStatus.generating
         await db.commit()
@@ -1261,52 +1259,79 @@ async def stream_quiz_generation(
         ctx = await _prepare_generation_context(db, session, payload)
 
         yield sse_data({"type": "stage", "stage": "generating"})
-
-        # Concurrency invariant: stream_ai_text does NOT touch `db`, so running
-        # it alongside _run_quiz_generation_from_context (which uses `db`) does
-        # not create conflicting AsyncSession access. Do not add db calls to
-        # stream_ai_text without switching to a separate session.
-        generation_task = asyncio.create_task(
-            _run_quiz_generation_from_context(session, ctx)
-        )
-
-        thinking_prompt = build_thinking_prompt(
-            source_context=ctx.source_context,
-            difficulty=ctx.difficulty,
-            question_types=ctx.question_types,
-            is_no_source=ctx.is_no_source,
-            topic=ctx.topic,
-            question_count=ctx.question_count,
-        )
-
         yield sse_data({"type": "thinking_start"})
 
-        try:
-            async for chunk in stream_ai_text(
-                thinking_prompt,
-                SYSTEM_PROMPT_QUIZ_THINKING,
-                model=_cfg.eco_generation_model or _cfg.balanced_generation_model,
-                max_tokens=400,
-                temperature=0.6,
-            ):
-                if chunk:
-                    yield sse_data({"type": "thinking_chunk", "text": chunk})
-        except Exception as exc:
-            logger.warning(
-                "Thinking stream failed for session %s (non-fatal): %s",
-                session.id,
-                exc,
-            )
+        prompt = build_generation_prompt(
+            source_context=ctx.source_context,
+            question_count=ctx.question_count,
+            difficulty=ctx.difficulty,
+            question_types=ctx.question_types,
+            concept_counts=ctx.concept_counts,
+            is_no_source=ctx.is_no_source,
+            topic=ctx.topic,
+        )
+
+        primary_model = session.generation_model_name or _cfg.balanced_generation_model
+        fallback_model = _cfg.eco_generation_model
+
+        ai_result: dict | None = None
+        tokens_used = 0
+
+        stream_iter = stream_ai_structured_with_thinking(
+            prompt=prompt,
+            schema=GENERATION_SCHEMA,
+            system_message=get_generation_system_prompt(ctx.difficulty),
+            primary_model=primary_model,
+            fallback_model=fallback_model,
+            max_tokens=16384,
+            cache_key=f"quiz_gen_{ctx.difficulty}_v1",
+            reasoning_effort="medium",
+            thinking_level="HIGH",
+        )
+
+        async with asyncio.timeout(_cfg.generation_timeout):
+            async for event in stream_iter:
+                etype = event.get("type")
+                if etype == "thinking":
+                    text = event.get("text") or ""
+                    if isinstance(text, str) and text:
+                        yield sse_data({"type": "thinking_chunk", "text": text})
+                elif etype == "result":
+                    data = event.get("data")
+                    if isinstance(data, dict):
+                        ai_result = data
+                    tokens_raw = event.get("tokens_used") or 0
+                    tokens_used = (
+                        int(tokens_raw) if isinstance(tokens_raw, (int, float)) else 0
+                    )
 
         yield sse_data({"type": "thinking_end"})
 
-        questions, tokens_used, resolved_difficulty = await asyncio.wait_for(
-            generation_task,
-            timeout=_cfg.generation_timeout,
-        )
-        generation_task = None
+        if ai_result is None:
+            raise JobFailure("AI stream ended without a result")
 
-        items = _persist_quiz_items(db, session, questions, resolved_difficulty)
+        if ai_result.get("rejected"):
+            raise JobFailure(
+                "INVALID_INPUT:"
+                + ai_result.get(
+                    "rejection_reason",
+                    "퀴즈를 만들기 어려운 입력입니다. 학습하고 싶은 주제나 자료를 입력해 주세요.",
+                )
+            )
+
+        all_questions = ai_result.get("questions", [])
+        questions = (
+            all_questions
+            if ctx.question_count is None
+            else all_questions[: ctx.question_count]
+        )
+        if not questions:
+            raise JobFailure("AI returned no questions")
+
+        if ctx.question_count is None:
+            session.question_count = len(questions)
+
+        items = _persist_quiz_items(db, session, questions, ctx.difficulty)
 
         credit_estimate = payload.get("credit_estimate", 0.0)
         await _adjust_generation_credits(db, session, tokens_used, credit_estimate)
@@ -1372,12 +1397,6 @@ async def stream_quiz_generation(
                 pass
         yield sse_error(f"Generation failed: {e}")
     finally:
-        if generation_task is not None and not generation_task.done():
-            generation_task.cancel()
-            try:
-                await generation_task
-            except BaseException:
-                pass
         if not generation_completed:
             logger.warning(
                 "SSE gen incomplete for session %s (status=%s, completed=%s)",

@@ -25,6 +25,7 @@ __all__ = [
     "call_ai_structured",
     "call_ai_with_fallback",
     "stream_ai_text",
+    "stream_ai_structured_with_thinking",
     "get_gemini_client",
 ]
 
@@ -631,6 +632,309 @@ async def call_ai_with_fallback(
             fallback_model,
         )
         return await call_ai_structured(prompt, schema, model=fallback_model, **kwargs)
+
+
+_THINKING_LEVEL_MAP: dict[str, Any] = {}
+
+
+def _is_openai_reasoning_model(model: str) -> bool:
+    m = model.lower()
+    return (
+        m.startswith("gpt-5")
+        or m.startswith("o1")
+        or m.startswith("o3")
+        or m.startswith("o4")
+    )
+
+
+async def _stream_gemini_structured_with_thinking(
+    prompt: str,
+    schema: dict,
+    system_message: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    cache_key: str | None,
+    thinking_level: str,
+):
+    from google.genai import types
+
+    global _THINKING_LEVEL_MAP
+    if not _THINKING_LEVEL_MAP:
+        _THINKING_LEVEL_MAP = {
+            "MINIMAL": types.ThinkingLevel.MINIMAL,
+            "LOW": types.ThinkingLevel.LOW,
+            "MEDIUM": types.ThinkingLevel.MEDIUM,
+            "HIGH": types.ThinkingLevel.HIGH,
+        }
+
+    level_enum = _THINKING_LEVEL_MAP.get(
+        thinking_level.upper(), types.ThinkingLevel.MEDIUM
+    )
+
+    gemini = _get_gemini_client()
+    gemini_schema = _jsonschema_to_gemini(schema)
+
+    thinking_kwargs: dict[str, Any] = {"include_thoughts": True}
+    if model.startswith("gemini-3") or model.startswith("gemini-4"):
+        thinking_kwargs["thinking_level"] = level_enum
+
+    config = types.GenerateContentConfig(
+        temperature=temperature,
+        max_output_tokens=max_tokens,
+        system_instruction=system_message,
+        response_mime_type="application/json",
+        response_schema=gemini_schema,
+        thinking_config=types.ThinkingConfig(**thinking_kwargs),
+    )
+
+    stream = await gemini.aio.models.generate_content_stream(
+        model=model,
+        contents=prompt,
+        config=config,
+    )
+
+    full_json = ""
+    prompt_tokens = 0
+    completion_tokens = 0
+    total_tokens = 0
+    cached_tokens = 0
+
+    async for chunk in stream:
+        if not chunk.candidates:
+            continue
+        content = chunk.candidates[0].content
+        parts = content.parts if content else None
+        if parts:
+            for part in parts:
+                text = part.text or ""
+                if not text:
+                    continue
+                if getattr(part, "thought", False):
+                    yield {"type": "thinking", "text": text}
+                elif text.startswith("THOUGHT:"):
+                    yield {"type": "thinking", "text": text[len("THOUGHT:") :].lstrip()}
+                else:
+                    full_json += text
+        usage = chunk.usage_metadata
+        if usage is not None:
+            prompt_tokens = getattr(usage, "prompt_token_count", 0) or 0
+            completion_tokens = getattr(usage, "candidates_token_count", 0) or 0
+            total_tokens = getattr(usage, "total_token_count", 0) or 0
+            cached_tokens = getattr(usage, "cached_content_token_count", 0) or 0
+
+    if not full_json:
+        raise ValueError("Gemini returned empty response body")
+
+    asyncio.create_task(
+        _log_token_usage(
+            model,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+            cached_tokens=cached_tokens,
+            cache_key=cache_key,
+        )
+    )
+
+    result = json.loads(full_json)
+    yield {"type": "result", "data": result, "tokens_used": total_tokens}
+
+
+async def _stream_openai_structured_with_reasoning(
+    prompt: str,
+    schema: dict,
+    system_message: str,
+    model: str,
+    max_tokens: int,
+    reasoning_effort: str,
+    strict: bool,
+):
+    from openai.types.shared_params import Reasoning
+    from openai.types.responses import ResponseTextConfigParam
+
+    reasoning_param: Reasoning = {
+        "effort": reasoning_effort,  # type: ignore[typeddict-item]
+        "summary": "auto",
+    }
+    text_param: ResponseTextConfigParam = {
+        "format": {
+            "type": "json_schema",
+            "name": "structured_response",
+            "schema": schema,
+            "strict": strict,
+        }
+    }
+    stream = await client.responses.create(
+        model=model,
+        input=[
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": prompt},
+        ],
+        reasoning=reasoning_param,
+        text=text_param,
+        max_output_tokens=max_tokens,
+        stream=True,
+    )
+
+    output_text = ""
+    total_tokens = 0
+    prompt_tokens = 0
+    completion_tokens = 0
+    cached_tokens = 0
+
+    async for event in stream:
+        et = getattr(event, "type", None)
+        if et in (
+            "response.reasoning_summary_text.delta",
+            "response.reasoning_text.delta",
+        ):
+            delta = getattr(event, "delta", None)
+            if isinstance(delta, str) and delta:
+                yield {"type": "thinking", "text": delta}
+        elif et == "response.output_text.delta":
+            delta = getattr(event, "delta", None)
+            if isinstance(delta, str):
+                output_text += delta
+        elif et == "response.completed":
+            resp = getattr(event, "response", None)
+            usage = getattr(resp, "usage", None) if resp else None
+            if usage is not None:
+                total_tokens = getattr(usage, "total_tokens", 0) or 0
+                prompt_tokens = getattr(usage, "input_tokens", 0) or 0
+                completion_tokens = getattr(usage, "output_tokens", 0) or 0
+                details = getattr(usage, "input_tokens_details", None)
+                if details is not None:
+                    cached_tokens = getattr(details, "cached_tokens", 0) or 0
+
+    if not output_text:
+        raise ValueError("OpenAI Responses API returned empty output")
+
+    asyncio.create_task(
+        _log_token_usage(
+            model,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+            cached_tokens=cached_tokens,
+        )
+    )
+
+    result = json.loads(output_text)
+    yield {"type": "result", "data": result, "tokens_used": total_tokens}
+
+
+async def _stream_thinking_dispatch(
+    prompt: str,
+    schema: dict,
+    system_message: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    cache_key: str | None,
+    reasoning_effort: str,
+    thinking_level: str,
+    strict: bool,
+):
+    if model.startswith("gemini-"):
+        async for event in _stream_gemini_structured_with_thinking(
+            prompt=prompt,
+            schema=schema,
+            system_message=system_message,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            cache_key=cache_key,
+            thinking_level=thinking_level,
+        ):
+            yield event
+    elif _is_openai_reasoning_model(model):
+        async for event in _stream_openai_structured_with_reasoning(
+            prompt=prompt,
+            schema=schema,
+            system_message=system_message,
+            model=model,
+            max_tokens=max_tokens,
+            reasoning_effort=reasoning_effort,
+            strict=strict,
+        ):
+            yield event
+    else:
+        result, tokens = await call_ai_structured(
+            prompt=prompt,
+            schema=schema,
+            system_message=system_message,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            cache_key=cache_key,
+            strict=strict,
+        )
+        yield {"type": "result", "data": result, "tokens_used": tokens}
+
+
+async def stream_ai_structured_with_thinking(
+    prompt: str,
+    schema: dict,
+    system_message: str,
+    primary_model: str,
+    fallback_model: str | None = None,
+    temperature: float = 0.3,
+    max_tokens: int = 16384,
+    cache_key: str | None = None,
+    reasoning_effort: str = "medium",
+    thinking_level: str = "HIGH",
+    strict: bool = False,
+):
+    """Yield native Chain-of-Thought + structured output events.
+
+    Emits ``{"type": "thinking", "text": str}`` as the model reasons, then
+    one final ``{"type": "result", "data": dict, "tokens_used": int}``.
+
+    Falls back to ``fallback_model`` only if the primary fails before any
+    event has been yielded (otherwise the user would see thinking restart).
+    """
+    emitted_any = False
+    try:
+        async for event in _stream_thinking_dispatch(
+            prompt=prompt,
+            schema=schema,
+            system_message=system_message,
+            model=primary_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            cache_key=cache_key,
+            reasoning_effort=reasoning_effort,
+            thinking_level=thinking_level,
+            strict=strict,
+        ):
+            emitted_any = True
+            yield event
+        return
+    except Exception as exc:
+        if not (fallback_model and not emitted_any):
+            raise
+        logger.warning(
+            "Primary %s failed (%s: %s); falling back to %s",
+            primary_model,
+            type(exc).__name__,
+            exc,
+            fallback_model,
+        )
+
+    async for event in _stream_thinking_dispatch(
+        prompt=prompt,
+        schema=schema,
+        system_message=system_message,
+        model=fallback_model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        cache_key=cache_key,
+        reasoning_effort=reasoning_effort,
+        thinking_level=thinking_level,
+        strict=strict,
+    ):
+        yield event
 
 
 async def stream_ai_text(

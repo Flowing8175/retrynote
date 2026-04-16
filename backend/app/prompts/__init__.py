@@ -32,7 +32,6 @@ from .study import (
     MINDMAP_PROMPT,
     TUTOR_SYSTEM_PROMPT,
 )
-from .thinking import SYSTEM_PROMPT_QUIZ_THINKING, build_thinking_prompt
 
 __all__ = [
     "SYSTEM_PROMPT_QUIZ_GENERATION",
@@ -52,6 +51,4 @@ __all__ = [
     "FLASHCARD_PROMPT",
     "MINDMAP_PROMPT",
     "TUTOR_SYSTEM_PROMPT",
-    "SYSTEM_PROMPT_QUIZ_THINKING",
-    "build_thinking_prompt",
 ]
