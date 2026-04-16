@@ -116,27 +116,33 @@ function QuizStreamingView({ stage, items, total, thinkingPhases, onCancel }: Qu
                 <span>생각하는 과정 표시</span>
               </button>
 
-              {thinkingOpen && (
-                <div className="pl-6 border-l-2 border-brand-500/30 space-y-5 animate-fade-in">
-                  {thinkingPhases.map((phase, idx) => {
-                    const entryDelay = Math.min(idx * 80, 600);
-                    return (
-                      <div
-                        key={idx}
-                        className="space-y-1.5 coaching-word-fade"
-                        style={{ animationDelay: `${entryDelay}ms` }}
-                      >
-                        <p className="text-sm font-semibold text-content-primary italic">
-                          {phase.title}
-                        </p>
-                        <p className="text-sm text-content-secondary italic leading-relaxed">
-                          {phase.content}
-                        </p>
-                      </div>
-                    );
-                  })}
+              <div
+                className={`grid transition-[grid-template-rows,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+                  thinkingOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                }`}
+              >
+                <div className="overflow-hidden min-h-0">
+                  <div className="pl-6 border-l-2 border-brand-500/30 space-y-5">
+                    {thinkingPhases.map((phase, idx) => {
+                      const entryDelay = Math.min(idx * 80, 600);
+                      return (
+                        <div
+                          key={idx}
+                          className="space-y-1.5 coaching-word-fade"
+                          style={{ animationDelay: `${entryDelay}ms` }}
+                        >
+                          <p className="text-sm font-semibold text-content-primary italic">
+                            {phase.title}
+                          </p>
+                          <p className="text-sm text-content-secondary italic leading-relaxed">
+                            {phase.content}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           )}
         </div>

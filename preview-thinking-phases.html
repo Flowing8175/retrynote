@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Quiz Streaming – Thinking Phases Preview</title>
+<style>
+  /* ── Reset & Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Pretendard Variable', 'Pretendard', -apple-system, system-ui, sans-serif;
+    background: oklch(0.13 0.01 250);
+    color: oklch(0.94 0.005 250);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ── Design Tokens (from tailwind.config.js) ── */
+  :root {
+    --brand-300: oklch(0.75 0.12 175);
+    --brand-400: oklch(0.70 0.14 175);
+    --brand-500: oklch(0.65 0.15 175);
+    --surface: oklch(0.20 0.01 250);
+    --surface-hover: oklch(0.28 0.01 250);
+    --content-primary: oklch(0.94 0.005 250);
+    --content-secondary: oklch(0.72 0.01 250);
+    --content-muted: oklch(0.55 0.01 250);
+    --border-subtle: oklch(0.24 0.008 250);
+  }
+
+  /* ── Layout ── */
+  .container {
+    max-width: 56rem;
+    width: 100%;
+    padding: 2rem 1.5rem;
+  }
+
+  .space-y-12 > * + * { margin-top: 3rem; }
+  .space-y-8  > * + * { margin-top: 2rem; }
+  .space-y-6  > * + * { margin-top: 1.5rem; }
+  .space-y-5  > * + * { margin-top: 1.25rem; }
+  .space-y-4  > * + * { margin-top: 1rem; }
+
+  /* ── Header ── */
+  header { display: flex; flex-direction: column; gap: 1rem; }
+
+  .header-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+  }
+
+  .header-label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--content-muted);
+    margin-bottom: 0.25rem;
+  }
+
+  .header-count {
+    font-size: 1.875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: white;
+  }
+  .header-count .total {
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: var(--content-secondary);
+  }
+
+  .btn-cancel {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 2.25rem;
+    padding: 0 1rem;
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 0.75rem;
+    font-size: 0.875rem;
+    color: var(--content-secondary);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .btn-cancel:hover { background: var(--surface-hover); color: white; }
+
+  /* ── Progress Bar ── */
+  .progress-track {
+    height: 0.5rem;
+    background: var(--surface);
+    border-radius: 9999px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--brand-500);
+    border-radius: 9999px;
+    transition: width 0.5s ease-out;
+    width: 0%;
+  }
+
+  /* ── Pill Shimmer (analyzing/generating phase) ── */
+  .pill-shimmer {
+    height: 0.5rem;
+    border-radius: 9999px;
+    background: oklch(0.22 0.02 175 / 0.35);
+    position: relative;
+    overflow: hidden;
+  }
+  .pill-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      oklch(0.38 0.065 175 / 0.45) 35%,
+      oklch(0.44 0.075 175 / 0.62) 50%,
+      oklch(0.38 0.065 175 / 0.45) 65%,
+      transparent 100%
+    );
+    animation: pill-wave 2.2s ease-in-out infinite;
+  }
+  @keyframes pill-wave {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(200%); }
+  }
+
+  .stage-label {
+    font-size: 1rem;
+    color: var(--content-secondary);
+  }
+
+  /* ── Thinking Phases ── */
+  .thinking-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--content-secondary);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    transition: color 0.15s;
+  }
+  .thinking-toggle:hover { color: white; }
+
+  .thinking-toggle svg {
+    width: 1rem;
+    height: 1rem;
+    color: var(--brand-400);
+    transition: transform 0.2s;
+  }
+  .thinking-toggle.collapsed svg { transform: rotate(-90deg); }
+
+  .thinking-collapse {
+    display: grid;
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transition: grid-template-rows 300ms cubic-bezier(0.16, 1, 0.3, 1),
+                opacity 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .thinking-collapse.collapsed {
+    grid-template-rows: 0fr;
+    opacity: 0;
+  }
+  .thinking-collapse > .collapse-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .thinking-list {
+    padding-left: 1.5rem;
+    border-left: 2px solid oklch(0.65 0.15 175 / 0.30);
+  }
+
+  .thinking-phase {
+    opacity: 0;
+    animation: coaching-word-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .thinking-phase .title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    font-style: italic;
+    color: var(--content-primary);
+  }
+  .thinking-phase .content {
+    font-size: 0.875rem;
+    font-style: italic;
+    color: var(--content-secondary);
+    line-height: 1.625;
+    margin-top: 0.375rem;
+  }
+
+  /* ── Footer ── */
+  .link-cancel {
+    font-size: 0.875rem;
+    color: var(--content-muted);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+  .link-cancel:hover { color: white; }
+
+  /* ── Animations ── */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes coaching-word-enter {
+    from {
+      opacity: 0;
+      filter: blur(4px);
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      filter: blur(0);
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* ── Controls ── */
+  .controls {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 0.75rem;
+    z-index: 50;
+  }
+  .ctrl-btn {
+    padding: 0.5rem 1.25rem;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: oklch(0.20 0.01 250 / 0.9);
+    backdrop-filter: blur(12px);
+    color: white;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .ctrl-btn:hover { background: oklch(0.28 0.01 250); }
+  .ctrl-btn.active { background: var(--brand-500); color: oklch(0.15 0.01 250); border-color: var(--brand-500); }
+
+  /* ── Hidden ── */
+  .hidden { display: none !important; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pill-shimmer::after, .thinking-phase, .animate-fade-in { animation: none; opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container" id="app">
+  <div class="space-y-12 animate-fade-in">
+
+    <!-- Header -->
+    <header>
+      <div class="header-row">
+        <div>
+          <div class="header-label" id="stageLabel">준비 중</div>
+          <div class="header-count" id="countDisplay">...</div>
+        </div>
+        <button class="btn-cancel">취소</button>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressBar"></div>
+      </div>
+    </header>
+
+    <!-- Phase: Analyzing / Generating -->
+    <div id="loadingPhase" class="space-y-8">
+      <div style="display:flex;flex-direction:column;align-items:flex-start;gap:0.625rem">
+        <div class="pill-shimmer" style="width:220px"></div>
+        <div class="pill-shimmer" style="width:160px;opacity:0.75;animation-delay:0.3s"></div>
+        <div class="pill-shimmer" style="width:200px;opacity:0.55;animation-delay:0.55s"></div>
+        <div class="pill-shimmer" style="width:120px;opacity:0.38;animation-delay:0.8s"></div>
+        <div class="pill-shimmer" style="width:80px;opacity:0.22;animation-delay:1.0s"></div>
+      </div>
+      <p class="stage-label" id="stageText">학습 자료를 분석하고 있습니다...</p>
+    </div>
+
+    <!-- Phase: Streaming / Thinking -->
+    <div id="streamingPhase" class="space-y-6 hidden">
+      <div class="space-y-4">
+        <button class="thinking-toggle" id="toggleBtn" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+          <span>생각하는 과정 표시</span>
+        </button>
+        <div class="thinking-collapse" id="thinkingCollapse">
+          <div class="collapse-inner">
+            <div class="thinking-list space-y-5" id="thinkingList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding-top:1rem">
+      <button class="link-cancel">취소하고 돌아가기</button>
+    </div>
+  </div>
+</div>
+
+<!-- Playback controls -->
+<div class="controls">
+  <button class="ctrl-btn active" id="btnPlay">▶ 재생</button>
+  <button class="ctrl-btn" id="btnReset">↺ 초기화</button>
+</div>
+
+<script>
+const THINKING_DATA = [
+  { title: '윤리적 결정지침과 권리 우선순위', content: '윤리적 결정지침과 권리 우선순위 · 중급 · 객관식 문항을 구성합니다.' },
+  { title: '사회복지 실천의 정의 유형', content: '사회복지 실천의 정의 유형 · 중급 · 단답형 문항을 구성합니다.' },
+  { title: '레비의 전문직 가치', content: '레비의 전문직 가치 · 기초 · 빈칸 채우기 문항을 구성합니다.' },
+  { title: '클라이언트 체계의 다중성', content: '클라이언트 체계의 다중성 · 심화 · O/X 문항을 구성합니다.' },
+  { title: '자유의 유형과 분류', content: '자유의 유형과 분류 · 중급 · 객관식 문항을 구성합니다.' },
+  { title: '사회정의의 원칙', content: '사회정의의 원칙 · 중급 · 서술형 문항을 구성합니다.' },
+  { title: '사회복지사의 역할과 기능', content: '사회복지사의 역할과 기능 · 기초 · 객관식 문항을 구성합니다.' },
+  { title: '윤리적 딜레마 해결 모델', content: '윤리적 딜레마 해결 모델 · 심화 · 단답형 문항을 구성합니다.' },
+];
+
+const TOTAL = THINKING_DATA.length;
+
+const $stageLabel  = document.getElementById('stageLabel');
+const $countDisplay= document.getElementById('countDisplay');
+const $progressBar = document.getElementById('progressBar');
+const $loadingPhase= document.getElementById('loadingPhase');
+const $streamPhase = document.getElementById('streamingPhase');
+const $thinkingList= document.getElementById('thinkingList');
+const $stageText   = document.getElementById('stageText');
+const $toggleBtn   = document.getElementById('toggleBtn');
+const $btnPlay     = document.getElementById('btnPlay');
+const $btnReset    = document.getElementById('btnReset');
+
+const $thinkingCollapse = document.getElementById('thinkingCollapse');
+let isOpen = true;
+let running = false;
+let timeouts = [];
+
+$toggleBtn.addEventListener('click', () => {
+  isOpen = !isOpen;
+  $toggleBtn.classList.toggle('collapsed', !isOpen);
+  $thinkingCollapse.classList.toggle('collapsed', !isOpen);
+});
+
+function reset() {
+  timeouts.forEach(clearTimeout);
+  timeouts = [];
+  running = false;
+
+  $stageLabel.textContent = '준비 중';
+  $countDisplay.innerHTML = '...';
+  $progressBar.style.width = '0%';
+  $loadingPhase.classList.remove('hidden');
+  $streamPhase.classList.add('hidden');
+  $stageText.textContent = '학습 자료를 분석하고 있습니다...';
+  $thinkingList.innerHTML = '';
+  $btnPlay.textContent = '▶ 재생';
+  $btnPlay.classList.add('active');
+  isOpen = true;
+  $toggleBtn.classList.remove('collapsed');
+  $thinkingCollapse.classList.remove('collapsed');
+}
+
+function updateCount(received) {
+  $countDisplay.innerHTML =
+    `<span>${received}</span><span class="total"> / ${TOTAL}</span>`;
+}
+
+function addThinking(phase, idx) {
+  const el = document.createElement('div');
+  el.className = 'thinking-phase space-y-1';
+  el.style.animationDelay = `${Math.min(idx * 80, 600)}ms`;
+  el.innerHTML = `
+    <p class="title">${phase.title}</p>
+    <p class="content">${phase.content}</p>
+  `;
+  $thinkingList.appendChild(el);
+}
+
+function play() {
+  if (running) return;
+  running = true;
+  $btnPlay.textContent = '⏸ 재생 중';
+  $btnPlay.classList.remove('active');
+
+  let t = 0;
+
+  // Stage: analyzing
+  timeouts.push(setTimeout(() => {
+    $stageText.textContent = '학습 자료를 분석하고 있습니다...';
+  }, t));
+
+  // Stage: generating
+  t += 1500;
+  timeouts.push(setTimeout(() => {
+    $stageText.textContent = 'AI가 문항을 생성하고 있습니다...';
+  }, t));
+
+  // Stage: streaming_questions
+  t += 2500;
+  timeouts.push(setTimeout(() => {
+    $loadingPhase.classList.add('hidden');
+    $streamPhase.classList.remove('hidden');
+    $stageLabel.textContent = '문항 생성 중';
+    updateCount(0);
+  }, t));
+
+  // Stream thinking + questions
+  THINKING_DATA.forEach((phase, i) => {
+    // thinking event
+    t += 150;
+    timeouts.push(setTimeout(() => {
+      addThinking(phase, i);
+    }, t));
+
+    // question event (count update)
+    t += 200;
+    timeouts.push(setTimeout(() => {
+      const received = i + 1;
+      updateCount(received);
+      $progressBar.style.width = `${(received / TOTAL) * 100}%`;
+    }, t));
+
+    // inter-question delay
+    if (i < THINKING_DATA.length - 1) t += 350;
+  });
+
+  // Done
+  t += 600;
+  timeouts.push(setTimeout(() => {
+    running = false;
+    $btnPlay.textContent = '✓ 완료';
+  }, t));
+}
+
+$btnPlay.addEventListener('click', play);
+$btnReset.addEventListener('click', reset);
+</script>
+</body>
+</html>
