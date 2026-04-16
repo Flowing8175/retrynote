@@ -7,7 +7,7 @@ import CoachingDisplay from '@/components/CoachingDisplay';
 import { SkeletonTransition, SegmentedControl } from '@/components';
 import type { DashboardResponse, RetryLocationState } from '@/types';
 import { formatPercent, formatQuestionType, formatDateTime } from '@/utils/formatters';
-import { useUsageStatus } from '@/lib/useUsageStatus';
+
 
 function DashboardSkeleton() {
   return (
@@ -71,59 +71,6 @@ function DashboardSkeleton() {
 }
 
 
-
-function fmtCredits(n: number): string {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
-}
-
-function CreditUsageBar() {
-  const { data: usageStatus, isLoading } = useUsageStatus();
-
-  if (isLoading || !usageStatus) {
-    return (
-      <div className="animate-pulse space-y-2 rounded-2xl border border-white/[0.08] bg-surface p-4">
-        <div className="h-4 w-64 rounded bg-surface-deep" />
-        <div className="h-2 w-full rounded-full bg-surface-deep" />
-      </div>
-    );
-  }
-
-  const quizWindow = usageStatus.windows.find((w) => w.resourceType === 'quiz');
-  if (!quizWindow) return null;
-
-  const { consumed, limit } = quizWindow;
-  const remaining = limit - consumed;
-  const pct = limit > 0 ? Math.max(0, Math.min((remaining / limit) * 100, 100)) : 0;
-
-  const barColor =
-    pct > 50 ? 'bg-brand-500' : pct > 20 ? 'bg-semantic-warning' : 'bg-semantic-error';
-
-  return (
-    <div className="rounded-2xl border border-white/[0.08] bg-surface px-5 py-4 space-y-2">
-      <div className="flex items-center justify-between gap-4">
-        <span className="text-sm text-content-primary">
-          이번 달 크레딧:{' '}
-          <span className="font-semibold tabular-nums">
-            {fmtCredits(remaining)}/{fmtCredits(limit)} 크레딧
-          </span>{' '}
-          남았습니다
-        </span>
-        <Link
-          to="/pricing"
-          className="shrink-0 text-xs font-medium text-brand-300 hover:text-brand-400 transition-colors"
-        >
-          더 많은 크레딧이 필요하세요? →
-        </Link>
-      </div>
-      <div className="h-1.5 w-full rounded-full bg-surface-deep overflow-hidden">
-        <div
-          className={`h-full rounded-full transition-all ${barColor}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-    </div>
-  );
-}
 
 function getFallbackCoachingMessage(dashboardData: DashboardResponse) {
   if (dashboardData.retry_recommendations.length > 0) {
@@ -234,11 +181,6 @@ export default function Dashboard() {
             </h1>
           </div>
 
-          {/* Credit bar — after headline, less intrusive */}
-          <div className="mb-10 animate-fade-in-up stagger-2">
-            <CreditUsageBar />
-          </div>
-
           {/* Primary CTA — upload is the only real action */}
           <Link
             to="/files"
@@ -283,8 +225,6 @@ export default function Dashboard() {
       ) : (
     <>
     <div className="space-y-20 py-8">
-      <CreditUsageBar />
-
       {/* Hero Section */}
       <section className="grid gap-12 lg:grid-cols-[1fr_300px] items-start" data-tour="dashboard-stats">
         <div className="animate-fade-in-up space-y-10">
