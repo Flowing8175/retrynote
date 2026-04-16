@@ -1145,6 +1145,10 @@ class TestUserManagement:
     async def test_delete_user(
         self, db_session, verified_admin_client: AsyncClient, test_user
     ):
+        from sqlalchemy import select
+        from app.models.user import User
+        from tests.conftest import TestingSessionLocal
+
         refresh_token = RefreshToken(
             id=str(uuid.uuid4()),
             user_id=test_user.id,
@@ -1152,19 +1156,18 @@ class TestUserManagement:
         )
         db_session.add(refresh_token)
         await db_session.commit()
+        user_id = test_user.id
+        rt_id = refresh_token.id
 
         resp = await verified_admin_client.delete(f"/admin/users/{test_user.id}")
         assert resp.status_code == 200
         assert resp.json() == {"status": "deleted"}
 
-        await db_session.refresh(test_user)
-        assert test_user.deleted_at is not None
-        assert test_user.is_active is False
-        assert test_user.status == "deleted"
-
-        refresh_token_result = await db_session.get(RefreshToken, refresh_token.id)
-        assert refresh_token_result is not None
-        assert refresh_token_result.revoked_at is not None
+        async with TestingSessionLocal() as s:
+            assert (
+                await s.execute(select(User).where(User.id == user_id))
+            ).scalar_one_or_none() is None
+            assert await s.get(RefreshToken, rt_id) is None
 
     async def test_delete_user_requires_verified_admin(
         self, admin_client: AsyncClient, test_user
@@ -1187,13 +1190,10 @@ class TestUserManagement:
         assert resp.status_code == 400
         assert "last active super_admin" in resp.json()["detail"]
 
-    async def test_delete_already_deleted_user_returns_404(
-        self, db_session, verified_admin_client: AsyncClient, test_user
+    async def test_delete_nonexistent_user_returns_404(
+        self, verified_admin_client: AsyncClient
     ):
-        test_user.deleted_at = datetime.now(timezone.utc)
-        await db_session.commit()
-
-        resp = await verified_admin_client.delete(f"/admin/users/{test_user.id}")
+        resp = await verified_admin_client.delete(f"/admin/users/{uuid.uuid4()}")
         assert resp.status_code == 404
         assert resp.json()["detail"] == "User not found"
 

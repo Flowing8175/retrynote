@@ -43,9 +43,24 @@ async def parsed_document(db_session, ready_file):
 
 @pytest_asyncio.fixture
 async def other_user_file(db_session):
+    from app.models.user import User, UserRole
+    from app.middleware.auth import hash_password
+
+    other = User(
+        id=str(uuid.uuid4()),
+        username=f"other_{uuid.uuid4().hex[:8]}",
+        email=f"other_{uuid.uuid4().hex[:8]}@example.com",
+        password_hash=hash_password("OtherPass123!"),
+        role=UserRole.user,
+        is_active=True,
+        email_verified=True,
+    )
+    db_session.add(other)
+    await db_session.flush()
+
     file = File(
         id=str(uuid.uuid4()),
-        user_id=str(uuid.uuid4()),  # random user not in DB
+        user_id=other.id,
         original_filename="other.pdf",
         file_type="pdf",
         file_size_bytes=512,

@@ -19,11 +19,11 @@ class Folder(CommonMixin, Base):
     __tablename__ = "folders"
 
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     parent_folder_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("folders.id"), nullable=True
+        String(36), ForeignKey("folders.id", ondelete="SET NULL"), nullable=True
     )
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     auto_classified: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -58,13 +58,13 @@ class File(CommonMixin, Base):
     __tablename__ = "files"
 
     user_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     guest_session_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("guest_sessions.id"), nullable=True
+        String(36), ForeignKey("guest_sessions.id", ondelete="CASCADE"), nullable=True
     )
     folder_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("folders.id"), nullable=True
+        String(36), ForeignKey("folders.id", ondelete="SET NULL"), nullable=True
     )
     original_filename: Mapped[str | None] = mapped_column(String(500), nullable=True)
     stored_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
@@ -103,7 +103,10 @@ class ParsedDocument(CommonMixin, Base):
     __tablename__ = "parsed_documents"
 
     file_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("files.id"), nullable=False, unique=True
+        String(36),
+        ForeignKey("files.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
     )
     raw_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     normalized_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -123,10 +126,12 @@ class DocumentChunk(CommonMixin, Base):
     __tablename__ = "document_chunks"
 
     file_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("files.id"), nullable=False
+        String(36), ForeignKey("files.id", ondelete="CASCADE"), nullable=False
     )
     parsed_document_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("parsed_documents.id"), nullable=False
+        String(36),
+        ForeignKey("parsed_documents.id", ondelete="CASCADE"),
+        nullable=False,
     )
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)

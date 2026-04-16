@@ -21,7 +21,7 @@ class GuestSession(CommonMixin, Base):
         DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP")
     )
     converted_user_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     converted_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

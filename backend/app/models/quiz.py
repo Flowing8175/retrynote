@@ -70,10 +70,10 @@ class QuizSession(CommonMixin, Base):
     __tablename__ = "quiz_sessions"
 
     user_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     guest_session_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("guest_sessions.id"), nullable=True
+        String(36), ForeignKey("guest_sessions.id", ondelete="CASCADE"), nullable=True
     )
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     mode: Mapped[QuizMode] = mapped_column(Enum(QuizMode), nullable=False)
@@ -118,10 +118,10 @@ class QuizSessionFile(CommonMixin, Base):
     __tablename__ = "quiz_session_files"
 
     quiz_session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("quiz_sessions.id"), nullable=False
+        String(36), ForeignKey("quiz_sessions.id", ondelete="CASCADE"), nullable=False
     )
     file_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("files.id"), nullable=False
+        String(36), ForeignKey("files.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[str] = mapped_column(String(50), default="active")
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)
@@ -135,7 +135,7 @@ class QuizItem(CommonMixin, Base):
     __tablename__ = "quiz_items"
 
     quiz_session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("quiz_sessions.id"), nullable=False
+        String(36), ForeignKey("quiz_sessions.id", ondelete="CASCADE"), nullable=False
     )
     item_order: Mapped[int] = mapped_column(Integer, nullable=False)
     question_type: Mapped[QuestionType] = mapped_column(
@@ -173,16 +173,16 @@ class AnswerLog(CommonMixin, Base):
     __tablename__ = "answer_logs"
 
     quiz_item_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("quiz_items.id"), nullable=False
+        String(36), ForeignKey("quiz_items.id", ondelete="CASCADE"), nullable=False
     )
     quiz_session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("quiz_sessions.id"), nullable=False
+        String(36), ForeignKey("quiz_sessions.id", ondelete="CASCADE"), nullable=False
     )
     user_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True
     )
     guest_session_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("guest_sessions.id"), nullable=True
+        String(36), ForeignKey("guest_sessions.id", ondelete="CASCADE"), nullable=True
     )
     user_answer_raw: Mapped[str | None] = mapped_column(Text, nullable=True)
     user_answer_normalized: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -198,7 +198,7 @@ class AnswerLog(CommonMixin, Base):
         DateTime(timezone=True), nullable=True
     )
     regraded_from_answer_log_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("answer_logs.id"), nullable=True
+        String(36), ForeignKey("answer_logs.id", ondelete="SET NULL"), nullable=True
     )
     status: Mapped[str] = mapped_column(String(50), default="active")
     created_by: Mapped[str | None] = mapped_column(String(36), nullable=True)

@@ -31,7 +31,7 @@ class StudySummary(CommonMixin, Base):
     __table_args__ = (UniqueConstraint("file_id"),)
 
     file_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("files.id"), nullable=False
+        String(36), ForeignKey("files.id", ondelete="CASCADE"), nullable=False
     )
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[ContentStatus] = mapped_column(
@@ -51,7 +51,7 @@ class StudyFlashcardSet(CommonMixin, Base):
     __tablename__ = "study_flashcard_sets"
 
     file_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("files.id"), nullable=False
+        String(36), ForeignKey("files.id", ondelete="CASCADE"), nullable=False
     )
     status: Mapped[ContentStatus] = mapped_column(
         Enum(ContentStatus, native_enum=False),
@@ -71,7 +71,9 @@ class StudyFlashcard(CommonMixin, Base):
     __tablename__ = "study_flashcards"
 
     flashcard_set_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("study_flashcard_sets.id"), nullable=False
+        String(36),
+        ForeignKey("study_flashcard_sets.id", ondelete="CASCADE"),
+        nullable=False,
     )
     front: Mapped[str] = mapped_column(Text, nullable=False)
     back: Mapped[str] = mapped_column(Text, nullable=False)
@@ -84,7 +86,7 @@ class StudyMindmap(CommonMixin, Base):
     __tablename__ = "study_mindmaps"
 
     file_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("files.id"), nullable=False
+        String(36), ForeignKey("files.id", ondelete="CASCADE"), nullable=False
     )
     data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[ContentStatus] = mapped_column(
@@ -104,7 +106,7 @@ class StudyChat(CommonMixin, Base):
     __tablename__ = "study_chats"
 
     file_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("files.id"), nullable=False
+        String(36), ForeignKey("files.id", ondelete="CASCADE"), nullable=False
     )
 
     file = relationship("File")
@@ -115,7 +117,7 @@ class StudyMessage(CommonMixin, Base):
     __tablename__ = "study_messages"
 
     chat_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("study_chats.id"), nullable=False
+        String(36), ForeignKey("study_chats.id", ondelete="CASCADE"), nullable=False
     )
     role: Mapped[MessageRole] = mapped_column(
         Enum(MessageRole, native_enum=False), nullable=False

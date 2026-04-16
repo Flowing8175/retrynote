@@ -598,7 +598,18 @@ class TestListWrongNotes:
         self, auth_client, db_session, test_user
     ):
         # Create another user's session
-        other_user_id = str(uuid.uuid4())
+        _other_user = User(
+            id=str(uuid.uuid4()),
+            username=f"other_{uuid.uuid4().hex[:8]}",
+            email=f"other_{uuid.uuid4().hex[:8]}@example.com",
+            password_hash=hash_password("OtherPass123!"),
+            role=UserRole.user,
+            is_active=True,
+            email_verified=True,
+        )
+        db_session.add(_other_user)
+        await db_session.flush()
+        other_user_id = _other_user.id
         session = QuizSession(
             id=str(uuid.uuid4()),
             user_id=other_user_id,
@@ -860,7 +871,18 @@ class TestUpdateErrorType:
     async def test_update_error_type_cannot_modify_others(
         self, auth_client, db_session, test_user
     ):
-        other_user_id = str(uuid.uuid4())
+        _other_user = User(
+            id=str(uuid.uuid4()),
+            username=f"other_{uuid.uuid4().hex[:8]}",
+            email=f"other_{uuid.uuid4().hex[:8]}@example.com",
+            password_hash=hash_password("OtherPass123!"),
+            role=UserRole.user,
+            is_active=True,
+            email_verified=True,
+        )
+        db_session.add(_other_user)
+        await db_session.flush()
+        other_user_id = _other_user.id
         session = QuizSession(
             id=str(uuid.uuid4()),
             user_id=other_user_id,

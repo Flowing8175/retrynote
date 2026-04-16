@@ -351,7 +351,9 @@ async def login(
 async def password_reset_request(
     request: Request, req: PasswordResetRequest, db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(User).where(User.email == req.email))
+    result = await db.execute(
+        select(User).where(User.email == req.email, User.deleted_at.is_(None))
+    )
     user = result.scalar_one_or_none()
     if not user:
         return {"status": "accepted"}
@@ -436,10 +438,12 @@ async def password_reset_confirm(
     if not verify_password(verifier, token_record.token_hash):
         raise HTTPException(status_code=400, detail="Invalid token")
 
-    user_result = await db.execute(select(User).where(User.id == token_record.user_id))
+    user_result = await db.execute(
+        select(User).where(User.id == token_record.user_id, User.deleted_at.is_(None))
+    )
     user = user_result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=400, detail="Invalid token")
 
     user.password_hash = hash_password(req.new_password)
     token_record.used_at = datetime.now(timezone.utc)
@@ -593,21 +597,9 @@ async def delete_account(
     if not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=400, detail="비밀번호가 올바르지 않습니다.")
 
-    now = datetime.now(timezone.utc)
+    from app.services.user_service import hard_delete_user
 
-    await db.execute(
-        update(RefreshToken)
-        .where(
-            RefreshToken.user_id == user.id,
-            RefreshToken.revoked_at.is_(None),
-        )
-        .values(revoked_at=now)
-    )
-
-    user.is_active = False
-    user.status = "deleted"
-    user.deleted_at = now
-
+    await hard_delete_user(db, user)
     await db.commit()
     return {"status": "ok"}
 

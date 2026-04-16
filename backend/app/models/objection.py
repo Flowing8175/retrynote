@@ -27,16 +27,16 @@ class Objection(CommonMixin, Base):
     __tablename__ = "objections"
 
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     quiz_session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("quiz_sessions.id"), nullable=False
+        String(36), ForeignKey("quiz_sessions.id", ondelete="CASCADE"), nullable=False
     )
     quiz_item_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("quiz_items.id"), nullable=False
+        String(36), ForeignKey("quiz_items.id", ondelete="CASCADE"), nullable=False
     )
     answer_log_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("answer_logs.id"), nullable=False
+        String(36), ForeignKey("answer_logs.id", ondelete="CASCADE"), nullable=False
     )
     objection_reason: Mapped[str] = mapped_column(Text, nullable=False)
     objection_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
@@ -56,7 +56,7 @@ class WeakPoint(CommonMixin, Base):
     __tablename__ = "weak_points"
 
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     concept_key: Mapped[str] = mapped_column(String(200), nullable=False)
     concept_label: Mapped[str | None] = mapped_column(String(255), nullable=True)

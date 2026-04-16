@@ -307,26 +307,17 @@ async def delete_user(
                 detail="Cannot delete the last active super_admin",
             )
 
-    now = datetime.now(timezone.utc)
-    await db.execute(
-        update(RefreshToken)
-        .where(
-            RefreshToken.user_id == user.id,
-            RefreshToken.revoked_at.is_(None),
-        )
-        .values(revoked_at=now)
-    )
-    user.is_active = False
-    user.status = "deleted"
-    user.deleted_at = now
+    from app.services.user_service import hard_delete_user
+
     await log_audit(
         db,
         admin.id,
         "delete_user",
         request,
         target_user_id=user_id,
-        payload={"status": "deleted"},
+        payload={"status": "deleted", "username": user.username, "email": user.email},
     )
+    await hard_delete_user(db, user)
     await db.commit()
 
     return AdminStatusResponse(status="deleted")

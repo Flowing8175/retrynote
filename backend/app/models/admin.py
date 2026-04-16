@@ -16,7 +16,7 @@ class DashboardSnapshot(CommonMixin, Base):
     __tablename__ = "dashboard_snapshots"
 
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     snapshot_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
@@ -50,11 +50,11 @@ class AdminAuditLog(Base):
     __tablename__ = "admin_audit_logs"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
-    admin_user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+    admin_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     target_user_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=True
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     action_type: Mapped[str] = mapped_column(String(100), nullable=False)
     target_type: Mapped[str | None] = mapped_column(String(100), nullable=True)

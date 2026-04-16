@@ -14,6 +14,7 @@ from app.models.quiz import (
     ErrorType,
 )
 from app.models.objection import Objection, ObjectionStatus
+from app.models.user import User, UserRole
 from app.middleware.auth import hash_password, create_access_token
 
 
@@ -101,17 +102,18 @@ class TestCreateObjection:
     async def test_create_objection_other_user_session(
         self, client: AsyncClient, db_session, test_user, ready_file
     ):
-        # Create another user
-        other_user_id = str(uuid.uuid4())
-        other = type(test_user)(
-            id=other_user_id,
-            username="otheruser",
-            email="other@example.com",
-            password_hash=hash_password("Pass123!"),
-            role=test_user.role,
+        _other_user = User(
+            id=str(uuid.uuid4()),
+            username=f"other_{uuid.uuid4().hex[:8]}",
+            email=f"other_{uuid.uuid4().hex[:8]}@example.com",
+            password_hash=hash_password("OtherPass123!"),
+            role=UserRole.user,
             is_active=True,
+            email_verified=True,
         )
-        db_session.add(other)
+        db_session.add(_other_user)
+        await db_session.flush()
+        other_user_id = _other_user.id
 
         # Create session owned by other user
         session = QuizSession(
@@ -408,17 +410,18 @@ class TestGetObjection:
     async def test_get_objection_other_user_denied(
         self, client: AsyncClient, db_session, test_user
     ):
-        # Create another user
-        other_user_id = str(uuid.uuid4())
-        other = type(test_user)(
-            id=other_user_id,
-            username="otheruser",
-            email="other@example.com",
-            password_hash=hash_password("Pass123!"),
-            role=test_user.role,
+        _other_user = User(
+            id=str(uuid.uuid4()),
+            username=f"other_{uuid.uuid4().hex[:8]}",
+            email=f"other_{uuid.uuid4().hex[:8]}@example.com",
+            password_hash=hash_password("OtherPass123!"),
+            role=UserRole.user,
             is_active=True,
+            email_verified=True,
         )
-        db_session.add(other)
+        db_session.add(_other_user)
+        await db_session.flush()
+        other_user_id = _other_user.id
 
         # Create objection owned by other user
         session = QuizSession(

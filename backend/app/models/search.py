@@ -23,7 +23,7 @@ class EmbeddingStore(CommonMixin, Base):
     __tablename__ = "embedding_store"
 
     chunk_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("document_chunks.id"), nullable=False
+        String(36), ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=False
     )
     embedding_model: Mapped[str] = mapped_column(String(100), nullable=False)
     embedding: Mapped[list] = mapped_column(Vector(1536), nullable=False)
@@ -42,7 +42,7 @@ class PasswordResetToken(Base):
         String(36), primary_key=True, default=lambda: str(__import__("uuid").uuid4())
     )
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     selector: Mapped[str] = mapped_column(String(22), nullable=False, index=True)
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -64,7 +64,7 @@ class EmailVerificationToken(Base):
         String(36), primary_key=True, default=lambda: str(__import__("uuid").uuid4())
     )
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     selector: Mapped[str] = mapped_column(String(22), nullable=False, index=True)
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -84,10 +84,10 @@ class ImpersonationSession(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     admin_user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     target_user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
@@ -107,13 +107,13 @@ class DraftAnswer(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     quiz_session_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("quiz_sessions.id"), nullable=False
+        String(36), ForeignKey("quiz_sessions.id", ondelete="CASCADE"), nullable=False
     )
     quiz_item_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("quiz_items.id"), nullable=False
+        String(36), ForeignKey("quiz_items.id", ondelete="CASCADE"), nullable=False
     )
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     user_answer: Mapped[str] = mapped_column(Text, nullable=True)
     saved_at: Mapped[datetime] = mapped_column(
@@ -150,7 +150,10 @@ class RefreshToken(Base):
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True)  # JTI
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False, index=True
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

@@ -447,13 +447,13 @@ class TestAdminModels:
         assert announcement.body == "The system will be under maintenance on Sunday."
         assert announcement.is_active is True
 
-    async def test_create_admin_audit_log(self, db_session, admin_user):
+    async def test_create_admin_audit_log(self, db_session, admin_user, test_user):
         """All fields"""
         log = AdminAuditLog(
             id=str(uuid.uuid4()),
             admin_user_id=admin_user.id,
             action_type="impersonation_start",
-            target_user_id=str(uuid.uuid4()),
+            target_user_id=test_user.id,
             target_type="user",
             target_id=str(uuid.uuid4()),
             reason="Support case #12345",
@@ -541,13 +541,13 @@ class TestSearchModels:
         assert imp_session.is_active is True
         assert imp_session.reason == "Support investigation"
 
-    async def test_create_password_reset_token(self, db_session):
+    async def test_create_password_reset_token(self, db_session, test_user):
         from datetime import timedelta
 
         expires = datetime.now(timezone.utc) + timedelta(hours=1)
         token = PasswordResetToken(
             id=str(uuid.uuid4()),
-            user_id=str(uuid.uuid4()),
+            user_id=test_user.id,
             selector="abcdef1234567890",
             token_hash="fake_hash",
             expires_at=expires,

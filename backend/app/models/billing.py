@@ -17,7 +17,10 @@ class Subscription(CommonMixin, Base):
     __tablename__ = "subscriptions"
 
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False, index=True
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     tier: Mapped[str] = mapped_column(String(20), nullable=False)
     billing_cycle: Mapped[str] = mapped_column(
@@ -42,7 +45,7 @@ class UsageRecord(CommonMixin, Base):
     __table_args__ = (Index("ix_usage_user_resource", "user_id", "resource_type"),)
 
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
     )
     resource_type: Mapped[str] = mapped_column(
         String(30), nullable=False
@@ -60,7 +63,10 @@ class CreditBalance(CommonMixin, Base):
     __tablename__ = "credit_balances"
 
     user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False, unique=True
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
     )
     storage_credits_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
     ai_credits_count: Mapped[int] = mapped_column(Integer, default=0)
@@ -69,8 +75,8 @@ class CreditBalance(CommonMixin, Base):
 class CreditPurchase(CommonMixin, Base):
     __tablename__ = "credit_purchases"
 
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id"), nullable=False
+    user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     credit_type: Mapped[str] = mapped_column(String(20), nullable=False)  # storage/ai
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)

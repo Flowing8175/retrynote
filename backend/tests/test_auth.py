@@ -245,6 +245,140 @@ class TestPasswordReset:
         )
         assert resp.status_code == 400
 
+    @patch("app.api.auth.send_password_reset_email", new_callable=AsyncMock)
+    async def test_password_reset_confirm_updates_credentials(
+        self, mock_send_email, client: AsyncClient, test_user
+    ):
+        """End-to-end: reset request → confirm → login with new password must succeed."""
+        from sqlalchemy import select
+        from app.models.user import User
+        from tests.conftest import TestingSessionLocal
+
+        # 1. Request reset
+        resp = await client.post(
+            "/auth/password/reset/request",
+            json={"email": "testuser@example.com"},
+        )
+        assert resp.status_code == 200
+        mock_send_email.assert_called_once()
+        # send_password_reset_email(email, token) — grab the raw token
+        _, token = mock_send_email.call_args[0]
+
+        # Snapshot the hash BEFORE confirm, using a fresh session
+        async with TestingSessionLocal() as s:
+            row = (
+                await s.execute(select(User).where(User.id == test_user.id))
+            ).scalar_one()
+            hash_before = row.password_hash
+
+        # 2. Confirm reset with new password
+        resp = await client.post(
+            "/auth/password/reset/confirm",
+            json={"token": token, "new_password": "NewPass456!"},
+        )
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["status"] == "success"
+
+        # Verify hash CHANGED via a fresh session (no session caching)
+        async with TestingSessionLocal() as s:
+            row = (
+                await s.execute(select(User).where(User.id == test_user.id))
+            ).scalar_one()
+            hash_after = row.password_hash
+        assert hash_after != hash_before, (
+            "password_hash did NOT change after reset confirm "
+            f"(still {hash_before[:20]}...)"
+        )
+
+        # 3. Old password must fail
+        resp_old = await client.post(
+            "/auth/login",
+            json={"username_or_email": "testuser", "password": "TestPass123!"},
+        )
+        assert resp_old.status_code == 401, (
+            f"Old password should no longer work, got {resp_old.status_code}"
+        )
+
+        # 4. New password must succeed
+        resp_new = await client.post(
+            "/auth/login",
+            json={"username_or_email": "testuser", "password": "NewPass456!"},
+        )
+        assert resp_new.status_code == 200, (
+            f"New password should work after reset, got {resp_new.status_code}: {resp_new.text}"
+        )
+
+    @patch("app.api.auth.send_password_reset_email", new_callable=AsyncMock)
+    async def test_password_reset_blocked_for_soft_deleted_user(
+        self, mock_send_email, client: AsyncClient, db_session, test_user
+    ):
+        """Soft-deleted users must not be able to reset passwords.
+
+        Regression guard for the nbkuj bug: a deleted account successfully
+        ran password reset twice, but login still rejected them (deleted_at
+        filter), leaving the user thinking "credentials didn't update".
+        """
+        from sqlalchemy import select
+        from app.models.user import User
+        from tests.conftest import TestingSessionLocal
+
+        test_user.deleted_at = datetime.now(timezone.utc)
+        test_user.is_active = False
+        test_user.status = "deleted"
+        await db_session.commit()
+
+        resp = await client.post(
+            "/auth/password/reset/request",
+            json={"email": "testuser@example.com"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "accepted"
+        mock_send_email.assert_not_called()
+
+        async with TestingSessionLocal() as s:
+            from app.models.search import PasswordResetToken
+
+            tokens = (
+                (
+                    await s.execute(
+                        select(PasswordResetToken).where(
+                            PasswordResetToken.user_id == test_user.id
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            assert len(tokens) == 0, (
+                f"No reset token should be created for deleted user, got {len(tokens)}"
+            )
+
+        mock_send_email.reset_mock()
+
+        import secrets
+        from app.middleware.auth import hash_password
+        from app.models.search import PasswordResetToken
+
+        raw_token = secrets.token_urlsafe(32)
+        async with TestingSessionLocal() as s:
+            s.add(
+                PasswordResetToken(
+                    user_id=test_user.id,
+                    selector=raw_token[:16],
+                    token_hash=hash_password(raw_token[16:]),
+                    expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                )
+            )
+            await s.commit()
+
+        resp = await client.post(
+            "/auth/password/reset/confirm",
+            json={"token": raw_token, "new_password": "NewPass999!"},
+        )
+        assert resp.status_code == 400, (
+            f"Confirm must reject deleted user, got {resp.status_code}: {resp.text}"
+        )
+
 
 class TestGetMe:
     async def test_get_me_authenticated(self, auth_client: AsyncClient, test_user):
@@ -261,9 +395,12 @@ class TestGetMe:
 
 
 class TestDeleteAccount:
-    async def test_delete_account_soft_deletes_and_revokes_tokens(
+    async def test_delete_account_hard_deletes_user_and_cascades(
         self, db_session, auth_client: AsyncClient, test_user
     ):
+        from sqlalchemy import select
+        from app.models.user import User
+
         refresh_token = RefreshToken(
             id=str(uuid.uuid4()),
             user_id=test_user.id,
@@ -271,6 +408,8 @@ class TestDeleteAccount:
         )
         db_session.add(refresh_token)
         await db_session.commit()
+        user_id = test_user.id
+        rt_id = refresh_token.id
 
         resp = await auth_client.request(
             "DELETE",
@@ -280,14 +419,16 @@ class TestDeleteAccount:
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
 
-        await db_session.refresh(test_user)
-        assert test_user.deleted_at is not None
-        assert test_user.is_active is False
-        assert test_user.status == "deleted"
+        from tests.conftest import TestingSessionLocal
 
-        refresh_token_result = await db_session.get(RefreshToken, refresh_token.id)
-        assert refresh_token_result is not None
-        assert refresh_token_result.revoked_at is not None
+        async with TestingSessionLocal() as s:
+            user_row = (
+                await s.execute(select(User).where(User.id == user_id))
+            ).scalar_one_or_none()
+            assert user_row is None, "User row must be hard-deleted"
+
+            rt_row = await s.get(RefreshToken, rt_id)
+            assert rt_row is None, "Refresh token must cascade-delete"
 
     async def test_delete_account_rejects_wrong_password(
         self, auth_client: AsyncClient
