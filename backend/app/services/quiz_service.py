@@ -76,6 +76,30 @@ def validate_source_url_syntax(url: str) -> str | None:
     return None
 
 
+def _classify_processing_error(e: BaseException) -> str:
+    """Map known exceptions to short, stable parse_error_codes (<=100 chars)."""
+    from botocore.exceptions import ClientError
+
+    if isinstance(e, ClientError):
+        response = getattr(e, "response", None) or {}
+        code = (
+            response.get("Error", {}).get("Code", "")
+            if isinstance(response, dict)
+            else ""
+        )
+        if code == "AccessDenied":
+            msg = str(e).lower()
+            if "bandwidth" in msg or "cap exceeded" in msg or "transaction" in msg:
+                return "storage_quota_exceeded"
+            return "storage_access_denied"
+        if code in ("NoSuchKey", "404"):
+            return "storage_not_found"
+        return f"storage_error:{code or 'unknown'}"[:100]
+
+    msg = str(e)[:100]
+    return msg or e.__class__.__name__[:100]
+
+
 async def process_file(job_id: str):
     async with async_session() as db:
         job_result = await db.execute(select(Job).where(Job.id == job_id))
@@ -242,7 +266,7 @@ async def process_file(job_id: str):
                     if is_ocr_failure
                     else FileStatus.failed_terminal
                 )
-                file.parse_error_code = str(e)[:100]
+                file.parse_error_code = _classify_processing_error(e)
                 file.processing_finished_at = datetime.now(timezone.utc)
                 raise
 

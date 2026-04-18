@@ -45,6 +45,12 @@ function getStatusHint(status: string, parseErrorCode?: string | null): string {
   if (parseErrorCode === 'image_unreadable') {
     return '이미지를 읽을 수 없습니다 — 파일이 손상되었을 수 있습니다';
   }
+  if (parseErrorCode === 'storage_quota_exceeded') {
+    return '일시적인 서비스 용량 한도 — 잠시 후 다시 시도하세요';
+  }
+  if (parseErrorCode === 'storage_access_denied' || parseErrorCode === 'storage_not_found') {
+    return '파일을 찾을 수 없습니다 — 다시 업로드하세요';
+  }
   const hints: Record<string, string> = {
     ready: '퀴즈 생성 가능',
     failed_partial: '일부만 사용 가능',
