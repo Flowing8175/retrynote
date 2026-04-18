@@ -956,6 +956,7 @@ class _QuizGenerationContext:
     concept_counts: dict[str, int]
     is_no_source: bool
     topic: str | None
+    user_instruction: str | None = None
 
 
 async def _prepare_generation_context(
@@ -1039,6 +1040,13 @@ async def _prepare_generation_context(
         if resolved_difficulty not in ("easy", "medium", "hard"):
             resolved_difficulty = "medium"
 
+    raw_instruction = payload.get("user_instruction") or session.user_instruction
+    user_instruction: str | None = None
+    if isinstance(raw_instruction, str):
+        stripped = raw_instruction.strip()
+        if stripped:
+            user_instruction = stripped[:2000]
+
     return _QuizGenerationContext(
         source_context=source_context,
         question_count=question_count,
@@ -1047,6 +1055,7 @@ async def _prepare_generation_context(
         concept_counts=concept_counts,
         is_no_source=is_no_source,
         topic=topic,
+        user_instruction=user_instruction,
     )
 
 
@@ -1064,6 +1073,7 @@ async def _run_quiz_generation_from_context(
         concept_counts=ctx.concept_counts,
         is_no_source=ctx.is_no_source,
         topic=ctx.topic,
+        user_instruction=ctx.user_instruction,
     )
 
     ai_result, tokens_used = await call_ai_with_fallback(
@@ -1293,6 +1303,7 @@ async def stream_quiz_generation(
             concept_counts=ctx.concept_counts,
             is_no_source=ctx.is_no_source,
             topic=ctx.topic,
+            user_instruction=ctx.user_instruction,
         )
 
         primary_model = session.generation_model_name or _cfg.balanced_generation_model
@@ -1524,10 +1535,20 @@ async def generate_quiz(job_id: str):
                         session.status = QuizSessionStatus.generation_failed
                         raise JobFailure("No retry questions could be generated")
 
+                    raw_retry_instruction = (
+                        payload.get("user_instruction") or session.user_instruction
+                    )
+                    retry_user_instruction: str | None = None
+                    if isinstance(raw_retry_instruction, str):
+                        stripped_retry = raw_retry_instruction.strip()
+                        if stripped_retry:
+                            retry_user_instruction = stripped_retry[:2000]
+
                     batch_prompt = build_batch_retry_prompt(
                         batch_items,
                         difficulty=user_difficulty,
                         question_types=user_question_types,
+                        user_instruction=retry_user_instruction,
                     )
                     resolved_retry_difficulty = user_difficulty or "medium"
                     batch_result, tokens_used = await call_ai_with_fallback(
