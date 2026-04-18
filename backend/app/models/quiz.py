@@ -89,6 +89,7 @@ class QuizSession(CommonMixin, Base):
     generation_model_name: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )
+    user_instruction: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
