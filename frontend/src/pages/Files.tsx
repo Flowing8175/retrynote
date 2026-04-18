@@ -3,12 +3,12 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { useMutationWithInvalidation } from '@/hooks/useMutationWithInvalidation';
 import { Link, useNavigate } from 'react-router-dom';
 import { Upload, Trash2, Download, Edit3, RotateCw, Plus, X, BookOpen } from 'lucide-react';
-import type { AxiosError } from 'axios';
 import { filesApi } from '@/api';
-import { Modal, Pagination, StatusBadge, SkeletonTransition } from '@/components';
+import { Modal, Pagination, StatusBadge, SkeletonTransition, UploadQueue } from '@/components';
 import { isFileProcessingStatus } from '@/types';
 import type { FileDetail } from '@/types';
 import { useModalState } from '@/hooks/useModalState';
+import { useMultiFileUpload } from '@/hooks/useMultiFileUpload';
 
 const failedStatuses = ['failed_partial', 'failed_terminal'];
 
@@ -134,8 +134,12 @@ export default function Files() {
   const folderDeleteModal = useModalState<{ id: string; name: string }>();
   const [moveTargetFolderId, setMoveTargetFolderId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const upload = useMultiFileUpload({
+    concurrency: 3,
+    folderId: selectedFolderId,
+  });
 
   const { data: folderData } = useQuery({
     queryKey: ['folders'],
@@ -149,49 +153,6 @@ export default function Files() {
     refetchInterval: (query) =>
       query.state.data?.files.some((file) => isFileProcessingStatus(file.status)) ? 3000 : false,
     refetchIntervalInBackground: true,
-  });
-
-  const uploadMutation = useMutation({
-    mutationFn: async (files: File[]) => {
-      const results = await Promise.allSettled(
-        files.map((file) => filesApi.uploadFile(file, null, null, null)),
-      );
-      const successes = results.filter((r) => r.status === 'fulfilled').length;
-      const failures = results
-        .map((r, i) => ({ result: r, file: files[i] }))
-        .filter(
-          (item): item is { result: PromiseRejectedResult; file: File } =>
-            item.result.status === 'rejected',
-        );
-      return { successes, failures };
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
-
-      if (data.failures.length === 0) {
-        setUploadError(null);
-        return;
-      }
-
-      const lines = data.failures.map(({ result, file }) => {
-        const axiosError = result.reason as AxiosError<{ detail: string }>;
-        const detail = axiosError.response?.data?.detail;
-        if (detail) return `${file.name}: ${detail}`;
-        const status = axiosError.response?.status;
-        if (status === 413) return `${file.name}: 파일 용량 초과`;
-        if (status === 415) return `${file.name}: 지원하지 않는 형식`;
-        return `${file.name}: 업로드 실패`;
-      });
-
-      if (data.successes > 0) {
-        setUploadError(`${data.successes}개 업로드 완료. 일부 파일 건너뜀:\n${lines.join('\n')}`);
-      } else {
-        setUploadError(lines.join('\n'));
-      }
-    },
-    onError: () => {
-      setUploadError('업로드에 실패했습니다');
-    },
   });
 
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -271,7 +232,7 @@ export default function Files() {
     e.stopPropagation();
     setDragActive(false);
     const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) uploadMutation.mutate(files);
+    if (files.length > 0) upload.enqueue(files);
   };
 
   const toggleFileSelection = (fileId: string) => {
@@ -418,7 +379,7 @@ export default function Files() {
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []);
                 if (files.length > 0) {
-                  uploadMutation.mutate(files);
+                  upload.enqueue(files);
                   e.target.value = '';
                 }
               }}
@@ -438,22 +399,20 @@ export default function Files() {
                 파일 선택
               </label>
             </div>
-            {uploadMutation.isPending && (
-              <div className="absolute inset-0 bg-surface/80 rounded-3xl flex items-center justify-center backdrop-blur-sm z-10">
-                <div className="bg-surface-raised border border-white/[0.1] rounded-2xl px-6 py-4 shadow-xl flex items-center gap-3">
-                  <div className="w-4 h-4 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm font-medium text-white">업로드 및 처리 중...</span>
-                </div>
-              </div>
-            )}
           </div>
 
-          {uploadError && (
-            <div className="bg-semantic-error/10 border border-semantic-error/20 rounded-2xl p-4 flex items-start justify-between gap-3">
-              <span className="text-sm font-medium text-semantic-error whitespace-pre-line">{uploadError}</span>
-              <button onClick={() => setUploadError(null)} className="text-semantic-error/70 hover:text-semantic-error shrink-0 mt-0.5">✕</button>
-            </div>
-          )}
+          <UploadQueue
+            items={upload.items}
+            activeCount={upload.activeCount}
+            completedCount={upload.completedCount}
+            failedCount={upload.failedCount}
+            totalCount={upload.totalCount}
+            onCancelItem={upload.cancelItem}
+            onRetryItem={upload.retryItem}
+            onRemoveItem={upload.removeItem}
+            onClearFinished={upload.clearFinished}
+            onCancelAll={upload.cancelAll}
+          />
 
           {/* List Section */}
           <div className="space-y-6">

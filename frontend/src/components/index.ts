@@ -11,3 +11,4 @@ export { default as Layout } from './Layout';
 export { default as UsageBar } from './UsageBar';
 export { SkeletonTransition } from './SkeletonTransition';
 export { default as SegmentedControl } from './ui/SegmentedControl';
+export { default as UploadQueue } from './UploadQueue';

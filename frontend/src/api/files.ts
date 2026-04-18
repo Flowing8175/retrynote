@@ -16,12 +16,18 @@ const decodeDownloadName = (value: string): string => {
   }
 };
 
+export interface UploadFileOptions {
+  onUploadProgress?: (percent: number, loaded: number, total: number) => void;
+  signal?: AbortSignal;
+}
+
 export const filesApi = {
   uploadFile: async (
     file: File | null,
     manualText: string | null,
     sourceUrl: string | null,
-    folderId: string | null = null
+    folderId: string | null = null,
+    options: UploadFileOptions = {}
   ): Promise<FileUploadResponse> => {
     const formData = new FormData();
     if (file) {
@@ -37,7 +43,17 @@ export const filesApi = {
       formData.append('folder_id', folderId);
     }
 
-    const response = await apiClient.post<FileUploadResponse>('/files', formData);
+    const response = await apiClient.post<FileUploadResponse>('/files', formData, {
+      signal: options.signal,
+      onUploadProgress: options.onUploadProgress
+        ? (event) => {
+            const total = event.total ?? (file ? file.size : 0);
+            const loaded = event.loaded ?? 0;
+            const percent = total > 0 ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+            options.onUploadProgress?.(percent, loaded, total);
+          }
+        : undefined,
+    });
     return response.data;
   },
 
