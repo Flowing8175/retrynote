@@ -84,10 +84,15 @@ function QuizNewSkeleton() {
           <div className="skeleton h-8 w-8 rounded-full" />
           <div className="skeleton h-7 w-20 rounded-md" />
         </div>
-        <div className="grid gap-6 md:grid-cols-2">
-          <div className="skeleton h-52 rounded-3xl" />
-          <div className="skeleton h-52 rounded-3xl" />
+        <div className="skeleton h-52 rounded-3xl" />
+      </section>
+
+      <section className="space-y-8">
+        <div className="flex items-center gap-3">
+          <div className="skeleton h-8 w-8 rounded-full" />
+          <div className="skeleton h-7 w-20 rounded-md" />
         </div>
+        <div className="skeleton h-40 rounded-3xl" />
       </section>
     </div>
   );
@@ -588,7 +593,7 @@ export default function QuizNew() {
         </div>
       </section>
 
-       {/* Configuration Section */}
+       {/* Learning Settings Section */}
        <section ref={section2Ref} className="space-y-8" data-tour="quiz-options">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 font-semibold text-sm">
@@ -596,59 +601,63 @@ export default function QuizNew() {
           </div>
           <h2 className="text-xl font-semibold text-white">학습 설정</h2>
         </div>
-
-        <div className="grid gap-6 md:grid-cols-2">
-          {/* Mode & Count */}
-          <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-8">
-            <div className="space-y-4">
-              <div className="text-sm font-medium text-content-primary">피드백 방식</div>
-              <OptionGroup
-                options={[
-                  { value: 'normal' as const, label: '한 문제씩 확인', description: '문제를 풀 때마다 바로 정답과 해설을 확인합니다' },
-                  { value: 'exam' as const, label: '전체 풀이 후 확인', description: '모든 문제를 푼 뒤 한꺼번에 결과를 확인합니다' },
-                ]}
-                value={mode}
-                onChange={(v) => setMode(v as 'normal' | 'exam')}
-                size="lg"
-                layout="row"
-                className="flex-col"
-              />
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium text-content-primary">문제 수</div>
-              </div>
-              <QuestionCountPicker
-                questionCount={questionCount}
-                autoCount={autoCount}
-                autoLabel="자동 조절"
-                onChange={(v) => {
-                  if (v === 'auto') {
-                    setAutoCount(true);
-                  } else {
-                    setAutoCount(false);
-                    setQuestionCount(v);
-                  }
-                }}
-              />
-            </div>
+        <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-6">
+          <div className="space-y-4">
+            <div className="text-sm font-medium text-content-primary">피드백 방식</div>
+            <OptionGroup
+              options={[
+                { value: 'normal' as const, label: '한 문제씩 확인', description: '문제를 풀 때마다 바로 정답과 해설을 확인합니다' },
+                { value: 'exam' as const, label: '전체 풀이 후 확인', description: '모든 문제를 푼 뒤 한꺼번에 결과를 확인합니다' },
+              ]}
+              value={mode}
+              onChange={(v) => setMode(v as 'normal' | 'exam')}
+              size="lg"
+              layout="row"
+              className="flex-col"
+            />
           </div>
 
-          {/* Advanced Options */}
-          <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="text-sm font-medium text-content-primary">상세 설정</div>
-              <button
-                onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                className="text-xs font-medium text-brand-300 hover:text-white transition-colors"
-              >
-                {showAdvancedOptions ? '닫기' : '열기'}
-              </button>
-            </div>
+          <div className="space-y-4">
+            <div className="text-sm font-medium text-content-primary">문제 수</div>
+            <QuestionCountPicker
+              questionCount={questionCount}
+              autoCount={autoCount}
+              autoLabel="자동 조절"
+              onChange={(v) => {
+                if (v === 'auto') {
+                  setAutoCount(true);
+                } else {
+                  setAutoCount(false);
+                  setQuestionCount(v);
+                }
+              }}
+            />
+          </div>
+        </div>
+      </section>
 
-            {showAdvancedOptions ? (
-              <div className="animate-fade-in-up space-y-8">
+      {/* Advanced Settings Section */}
+      <section className="space-y-8" data-tour="quiz-advanced">
+        <div className="flex items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/10 text-brand-300 font-semibold text-sm">
+            3
+          </div>
+          <h2 className="text-xl font-semibold text-white">상세 설정</h2>
+        </div>
+        <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="text-sm font-medium text-content-primary">고급 옵션</div>
+            <button
+              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+              className="text-xs font-medium text-brand-300 hover:text-white transition-colors"
+            >
+              {showAdvancedOptions ? '닫기' : '열기'}
+            </button>
+          </div>
+
+          {showAdvancedOptions ? (
+            <div className="animate-fade-in-up space-y-8">
+              {generationModelOptions.length > 0 && (
                 <div className="space-y-4">
                   <div className="text-xs font-medium text-content-muted">AI 모델</div>
                   <OptionGroup
@@ -663,72 +672,71 @@ export default function QuizNew() {
                     size="md"
                     layout="grid-2"
                   />
-
                 </div>
+              )}
 
-                <div className="space-y-4">
-                  <div className="text-xs font-medium text-content-muted">난이도</div>
-                  <OptionGroup
-                    options={DIFFICULTY_OPTIONS.map((opt) => ({
-                      value: opt.value,
-                      label: opt.label === '난이도 무관' ? '자동 (다양한 난이도)' : opt.label,
-                      description: opt.value === 'easy' ? '기본 개념 위주, 직관적 선택지'
-                        : opt.value === 'medium' ? '응용 개념 포함'
-                        : opt.value === 'hard' ? '함정 선택지, 세부 개념까지'
-                        : undefined,
-                    }))}
-                    value={difficulty}
-                    onChange={(v) => setDifficulty(v as string)}
-                    size="md"
-                    layout="grid-2"
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  <div className="text-xs font-medium text-content-muted">문제 유형</div>
-                  <OptionGroup
-                    options={QUESTION_TYPES.map((qt) => ({
-                      value: qt.value,
-                      label: qt.label,
-                      description: qt.value === 'essay' ? 'AI 채점 시 1크레딧 소모' : undefined,
-                    }))}
-                    value={selectedQuestionTypes}
-                    onChange={(v) => setSelectedQuestionTypes(v as string[])}
-                    multiple
-                    size="md"
-                    layout="grid-2"
-                  />
-                </div>
-
-                <div className="space-y-4">
-                  <div className="flex items-baseline justify-between">
-                    <label htmlFor="user-instruction" className="text-xs font-medium text-content-muted">
-                      AI에게 추가 요청사항 <span className="text-content-muted/70">(선택)</span>
-                    </label>
-                    <span className={`text-[10px] tabular-nums ${userInstruction.length > 2000 ? 'text-semantic-error' : 'text-content-muted/70'}`}>
-                      {userInstruction.length}/2000
-                    </span>
-                  </div>
-                  <textarea
-                    id="user-instruction"
-                    value={userInstruction}
-                    onChange={(e) => setUserInstruction(e.target.value.slice(0, 2000))}
-                    placeholder="예: 개념 이해 중심으로 출제해주세요 / 실제 사례를 포함해주세요 / 비교 문제 위주로 만들어주세요"
-                    rows={3}
-                    className="w-full rounded-xl border border-white/[0.05] bg-surface-deep px-4 py-3 text-sm text-content-primary placeholder:text-content-muted resize-y focus:outline-none focus:ring-1 focus:ring-brand-500"
-                    style={{ minHeight: '72px', maxHeight: '200px' }}
-                  />
-                  <p className="text-xs leading-relaxed text-content-muted">
-                    AI가 문제를 만들 때 참고할 추가 지시를 자유롭게 작성하세요. 시스템 출제 원칙(자료 기반, 품질 기준 등)과 충돌하는 요청은 반영되지 않을 수 있습니다.
-                  </p>
-                </div>
+              <div className="space-y-4">
+                <div className="text-xs font-medium text-content-muted">난이도</div>
+                <OptionGroup
+                  options={DIFFICULTY_OPTIONS.map((opt) => ({
+                    value: opt.value,
+                    label: opt.label === '난이도 무관' ? '자동 (다양한 난이도)' : opt.label,
+                    description: opt.value === 'easy' ? '기본 개념 위주, 직관적 선택지'
+                      : opt.value === 'medium' ? '응용 개념 포함'
+                      : opt.value === 'hard' ? '함정 선택지, 세부 개념까지'
+                      : undefined,
+                  }))}
+                  value={difficulty}
+                  onChange={(v) => setDifficulty(v as string)}
+                  size="md"
+                  layout="grid-2"
+                />
               </div>
-            ) : (
-              <div className="flex items-center justify-center h-32 bg-surface-deep rounded-2xl border border-white/[0.05]">
-                <p className="text-sm text-content-muted">기본 설정으로 최적화되어 있습니다.</p>
+
+              <div className="space-y-4">
+                <div className="text-xs font-medium text-content-muted">문제 유형</div>
+                <OptionGroup
+                  options={QUESTION_TYPES.map((qt) => ({
+                    value: qt.value,
+                    label: qt.label,
+                    description: qt.value === 'essay' ? 'AI 채점 시 1크레딧 소모' : undefined,
+                  }))}
+                  value={selectedQuestionTypes}
+                  onChange={(v) => setSelectedQuestionTypes(v as string[])}
+                  multiple
+                  size="md"
+                  layout="grid-2"
+                />
               </div>
-            )}
-          </div>
+
+              <div className="space-y-4">
+                <div className="flex items-baseline justify-between">
+                  <label htmlFor="user-instruction" className="text-xs font-medium text-content-muted">
+                    AI에게 추가 요청사항 <span className="text-content-muted/70">(선택)</span>
+                  </label>
+                  <span className={`text-[10px] tabular-nums ${userInstruction.length > 2000 ? 'text-semantic-error' : 'text-content-muted/70'}`}>
+                    {userInstruction.length}/2000
+                  </span>
+                </div>
+                <textarea
+                  id="user-instruction"
+                  value={userInstruction}
+                  onChange={(e) => setUserInstruction(e.target.value.slice(0, 2000))}
+                  placeholder="예: 개념 이해 중심으로 출제해주세요 / 실제 사례를 포함해주세요 / 비교 문제 위주로 만들어주세요"
+                  rows={3}
+                  className="w-full rounded-xl border border-white/[0.05] bg-surface-deep px-4 py-3 text-sm text-content-primary placeholder:text-content-muted resize-y focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  style={{ minHeight: '72px', maxHeight: '200px' }}
+                />
+                <p className="text-xs leading-relaxed text-content-muted">
+                  AI가 문제를 만들 때 참고할 추가 지시를 자유롭게 작성하세요. 시스템 출제 원칙(자료 기반, 품질 기준 등)과 충돌하는 요청은 반영되지 않을 수 있습니다.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-32 bg-surface-deep rounded-2xl border border-white/[0.05]">
+              <p className="text-sm text-content-muted">기본 설정으로 최적화되어 있습니다.</p>
+            </div>
+          )}
         </div>
       </section>
 
