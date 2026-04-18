@@ -242,7 +242,7 @@ async def process_file(job_id: str):
                     if is_ocr_failure
                     else FileStatus.failed_terminal
                 )
-                file.parse_error_code = str(e)[:200]
+                file.parse_error_code = str(e)[:100]
                 file.processing_finished_at = datetime.now(timezone.utc)
                 raise
 

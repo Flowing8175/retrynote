@@ -24,7 +24,16 @@ class OcrResult:
 
 
 def _prepare_image(image_bytes: bytes) -> bytes:
-    img = Image.open(io.BytesIO(image_bytes))
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        img.load()
+    except Image.DecompressionBombError as e:
+        # Short stable code — File.parse_error_code is VARCHAR(100) and PIL's message exceeds it.
+        logger.warning("OCR rejected oversized image: %s", e)
+        raise RuntimeError("image_too_large") from e
+    except Image.UnidentifiedImageError as e:
+        logger.warning("OCR rejected unreadable image: %s", e)
+        raise RuntimeError("image_unreadable") from e
 
     if img.mode in ("RGBA", "P", "LA"):
         background = Image.new("RGB", img.size, (255, 255, 255))

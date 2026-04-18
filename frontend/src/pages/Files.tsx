@@ -39,6 +39,12 @@ function getStatusHint(status: string, parseErrorCode?: string | null): string {
   if (status === 'failed_terminal' && parseErrorCode === 'ocr_not_configured') {
     return 'OCR 설정 오류 — 관리자에게 문의하세요';
   }
+  if (parseErrorCode === 'image_too_large') {
+    return '이미지가 너무 큽니다 — 해상도를 낮춰 다시 업로드하세요';
+  }
+  if (parseErrorCode === 'image_unreadable') {
+    return '이미지를 읽을 수 없습니다 — 파일이 손상되었을 수 있습니다';
+  }
   const hints: Record<string, string> = {
     ready: '퀴즈 생성 가능',
     failed_partial: '일부만 사용 가능',
