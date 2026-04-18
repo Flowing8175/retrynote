@@ -15,6 +15,7 @@ MAX_BYTES = 1024 * 1024
 JPEG_INITIAL_QUALITY = 90
 JPEG_MIN_QUALITY = 40
 JPEG_QUALITY_STEP = 10
+NON_JPEG_MAX_PIXELS = 50_000_000
 
 
 @dataclass
@@ -24,16 +25,37 @@ class OcrResult:
 
 
 def _prepare_image(image_bytes: bytes) -> bytes:
+    # Bypass Pillow's MAX_IMAGE_PIXELS guard (~178M px) — we downscale everything to
+    # MAX_DIMENSION, so the guard just wedges files in processing. Memory is still
+    # bounded because (a) JPEGs use draft() for reduced-scale decode, and (b) non-JPEGs
+    # are rejected above NON_JPEG_MAX_PIXELS before decode.
+    previous_bomb_limit = Image.MAX_IMAGE_PIXELS
+    Image.MAX_IMAGE_PIXELS = None
     try:
-        img = Image.open(io.BytesIO(image_bytes))
+        try:
+            img = Image.open(io.BytesIO(image_bytes))
+        except Image.UnidentifiedImageError as e:
+            logger.warning("OCR rejected unreadable image: %s", e)
+            raise RuntimeError("image_unreadable") from e
+
+        if img.format == "JPEG":
+            # draft() picks the smallest DCT scale (1/1…1/8) covering the target.
+            # No-op on non-JPEG formats.
+            img.draft("RGB", (MAX_DIMENSION, MAX_DIMENSION))
+        else:
+            w, h = img.size
+            if w * h > NON_JPEG_MAX_PIXELS:
+                logger.warning(
+                    "OCR rejected oversized %s image: %dx%d",
+                    img.format,
+                    w,
+                    h,
+                )
+                raise RuntimeError("image_too_large")
+
         img.load()
-    except Image.DecompressionBombError as e:
-        # Short stable code — File.parse_error_code is VARCHAR(100) and PIL's message exceeds it.
-        logger.warning("OCR rejected oversized image: %s", e)
-        raise RuntimeError("image_too_large") from e
-    except Image.UnidentifiedImageError as e:
-        logger.warning("OCR rejected unreadable image: %s", e)
-        raise RuntimeError("image_unreadable") from e
+    finally:
+        Image.MAX_IMAGE_PIXELS = previous_bomb_limit
 
     if img.mode in ("RGBA", "P", "LA"):
         background = Image.new("RGB", img.size, (255, 255, 255))
