@@ -810,7 +810,7 @@ PNG / JPG:
 - 동일 concept_key는 최근 3회까지만 허용
 - 동일 concept_key가 최근 3회 내 이미 출제되었으면 다음 출제는 question_type 중복 금지
 - 4회째부터 semantic similarity threshold 초과 문항 금지
-- source_mode = no_source이면 source_refs 비울 수 있으나 low_confidence_source = true 설정
+- source_mode = no_source이면 source_refs를 빈 배열로 둔다
 
 ## 문제 생성 출력 스키마
 각 문항 최소 필드:
@@ -824,7 +824,6 @@ PNG / JPG:
 - category_tag
 - difficulty
 - source_refs
-- low_confidence_source
 
 ## 채점 우선순위
 1. 규칙 기반 정규화

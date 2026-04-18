@@ -109,6 +109,114 @@ Master password verification: `POST /admin/login/verify-master`
 - If no hash and no env var → only `super_admin` role can set it on first use
 - On success → returns `admin_token` (JWT, 30 min), stored as `X-Admin-Token` header
 
+## Direct DB Modification
+
+Use the Doppler SSH pattern (see "Running Commands on Server with Doppler" above) to run inline Python against the live DB.
+
+### Tables involved in admin operations
+
+#### `users` — primary user state
+| Column | Type | Values / Notes |
+|--------|------|----------------|
+| `tier` | `varchar(20)` | `"free"` · `"lite"` · `"standard"` · `"pro"` |
+| `storage_quota_bytes` | `bigint` | **Must match tier** — see byte values below |
+| `role` | enum | `"user"` · `"admin"` · `"super_admin"` |
+| `is_active` | `bool` | `True` = account usable · `False` = blocked |
+| `email_verified` | `bool` | `False` by default; set `True` to skip verification |
+
+#### `subscriptions` — billing record (one row per user, optional)
+| Column | Type | Values / Notes |
+|--------|------|----------------|
+| `tier` | `varchar(20)` | Mirror of `users.tier` |
+| `status` | `varchar(30)` | `"active"` · `"past_due"` · `"canceled"` · `"paused"` · `"trialing"` |
+| `billing_cycle` | `varchar(20)` | `"monthly"` · `"quarterly"` · `"manual"` (for admin-set) |
+| `current_period_end` | `datetime` | `NULL` = no expiry (fine for manual grants) |
+| `paddle_subscription_id` | `varchar(100)` | `NULL` for manually-provisioned tiers |
+
+### Storage quota bytes by tier
+```
+free     →  157_286_400   (150 MB)
+lite     →  3_221_225_472  (3 GB)
+standard → 16_106_127_360  (15 GB)
+pro      → 53_687_091_200  (50 GB)
+```
+
+### Operations
+
+#### Set user to a paid tier
+Both `users` **and** `subscriptions` must be updated — the app reads `users.tier` for quota enforcement and `subscriptions` for billing display.
+
+```bash
+ssh -i ~/.ssh/oracle.key ubuntu@134.185.101.134
+sudo -u retrynote bash << 'SHELL'
+cd /home/retrynote/app/backend
+TOKEN=$(cat /home/retrynote/.doppler/service-token | sed 's/DOPPLER_TOKEN=//')
+doppler run --project retrynote --config prd -t $TOKEN -- .venv/bin/python3 -c "
+import asyncio
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import engine
+from app.models.user import User
+from app.models.billing import Subscription
+
+EMAIL = 'user@example.com'
+TIER  = 'pro'          # free | lite | standard | pro
+BYTES = 53_687_091_200 # match tier: 150MB/3GB/15GB/50GB
+
+async def run():
+    async with AsyncSession(engine) as db:
+        user = (await db.execute(select(User).where(User.email == EMAIL))).scalar_one_or_none()
+        if not user:
+            print('ERROR: user not found'); return
+        print(f'Before: tier={user.tier}, quota={user.storage_quota_bytes}')
+        user.tier = TIER
+        user.storage_quota_bytes = BYTES
+        sub = (await db.execute(select(Subscription).where(Subscription.user_id == user.id))).scalar_one_or_none()
+        if sub is None:
+            sub = Subscription(user_id=user.id, billing_cycle='manual', reset_tz='Asia/Seoul')
+            db.add(sub)
+        sub.tier = TIER
+        sub.status = 'active'
+        await db.commit()
+        await db.refresh(user)
+        print(f'After:  tier={user.tier}, quota={user.storage_quota_bytes}')
+    await engine.dispose()
+
+asyncio.run(run())
+"
+SHELL
+```
+
+#### Downgrade to free
+Same script — set `TIER = 'free'`, `BYTES = 157_286_400`, and set `sub.status = 'canceled'`.
+
+#### Change user role
+Only touch `users.role`. Valid values: `"user"` · `"admin"` · `"super_admin"`.
+
+```python
+# inside the async with block:
+user.role = 'admin'   # or 'super_admin' / 'user'
+await db.commit()
+```
+
+#### Activate / deactivate account
+```python
+user.is_active = False   # blocks login immediately
+await db.commit()
+```
+
+#### Force email verified
+```python
+user.email_verified = True
+await db.commit()
+```
+
+### What NOT to touch manually
+- `storage_used_bytes` — computed from actual file sizes; don't set this by hand
+- `usage_records` — rolling 30-day consumption windows managed by the app; manual edits break quota enforcement
+- `credit_balances` — app adds/subtracts atomically; direct edits cause race conditions
+- `password_hash` — use the password-reset flow instead
+
 ## LSP Diagnostics
 
 **Always run `mcp_lsp_diagnostics` on specific changed files, never on the full directory.**
