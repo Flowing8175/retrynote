@@ -12,6 +12,7 @@ export interface QuizSessionCreate {
   source_url: string | null;
   idempotency_key: string | null;
   stream?: boolean;
+  user_instruction?: string | null;
 }
 
 export interface QuizSessionResponse {

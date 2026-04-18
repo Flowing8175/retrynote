@@ -81,6 +81,7 @@ export default function Retry() {
     setPreferredTierState(tier);
   };
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [userInstruction, setUserInstruction] = useState('');
   const { ref: section2Ref, capture: captureSection2 } = useFlip<HTMLElement>();
 
   const handleConceptModeChange = (mode: 'manual' | 'ai') => {
@@ -226,6 +227,7 @@ export default function Retry() {
             ? 'concept_manual'
             : 'wrong_notes';
 
+      const trimmedInstruction = userInstruction.trim();
       return retryApi.createRetrySet({
         source,
         concept_keys: conceptMode === 'manual' && selectedManualConceptKeys.size > 0 ? [...selectedManualConceptKeys] : null,
@@ -234,6 +236,7 @@ export default function Retry() {
         difficulty: difficulty || null,
         question_types: selectedQuestionTypes,
         preferred_model: activeModel ?? null,
+        user_instruction: trimmedInstruction ? trimmedInstruction.slice(0, 2000) : null,
       });
     },
     onSuccess: (response) => {
@@ -522,6 +525,29 @@ export default function Retry() {
                   size="md"
                   layout="grid-2"
                 />
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-baseline justify-between">
+                  <label htmlFor="retry-user-instruction" className="text-xs font-medium text-content-muted">
+                    AI에게 추가 요청사항 <span className="text-content-muted/70">(선택)</span>
+                  </label>
+                  <span className={`text-[10px] tabular-nums ${userInstruction.length > 2000 ? 'text-semantic-error' : 'text-content-muted/70'}`}>
+                    {userInstruction.length}/2000
+                  </span>
+                </div>
+                <textarea
+                  id="retry-user-instruction"
+                  value={userInstruction}
+                  onChange={(e) => setUserInstruction(e.target.value.slice(0, 2000))}
+                  placeholder="예: 같은 개념이라도 완전히 다른 각도에서 물어봐주세요 / 힌트를 더 친절하게 주세요"
+                  rows={3}
+                  className="w-full rounded-xl border border-white/[0.05] bg-surface-deep px-4 py-3 text-sm text-content-primary placeholder:text-content-muted resize-y focus:outline-none focus:ring-1 focus:ring-brand-500"
+                  style={{ minHeight: '72px', maxHeight: '200px' }}
+                />
+                <p className="text-xs leading-relaxed text-content-muted">
+                  재도전 문제 생성 시 참고할 추가 지시를 자유롭게 작성하세요. 시스템 원칙과 충돌하는 요청은 반영되지 않을 수 있습니다.
+                </p>
               </div>
             </div>
           ) : (

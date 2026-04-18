@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFlip } from '@/hooks/useFlip';
 import { useModalState } from '@/hooks/useModalState';
 import { useMutation, useQuery } from '@tanstack/react-query';
@@ -115,6 +115,7 @@ export default function QuizNew() {
     'multiple_choice', 'ox', 'short_answer', 'fill_blank',
   ]);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
+  const [userInstruction, setUserInstruction] = useState('');
   const [preferredTier, setPreferredTierState] = useState<string | null>(
     () => localStorage.getItem('quiz_preferred_tier')
   );
@@ -226,6 +227,7 @@ export default function QuizNew() {
       const detectedUrl = sourceMode === 'topic_based' && isUrl(trimmedTopic);
       const backendSourceMode: 'document_based' | 'no_source' =
         sourceMode === 'document_based' ? 'document_based' : 'no_source';
+      const trimmedInstruction = userInstruction.trim();
       return quizApi.createQuizSession(
         {
           mode,
@@ -241,6 +243,7 @@ export default function QuizNew() {
           source_url: detectedUrl ? trimmedTopic : null,
           idempotency_key: crypto.randomUUID(),
           stream: true,
+          user_instruction: trimmedInstruction ? trimmedInstruction.slice(0, 2000) : null,
         },
         abortControllerRef.current.signal
       );
@@ -275,6 +278,40 @@ export default function QuizNew() {
     setSelectedFileIds((prev) =>
       prev.includes(fileId) ? prev.filter((id) => id !== fileId) : [...prev, fileId]
     );
+  };
+
+  const visibleReadyIds = useMemo(
+    () => fileGroups.readyFiles.map((f) => f.id),
+    [fileGroups.readyFiles]
+  );
+  const selectedVisibleCount = useMemo(
+    () => visibleReadyIds.filter((id) => selectedFileIds.includes(id)).length,
+    [visibleReadyIds, selectedFileIds]
+  );
+  const allVisibleSelected =
+    visibleReadyIds.length > 0 && selectedVisibleCount === visibleReadyIds.length;
+  const someVisibleSelected =
+    selectedVisibleCount > 0 && selectedVisibleCount < visibleReadyIds.length;
+
+  const selectAllRef = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someVisibleSelected;
+    }
+  }, [someVisibleSelected]);
+
+  const handleSelectAllToggle = () => {
+    setFormMessage(null);
+    setFileError(null);
+    if (allVisibleSelected) {
+      setSelectedFileIds((prev) => prev.filter((id) => !visibleReadyIds.includes(id)));
+    } else {
+      setSelectedFileIds((prev) => {
+        const merged = new Set(prev);
+        visibleReadyIds.forEach((id) => merged.add(id));
+        return Array.from(merged);
+      });
+    }
   };
 
   const resetNoSourceModal = () => {
@@ -413,6 +450,24 @@ export default function QuizNew() {
                 </Link>
               </div>
 
+              {fileGroups.readyFiles.length > 0 && (
+                <label className="flex items-center gap-4 px-5 py-2 cursor-pointer select-none">
+                  <input
+                    ref={selectAllRef}
+                    type="checkbox"
+                    checked={allVisibleSelected}
+                    onChange={handleSelectAllToggle}
+                    className="w-5 h-5 rounded border-white/[0.1] bg-surface text-brand-500 focus:ring-brand-500"
+                    aria-label={allVisibleSelected ? '전체 선택 해제' : '전체 선택'}
+                  />
+                  <span className="text-xs font-medium text-content-secondary">
+                    {allVisibleSelected ? '전체 선택 해제' : '전체 선택'}
+                  </span>
+                  <span className="ml-auto text-xs tabular-nums text-content-muted">
+                    {selectedVisibleCount} / {visibleReadyIds.length}
+                  </span>
+                </label>
+              )}
               <div className="space-y-3">
                 {fileGroups.readyFiles.map((file) => {
                   const isSelected = selectedFileIds.includes(file.id);
@@ -643,6 +698,29 @@ export default function QuizNew() {
                     size="md"
                     layout="grid-2"
                   />
+                </div>
+
+                <div className="space-y-4">
+                  <div className="flex items-baseline justify-between">
+                    <label htmlFor="user-instruction" className="text-xs font-medium text-content-muted">
+                      AI에게 추가 요청사항 <span className="text-content-muted/70">(선택)</span>
+                    </label>
+                    <span className={`text-[10px] tabular-nums ${userInstruction.length > 2000 ? 'text-semantic-error' : 'text-content-muted/70'}`}>
+                      {userInstruction.length}/2000
+                    </span>
+                  </div>
+                  <textarea
+                    id="user-instruction"
+                    value={userInstruction}
+                    onChange={(e) => setUserInstruction(e.target.value.slice(0, 2000))}
+                    placeholder="예: 개념 이해 중심으로 출제해주세요 / 실제 사례를 포함해주세요 / 비교 문제 위주로 만들어주세요"
+                    rows={3}
+                    className="w-full rounded-xl border border-white/[0.05] bg-surface-deep px-4 py-3 text-sm text-content-primary placeholder:text-content-muted resize-y focus:outline-none focus:ring-1 focus:ring-brand-500"
+                    style={{ minHeight: '72px', maxHeight: '200px' }}
+                  />
+                  <p className="text-xs leading-relaxed text-content-muted">
+                    AI가 문제를 만들 때 참고할 추가 지시를 자유롭게 작성하세요. 시스템 출제 원칙(자료 기반, 품질 기준 등)과 충돌하는 요청은 반영되지 않을 수 있습니다.
+                  </p>
                 </div>
               </div>
             ) : (

@@ -13,6 +13,7 @@ export interface RetrySetCreate {
   difficulty?: string | null;
   question_types?: string[];
   preferred_model?: string | null;
+  user_instruction?: string | null;
 }
 
 export interface RetrySetResponse {
