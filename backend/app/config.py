@@ -73,8 +73,8 @@ class Settings(BaseSettings):
     b2_bucket_name: str = ""
     b2_endpoint_url: str = ""
 
-    # Kakao Vision OCR
-    kakao_rest_api_key: str = ""
+    # Google Cloud Vision OCR
+    google_vision_api_key: str = ""
 
     paddle_api_key: str = ""
     paddle_client_token: str = ""

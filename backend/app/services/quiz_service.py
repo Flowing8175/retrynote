@@ -218,7 +218,7 @@ async def process_file(job_id: str):
                     normalized_text=normalized,
                     language="ko",
                     page_count=1,
-                    parser_name="kakao_ocr" if ocr_required else "builtin",
+                    parser_name="google_vision" if ocr_required else "builtin",
                     parser_version="1.0",
                     ocr_applied=ocr_required,
                 )

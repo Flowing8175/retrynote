@@ -1,3 +1,4 @@
+import base64
 import io
 import logging
 from dataclasses import dataclass
@@ -9,7 +10,8 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-KAKAO_OCR_URL = "https://dapi.kakao.com/v2/vision/text/ocr"
+GOOGLE_VISION_URL = "https://vision.googleapis.com/v1/images:annotate"
+LANGUAGE_HINTS = ["ko", "en"]
 MAX_DIMENSION = 1024
 MAX_BYTES = 1024 * 1024
 JPEG_INITIAL_QUALITY = 90
@@ -85,35 +87,58 @@ def _prepare_image(image_bytes: bytes) -> bytes:
 
 
 async def extract_text_from_image(image_bytes: bytes) -> OcrResult:
-    api_key = settings.kakao_rest_api_key
+    api_key = settings.google_vision_api_key
     if not api_key:
-        raise RuntimeError("KAKAO_REST_API_KEY is not configured")
+        raise RuntimeError("GOOGLE_VISION_API_KEY is not configured")
 
     jpeg_data = _prepare_image(image_bytes)
+    image_b64 = base64.b64encode(jpeg_data).decode("ascii")
+
+    request_body = {
+        "requests": [
+            {
+                "image": {"content": image_b64},
+                "features": [{"type": "TEXT_DETECTION"}],
+                "imageContext": {"languageHints": LANGUAGE_HINTS},
+            }
+        ]
+    }
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.post(
-            KAKAO_OCR_URL,
-            headers={"Authorization": f"KakaoAK {api_key}"},
-            files={"image": ("image.jpg", jpeg_data, "image/jpeg")},
+            GOOGLE_VISION_URL,
+            params={"key": api_key},
+            json=request_body,
         )
 
     if resp.status_code == 401:
-        raise RuntimeError("Kakao OCR: invalid API key")
+        raise RuntimeError("Google Vision: invalid API key")
+    if resp.status_code == 403:
+        raise RuntimeError("Google Vision: API key not authorized for Vision API")
     if resp.status_code == 429:
-        raise RuntimeError("Kakao OCR: rate limit exceeded")
+        raise RuntimeError("Google Vision: rate limit exceeded")
     resp.raise_for_status()
 
     data = resp.json()
-    results = data.get("result", [])
-
-    if not results:
+    responses = data.get("responses", [])
+    if not responses:
         return OcrResult(text="", word_count=0)
 
-    words: list[str] = []
-    for item in results:
-        recognition = item.get("recognition_words", [])
-        words.extend(recognition)
+    first = responses[0]
 
-    text = " ".join(words)
-    return OcrResult(text=text, word_count=len(words))
+    # Per-image error envelope (200 OK with embedded error payload).
+    if "error" in first:
+        err = first["error"]
+        msg = err.get("message", "unknown")
+        raise RuntimeError(f"Google Vision: {msg}")
+
+    annotations = first.get("textAnnotations", [])
+    if not annotations:
+        return OcrResult(text="", word_count=0)
+
+    # Vision returns the full transcript as the first textAnnotation; subsequent
+    # entries are per-word with bounding boxes, which we use only for word_count.
+    full_text = annotations[0].get("description", "")
+    word_count = max(len(annotations) - 1, 0)
+
+    return OcrResult(text=full_text, word_count=word_count)
