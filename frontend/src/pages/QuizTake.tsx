@@ -2,6 +2,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { isAxiosError } from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Markdown from 'react-markdown';
+import type { Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import { gradeLocally } from '@/utils/gradeLocally';
@@ -31,6 +34,131 @@ const STAGE_LABELS: Record<string, string> = {
   analyzing: '학습 자료를 분석하고 있습니다...',
   generating: 'AI가 문항을 생성하고 있습니다...',
   streaming_questions: '문항을 불러오고 있습니다...',
+};
+
+const thinkingMarkdownComponents: Components = {
+  p({ children }) {
+    return (
+      <p className="text-sm text-content-secondary italic leading-relaxed mb-2 last:mb-0">
+        {children}
+      </p>
+    );
+  },
+  strong({ children }) {
+    return (
+      <strong className="not-italic font-semibold text-content-primary">
+        {children}
+      </strong>
+    );
+  },
+  em({ children }) {
+    return <em className="italic">{children}</em>;
+  },
+  h1({ children }) {
+    return (
+      <h1 className="not-italic text-base font-semibold text-content-primary mt-3 mb-2 first:mt-0">
+        {children}
+      </h1>
+    );
+  },
+  h2({ children }) {
+    return (
+      <h2 className="not-italic text-sm font-semibold text-content-primary mt-3 mb-1.5 first:mt-0">
+        {children}
+      </h2>
+    );
+  },
+  h3({ children }) {
+    return (
+      <h3 className="not-italic text-sm font-semibold text-content-primary mt-2 mb-1 first:mt-0">
+        {children}
+      </h3>
+    );
+  },
+  h4({ children }) {
+    return (
+      <h4 className="not-italic text-sm font-medium text-content-primary mt-2 mb-1 first:mt-0">
+        {children}
+      </h4>
+    );
+  },
+  ul({ children }) {
+    return (
+      <ul className="list-disc pl-5 space-y-0.5 mb-2 text-sm italic text-content-secondary leading-relaxed last:mb-0">
+        {children}
+      </ul>
+    );
+  },
+  ol({ children }) {
+    return (
+      <ol className="list-decimal pl-5 space-y-0.5 mb-2 text-sm italic text-content-secondary leading-relaxed last:mb-0">
+        {children}
+      </ol>
+    );
+  },
+  li({ children }) {
+    return <li className="leading-relaxed">{children}</li>;
+  },
+  a({ href, children }) {
+    return (
+      <a
+        href={href}
+        className="not-italic text-brand-400 hover:text-brand-300 underline underline-offset-2 transition-colors"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        {children}
+      </a>
+    );
+  },
+  code({ children }) {
+    return (
+      <code className="not-italic bg-surface text-brand-300 px-1.5 py-0.5 rounded text-xs font-mono">
+        {children}
+      </code>
+    );
+  },
+  pre({ children }) {
+    return (
+      <pre className="not-italic bg-surface border border-white/[0.05] rounded-lg p-3 my-2 overflow-x-auto text-xs font-mono text-content-primary">
+        {children}
+      </pre>
+    );
+  },
+  blockquote({ children }) {
+    return (
+      <blockquote className="border-l-2 border-brand-500/40 pl-3 my-2 text-content-muted italic">
+        {children}
+      </blockquote>
+    );
+  },
+  hr() {
+    return <hr className="border-white/[0.05] my-3" />;
+  },
+  table({ children }) {
+    return (
+      <div className="overflow-x-auto my-2 rounded-lg border border-white/[0.05]">
+        <table className="w-full text-xs not-italic border-collapse">{children}</table>
+      </div>
+    );
+  },
+  thead({ children }) {
+    return <thead className="bg-surface">{children}</thead>;
+  },
+  th({ children }) {
+    return (
+      <th className="text-left px-2.5 py-1.5 text-content-primary font-medium border-b border-white/[0.05]">
+        {children}
+      </th>
+    );
+  },
+  td({ children }) {
+    return (
+      <td className="px-2.5 py-1.5 text-content-secondary border-b border-white/[0.05]">
+        {children}
+      </td>
+    );
+  },
 };
 
 interface QuizStreamingViewProps {
@@ -114,12 +242,17 @@ function QuizStreamingView({ stage, items, total, thinkingText, thinkingActive, 
           >
             <div className="overflow-hidden min-h-0">
               <div className="pl-6 border-l-2 border-brand-500/30">
-                <p className="text-sm text-content-secondary italic leading-relaxed whitespace-pre-wrap">
-                  {thinkingText}
+                <div className="text-sm text-content-secondary italic leading-relaxed">
+                  <Markdown
+                    components={thinkingMarkdownComponents}
+                    remarkPlugins={[remarkGfm]}
+                  >
+                    {thinkingText}
+                  </Markdown>
                   {thinkingActive && (
-                    <span className="thinking-cursor" aria-hidden="true">▊</span>
+                    <span className="thinking-cursor not-italic" aria-hidden="true">▊</span>
                   )}
-                </p>
+                </div>
               </div>
             </div>
           </div>
