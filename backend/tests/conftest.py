@@ -386,7 +386,6 @@ MOCK_GENERATION_RESULT = {
             "category_tag": "social_work",
             "difficulty": "medium",
             "source_refs": [{"file_id": "test", "page": 1}],
-            "low_confidence_source": False,
         },
         {
             "question_type": "ox",
@@ -399,7 +398,6 @@ MOCK_GENERATION_RESULT = {
             "category_tag": "social_work",
             "difficulty": "easy",
             "source_refs": [],
-            "low_confidence_source": False,
         },
         {
             "question_type": "short_answer",
@@ -418,7 +416,6 @@ MOCK_GENERATION_RESULT = {
             "category_tag": "social_work",
             "difficulty": "medium",
             "source_refs": [],
-            "low_confidence_source": False,
         },
     ]
 }

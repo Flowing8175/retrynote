@@ -207,7 +207,6 @@ GENERATION_SCHEMA = {
                     "category_tag",
                     "difficulty",
                     "source_refs",
-                    "low_confidence_source",
                 ],
                 "properties": {
                     "question_type": {
@@ -243,7 +242,6 @@ GENERATION_SCHEMA = {
                         "type": ["array", "null"],
                         "items": {"type": "string"},
                     },
-                    "low_confidence_source": {"type": "boolean"},
                 },
                 "additionalProperties": False,
             },

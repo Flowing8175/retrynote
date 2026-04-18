@@ -64,7 +64,7 @@ class TestBuildGenerationPrompt:
             concept_counts={},
             is_no_source=True,
         )
-        assert "low_confidence_source" in result
+        assert "자료 없이" in result
 
     async def test_handles_concept_counts_with_sorting(self):
         concepts = {"concept_a": 5, "concept_b": 2, "concept_c": 8}
