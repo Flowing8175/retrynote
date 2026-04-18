@@ -6,6 +6,7 @@ import { BookOpen, Sparkles, ChevronRight, AlertTriangle, NotebookPen, Check } f
 import { retryApi, wrongNotesApi, quizApi } from '@/api';
 import { OptionGroup } from '@/components/ui';
 import { QuestionCountPicker } from '@/components/quiz/QuestionCountPicker';
+import { SavedPromptSlots } from '@/components/quiz/SavedPromptSlots';
 import type { RetryLocationState } from '@/types';
 import { getDetailMessage } from '@/utils/errorMessages';
 import { useFlip } from '@/hooks/useFlip';
@@ -536,6 +537,10 @@ export default function Retry() {
                     {userInstruction.length}/2000
                   </span>
                 </div>
+                <SavedPromptSlots
+                  currentValue={userInstruction}
+                  onLoad={(content) => setUserInstruction(content.slice(0, 2000))}
+                />
                 <textarea
                   id="retry-user-instruction"
                   value={userInstruction}

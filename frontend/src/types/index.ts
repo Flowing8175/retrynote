@@ -7,3 +7,4 @@ export * from './dashboard';
 export * from './search';
 export * from './admin';
 export * from './common';
+export * from './savedPrompt';

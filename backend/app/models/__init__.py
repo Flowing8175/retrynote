@@ -21,6 +21,7 @@ from app.models.quiz import (
     ErrorType,
 )
 from app.models.objection import Objection, ObjectionStatus, WeakPoint
+from app.models.saved_prompt import SavedPrompt
 from app.models.admin import DashboardSnapshot, SystemLog, AdminAuditLog, Announcement
 from app.models.search import (
     EmbeddingStore,
@@ -72,6 +73,7 @@ __all__ = [
     "Objection",
     "ObjectionStatus",
     "WeakPoint",
+    "SavedPrompt",
     "DashboardSnapshot",
     "SystemLog",
     "AdminAuditLog",

@@ -8,6 +8,7 @@ import { filesApi, quizApi } from '@/api';
 import { Modal, StatusBadge, SkeletonTransition } from '@/components';
 import { OptionGroup } from '@/components/ui';
 import { QuestionCountPicker } from '@/components/quiz/QuestionCountPicker';
+import { SavedPromptSlots } from '@/components/quiz/SavedPromptSlots';
 import { isFileProcessingStatus } from '@/types/file';
 import { getDetailMessage } from '@/utils/errorMessages';
 import { formatFileSize, formatFileSource } from '@/utils/formatters';
@@ -718,6 +719,10 @@ export default function QuizNew() {
                     {userInstruction.length}/2000
                   </span>
                 </div>
+                <SavedPromptSlots
+                  currentValue={userInstruction}
+                  onLoad={(content) => setUserInstruction(content.slice(0, 2000))}
+                />
                 <textarea
                   id="user-instruction"
                   value={userInstruction}

@@ -116,6 +116,7 @@ from app.api import (
     files,
     quiz,
     objections,
+    saved_prompts,
     wrong_notes,
     retry,
     dashboard,
@@ -133,6 +134,9 @@ app.include_router(auth.router, prefix="/auth", tags=["auth"])
 app.include_router(files.router, prefix="/files", tags=["files"])
 app.include_router(quiz.router, prefix="/quiz-sessions", tags=["quiz-sessions"])
 app.include_router(objections.router, prefix="/objections", tags=["objections"])
+app.include_router(
+    saved_prompts.router, prefix="/saved-prompts", tags=["saved-prompts"]
+)
 app.include_router(wrong_notes.router, prefix="/wrong-notes", tags=["wrong-notes"])
 app.include_router(retry.router, prefix="/retry-sets", tags=["retry-sets"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])

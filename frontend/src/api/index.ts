@@ -5,6 +5,7 @@ export { filesApi } from './files';
 export { quizApi } from './quiz';
 export { wrongNotesApi } from './wrongNotes';
 export { retryApi } from './retry';
+export { savedPromptsApi } from './savedPrompts';
 export { dashboardApi } from './dashboard';
 export { searchApi } from './search';
 export { adminApi } from './admin';
