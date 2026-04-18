@@ -275,6 +275,7 @@ async def create_quiz_session(
         generation_priority=req.generation_priority,
         generation_model_name=model_name,
         idempotency_key=req.idempotency_key,
+        user_instruction=req.user_instruction,
     )
     db.add(session)
     await db.flush()
@@ -310,6 +311,7 @@ async def create_quiz_session(
             "topic": req.topic,
             "source_url": req.source_url,
             "credit_estimate": generation_cost,
+            "user_instruction": req.user_instruction,
         },
     )
     db.add(job)

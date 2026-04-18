@@ -174,6 +174,7 @@ async def create_retry_set(
         difficulty=req.difficulty,
         generation_priority="retry",
         generation_model_name=preferred,
+        user_instruction=req.user_instruction,
     )
     db.add(session)
     await db.flush()
@@ -191,6 +192,7 @@ async def create_retry_set(
             "difficulty": req.difficulty,
             "question_types": req.question_types,
             "credit_estimate": estimate,
+            "user_instruction": req.user_instruction,
         },
     )
     db.add(job)

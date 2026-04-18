@@ -19,6 +19,15 @@ class QuizSessionCreate(BaseModel):
     source_url: str | None = Field(default=None, max_length=2000)
     idempotency_key: str | None = Field(default=None, max_length=255)
     stream: bool = False
+    user_instruction: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("user_instruction")
+    @classmethod
+    def _normalize_user_instruction(cls, value: str | None):
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
 
     @field_validator("preferred_model")
     @classmethod
