@@ -304,6 +304,107 @@ textarea:focus-visible,
   animation: thinking-cursor-blink 1s steps(1, end) infinite;
 }
 
+/* ── Mindmap collapse / expand motion ── */
+
+@keyframes mindmap-node-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.88);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes mindmap-edge-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes mindmap-badge-press {
+  0%, 100% { transform: translateX(-50%) scale(1); }
+  45%      { transform: translateX(-50%) scale(0.82); }
+}
+
+.mindmap-animated .react-flow__node {
+  transition: transform 440ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.mindmap-animated .react-flow__edge {
+  animation: mindmap-edge-enter 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.mindmap-animated .react-flow__edge-path {
+  transition: stroke 280ms cubic-bezier(0.16, 1, 0.3, 1),
+              stroke-width 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mindmap-node-inner {
+  animation: mindmap-node-enter 340ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center;
+}
+
+.mindmap-toggle-badge {
+  position: absolute;
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  background: oklch(0.20 0.01 250);
+  border: 1px solid oklch(0.30 0.01 250);
+  color: oklch(0.72 0.01 250);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  z-index: 2;
+  transition: border-color 200ms cubic-bezier(0.16, 1, 0.3, 1),
+              color 200ms cubic-bezier(0.16, 1, 0.3, 1),
+              background-color 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mindmap-toggle-badge:hover {
+  border-color: oklch(0.70 0.14 175 / 0.55);
+  color: oklch(0.70 0.14 175);
+  background: oklch(0.24 0.01 250);
+}
+
+.mindmap-toggle-badge:focus-visible {
+  outline: 2px solid oklch(0.70 0.14 175 / 0.6);
+  outline-offset: 2px;
+}
+
+.mindmap-badge-pressed {
+  animation: mindmap-badge-press 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mindmap-hidden-count {
+  margin-left: 6px;
+  opacity: 0.7;
+  font-weight: 500;
+  font-size: 0.82em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mindmap-animated .react-flow__node,
+  .mindmap-animated .react-flow__edge,
+  .mindmap-animated .react-flow__edge-path {
+    transition: none;
+    animation: none;
+  }
+  .mindmap-node-inner,
+  .mindmap-badge-pressed {
+    animation: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-mode-switch,
   .animate-fade-in-up,

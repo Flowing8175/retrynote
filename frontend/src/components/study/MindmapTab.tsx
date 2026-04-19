@@ -1,21 +1,23 @@
-import { lazy, Suspense, useMemo, useEffect, useState, useCallback } from 'react';
+import { lazy, Suspense, useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Network, RefreshCw } from 'lucide-react';
 import type { NodeMouseHandler } from '@xyflow/react';
 import { useStudyStatus, useStudyMindmap, useGenerateContent } from '@/api/study';
 import type { StudyMindmapNode, StudyMindmapEdge } from '@/types/study';
-import type { MindmapFlowNode, MindmapFlowEdge } from './MindmapFlow';
+import type { MindmapFlowNode, MindmapFlowEdge, MindmapFlowInstance } from './MindmapFlow';
 import KeywordPopup, { type KeywordPopupNode, type KeywordPopupAnchor } from './KeywordPopup';
 
 const MindmapFlow = lazy(() => import('./MindmapFlow'));
 
-// Subtree-width-aware tree layout — computes depth and positions so that
-// sibling subtrees never overlap and children are centered under parents.
+// Subtree-width-aware tree layout — computes depth, transitive descendant counts,
+// and positions so that visible siblings never overlap and collapsed subtrees
+// are excluded from layout while their hidden-count is preserved on the parent.
 function enrichWithDepth(
   rawNodes: StudyMindmapNode[],
   rawEdges: StudyMindmapEdge[],
+  collapsed: Set<string>,
+  onToggle: (id: string) => void,
 ): { nodes: MindmapFlowNode[]; edges: MindmapFlowEdge[] } {
-  const targets = new Set(rawEdges.map((e) => e.target));
   const childrenMap = new Map<string, string[]>();
   for (const edge of rawEdges) {
     const list = childrenMap.get(edge.source) ?? [];
@@ -23,22 +25,39 @@ function enrichWithDepth(
     childrenMap.set(edge.source, list);
   }
 
-  const depthMap = new Map<string, number>();
+  const targets = new Set(rawEdges.map((e) => e.target));
   const roots = rawNodes.filter((n) => !targets.has(n.id));
-  const queue = roots.map((r) => ({ id: r.id, depth: 0 }));
-  if (queue.length === 0 && rawNodes.length > 0) {
-    queue.push({ id: rawNodes[0].id, depth: 0 });
-  }
+  const startingRoots = roots.length > 0 ? roots : rawNodes.length > 0 ? [rawNodes[0]] : [];
+
+  const visible = new Set<string>();
+  const depthMap = new Map<string, number>();
+  const queue: { id: string; depth: number }[] = startingRoots.map((r) => ({
+    id: r.id,
+    depth: 0,
+  }));
   while (queue.length > 0) {
     const { id, depth } = queue.shift()!;
-    if (depthMap.has(id)) continue;
+    if (visible.has(id)) continue;
+    visible.add(id);
     depthMap.set(id, depth);
+    if (collapsed.has(id)) continue;
     for (const childId of childrenMap.get(id) ?? []) {
-      if (!depthMap.has(childId)) queue.push({ id: childId, depth: depth + 1 });
+      if (!visible.has(childId)) queue.push({ id: childId, depth: depth + 1 });
     }
   }
 
-  // Node widths per depth (must match MindmapFlow getNodeStyle maxWidth + padding)
+  const descendantCount = new Map<string, number>();
+  function countDescendants(nodeId: string, guard: Set<string>): number {
+    if (descendantCount.has(nodeId)) return descendantCount.get(nodeId)!;
+    if (guard.has(nodeId)) return 0;
+    guard.add(nodeId);
+    const children = childrenMap.get(nodeId) ?? [];
+    let total = children.length;
+    for (const c of children) total += countDescendants(c, guard);
+    descendantCount.set(nodeId, total);
+    return total;
+  }
+
   const NODE_WIDTHS = [220, 180, 160];
   const H_GAP = 40;
   const V_SPACING = 160;
@@ -48,12 +67,19 @@ function enrichWithDepth(
     return NODE_WIDTHS[Math.min(d, NODE_WIDTHS.length - 1)];
   }
 
-  // Bottom-up: compute how wide each subtree needs to be
-  const subtreeW = new Map<string, number>();
+  const visibleChildrenMap = new Map<string, string[]>();
+  for (const edge of rawEdges) {
+    if (!visible.has(edge.source) || !visible.has(edge.target)) continue;
+    if (collapsed.has(edge.source)) continue;
+    const list = visibleChildrenMap.get(edge.source) ?? [];
+    list.push(edge.target);
+    visibleChildrenMap.set(edge.source, list);
+  }
 
+  const subtreeW = new Map<string, number>();
   function calcWidth(nodeId: string): number {
     if (subtreeW.has(nodeId)) return subtreeW.get(nodeId)!;
-    const children = childrenMap.get(nodeId) ?? [];
+    const children = visibleChildrenMap.get(nodeId) ?? [];
     if (children.length === 0) {
       const w = nodeWidth(nodeId);
       subtreeW.set(nodeId, w);
@@ -67,21 +93,16 @@ function enrichWithDepth(
     return w;
   }
 
-  // Top-down: place each node centered in its allocated space
   const positions = new Map<string, { x: number; y: number }>();
-
   function place(nodeId: string, centerX: number) {
-    if (positions.has(nodeId)) return; // guard against multi-parent DAGs
+    if (positions.has(nodeId)) return;
     const d = depthMap.get(nodeId) ?? 0;
     positions.set(nodeId, { x: centerX, y: d * V_SPACING });
-
-    const children = childrenMap.get(nodeId) ?? [];
+    const children = visibleChildrenMap.get(nodeId) ?? [];
     if (children.length === 0) return;
-
     let totalW = 0;
-    for (const c of children) totalW += (subtreeW.get(c) ?? 0);
+    for (const c of children) totalW += subtreeW.get(c) ?? 0;
     totalW += (children.length - 1) * H_GAP;
-
     let x = centerX - totalW / 2;
     for (const c of children) {
       const cw = subtreeW.get(c) ?? 0;
@@ -90,33 +111,65 @@ function enrichWithDepth(
     }
   }
 
-  for (const r of roots) calcWidth(r.id);
+  const visibleRoots = startingRoots.filter((r) => visible.has(r.id));
+  for (const r of visibleRoots) calcWidth(r.id);
 
   let totalRoots = 0;
-  for (const r of roots) totalRoots += (subtreeW.get(r.id) ?? 0);
-  totalRoots += Math.max(0, roots.length - 1) * H_GAP;
+  for (const r of visibleRoots) totalRoots += subtreeW.get(r.id) ?? 0;
+  totalRoots += Math.max(0, visibleRoots.length - 1) * H_GAP;
 
   let rx = -totalRoots / 2;
-  for (const r of roots) {
+  for (const r of visibleRoots) {
     const rw = subtreeW.get(r.id) ?? 0;
     place(r.id, rx + rw / 2);
     rx += rw + H_GAP;
   }
 
-  const nodes: MindmapFlowNode[] = rawNodes.map((n) => ({
-    id: n.id,
-    type: n.type ?? 'mindmap',
-    position: positions.get(n.id) ?? n.position,
-    data: { label: String(n.data?.label ?? n.id), depth: depthMap.get(n.id) ?? 0 },
-  }));
+  const visibleRawNodes = rawNodes.filter((n) => visible.has(n.id));
+  const nodes: MindmapFlowNode[] = visibleRawNodes.map((n) => {
+    const hasChildren = (childrenMap.get(n.id) ?? []).length > 0;
+    const isCollapsed = collapsed.has(n.id);
+    const hiddenCount = isCollapsed ? countDescendants(n.id, new Set<string>()) : 0;
+    return {
+      id: n.id,
+      type: n.type ?? 'mindmap',
+      position: positions.get(n.id) ?? n.position,
+      data: {
+        label: String(n.data?.label ?? n.id),
+        depth: depthMap.get(n.id) ?? 0,
+        hasChildren,
+        isCollapsed,
+        hiddenCount,
+        onToggle,
+      },
+    };
+  });
 
-  const edges: MindmapFlowEdge[] = rawEdges.map((e) => ({
-    id: e.id,
-    source: e.source,
-    target: e.target,
-    type: e.type,
-    style: e.style as React.CSSProperties | undefined,
-  }));
+  const edges: MindmapFlowEdge[] = [];
+  for (const edge of rawEdges) {
+    if (!visible.has(edge.source) || !visible.has(edge.target)) continue;
+    if (collapsed.has(edge.source)) continue;
+    const targetDepth = depthMap.get(edge.target) ?? 1;
+    let stroke: string;
+    let strokeWidth: number;
+    if (targetDepth === 1) {
+      stroke = 'oklch(0.55 0.08 175)';
+      strokeWidth = 1.75;
+    } else if (targetDepth === 2) {
+      stroke = 'oklch(0.45 0.04 175)';
+      strokeWidth = 1.5;
+    } else {
+      stroke = 'oklch(0.38 0.02 250)';
+      strokeWidth = 1.25;
+    }
+    edges.push({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      type: edge.type,
+      style: { stroke, strokeWidth },
+    });
+  }
 
   return { nodes, edges };
 }
@@ -138,6 +191,21 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
   const [selected, setSelected] = useState<
     { node: KeywordPopupNode; anchor: KeywordPopupAnchor } | null
   >(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const flowInstanceRef = useRef<MindmapFlowInstance | null>(null);
+
+  const handleToggle = useCallback((id: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleInit = useCallback((instance: MindmapFlowInstance) => {
+    flowInstanceRef.current = instance;
+  }, []);
 
   useEffect(() => {
     if (mindmapStatus === 'completed') {
@@ -147,17 +215,31 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
 
   useEffect(() => {
     setSelected(null);
+    setCollapsed(new Set());
   }, [fileId, mindmap?.generated_at]);
+
+  useEffect(() => {
+    if (!flowInstanceRef.current) return;
+    const timer = setTimeout(() => {
+      flowInstanceRef.current?.fitView({ padding: 0.25, duration: 500 });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [collapsed]);
 
   const rawData = mindmap?.data;
   const hasData = rawData && Array.isArray(rawData.nodes) && rawData.nodes.length > 0;
 
   const layout = useMemo(
-    () => (hasData ? enrichWithDepth(rawData.nodes, rawData.edges ?? []) : null),
-    [hasData, rawData],
+    () =>
+      hasData
+        ? enrichWithDepth(rawData.nodes, rawData.edges ?? [], collapsed, handleToggle)
+        : null,
+    [hasData, rawData, collapsed, handleToggle],
   );
 
   const handleNodeClick = useCallback<NodeMouseHandler>((event, node) => {
+    const target = event.target as HTMLElement | null;
+    if (target && target.closest('.mindmap-toggle-badge')) return;
     const nodeData = node.data as { label?: unknown } | undefined;
     const label = String(nodeData?.label ?? node.id).trim();
     if (!label) return;
@@ -245,7 +327,12 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
           </div>
         }
       >
-        <MindmapFlow nodes={nodes} edges={edges} onNodeClick={handleNodeClick} />
+        <MindmapFlow
+          nodes={nodes}
+          edges={edges}
+          onNodeClick={handleNodeClick}
+          onInit={handleInit}
+        />
       </Suspense>
       <button
         onClick={() => generate('mindmap')}
