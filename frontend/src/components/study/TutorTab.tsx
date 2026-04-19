@@ -1,5 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
+import type { Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useQueryClient } from '@tanstack/react-query';
 import { useChatHistory } from '@/api/study';
 import { useSSE } from '@/hooks/useSSE';
@@ -32,6 +34,152 @@ export function TutorTab({ fileId, currentPage }: Props) {
     setIsStreaming,
     setSelectedPage,
   } = useStudyStore();
+
+  const markdownComponents: Components = useMemo(
+    () => ({
+      h1({ children }) {
+        return (
+          <h1 className="text-base font-semibold text-content-primary mt-5 mb-2 pb-1 border-b border-surface-border first:mt-0">
+            {children}
+          </h1>
+        );
+      },
+      h2({ children }) {
+        return (
+          <h2 className="text-sm font-bold text-content-primary mt-4 mb-1.5 first:mt-0">
+            {children}
+          </h2>
+        );
+      },
+      h3({ children }) {
+        return (
+          <h3 className="text-sm font-semibold text-content-primary mt-3 mb-1 first:mt-0">
+            {children}
+          </h3>
+        );
+      },
+      h4({ children }) {
+        return (
+          <h4 className="text-sm font-semibold text-content-primary mt-3 mb-1 first:mt-0">
+            {children}
+          </h4>
+        );
+      },
+      h5({ children }) {
+        return (
+          <h5 className="text-sm font-medium text-content-secondary mt-3 mb-1 first:mt-0">
+            {children}
+          </h5>
+        );
+      },
+      h6({ children }) {
+        return (
+          <h6 className="text-sm font-medium text-content-secondary mt-3 mb-1 first:mt-0">
+            {children}
+          </h6>
+        );
+      },
+      p({ children }) {
+        return (
+          <p className="text-sm leading-7 text-content-primary mb-3 last:mb-0 first:mt-0">
+            {children}
+          </p>
+        );
+      },
+      ul({ children }) {
+        return (
+          <ul className="list-disc pl-5 space-y-1 mb-3 text-content-primary text-sm last:mb-0">
+            {children}
+          </ul>
+        );
+      },
+      ol({ children }) {
+        return (
+          <ol className="list-decimal pl-5 space-y-1 mb-3 text-content-primary text-sm last:mb-0">
+            {children}
+          </ol>
+        );
+      },
+      li({ children }) {
+        return (
+          <li className="text-content-primary leading-relaxed">
+            {children}
+          </li>
+        );
+      },
+      strong({ children }) {
+        return (
+          <strong className="bg-brand-500/10 text-brand-300 px-1 rounded font-semibold not-italic">
+            {children}
+          </strong>
+        );
+      },
+      a({ href, children }) {
+        return (
+          <a
+            href={href}
+            className="text-brand-400 hover:text-brand-300 underline underline-offset-2 transition-colors"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {children}
+          </a>
+        );
+      },
+      pre({ children }) {
+        return (
+          <pre className="bg-surface-raised text-content-primary text-xs font-mono rounded-lg p-3 my-3 overflow-x-auto border border-surface-border last:mb-0">
+            {children}
+          </pre>
+        );
+      },
+      code({ className, children }) {
+        if (className && className.startsWith('language-')) {
+          return <code className="font-mono text-xs text-content-primary">{children}</code>;
+        }
+        return (
+          <code className="bg-surface-raised text-brand-300 px-1.5 py-0.5 rounded text-xs font-mono">
+            {children}
+          </code>
+        );
+      },
+      blockquote({ children }) {
+        return (
+          <blockquote className="border-l-2 border-brand-500/40 pl-4 my-3 text-content-secondary italic">
+            {children}
+          </blockquote>
+        );
+      },
+      table({ children }) {
+        return (
+          <div className="overflow-x-auto mb-4 rounded-lg border border-surface-border">
+            <table className="w-full text-sm border-collapse">{children}</table>
+          </div>
+        );
+      },
+      thead({ children }) {
+        return <thead className="bg-surface-raised">{children}</thead>;
+      },
+      th({ children }) {
+        return (
+          <th className="text-left px-2.5 py-1.5 text-content-primary font-semibold border-b border-surface-border text-xs uppercase tracking-wider">
+            {children}
+          </th>
+        );
+      },
+      td({ children }) {
+        return (
+          <td className="px-2.5 py-1.5 text-content-secondary border-b border-surface-border text-sm">
+            {children}
+          </td>
+        );
+      },
+      hr() {
+        return <hr className="border-surface-border my-3" />;
+      },
+    }),
+    [],
+  );
 
   const [inputText, setInputText] = useState('');
   const [streamUrl, setStreamUrl] = useState('');
@@ -184,9 +332,7 @@ export function TutorTab({ fileId, currentPage }: Props) {
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     </div>
                   ) : (
-                    <div className="prose prose-sm prose-invert max-w-none">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
-                    </div>
+                    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                   )}
                 </div>
               </div>
@@ -196,9 +342,7 @@ export function TutorTab({ fileId, currentPage }: Props) {
               <div className="flex justify-start">
                 <div className="max-w-[80%] bg-surface border border-white/[0.05] text-content-primary rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
                   {streamingContent ? (
-                    <div className="prose prose-sm prose-invert max-w-none">
-                      <ReactMarkdown>{streamingContent}</ReactMarkdown>
-                    </div>
+                    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
                   ) : (
                     <div className="flex gap-1 items-center py-1">
                       <span className="w-2 h-2 bg-content-muted rounded-full animate-bounce [animation-delay:0ms]" />
