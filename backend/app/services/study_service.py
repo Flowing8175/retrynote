@@ -1,3 +1,4 @@
+import hashlib
 import json
 import logging
 import re
@@ -18,6 +19,7 @@ from app.models.study import (
 from app.prompts.study import (
     FLASHCARD_PROMPT,
     MINDMAP_PROMPT,
+    NODE_EXPLANATION_PROMPT,
     STUDY_MODEL,
     SUMMARY_PROMPT,
 )
@@ -30,6 +32,12 @@ logger = logging.getLogger(__name__)
 _MAX_TEXT_CHARS = 100_000
 _MIN_TEXT_CHARS = 100
 
+_NODE_EXPLAIN_EXCERPT_WINDOW_CHARS = 800
+_NODE_EXPLAIN_FALLBACK_EXCERPT_CHARS = 1600
+_NODE_EXPLAIN_MAX_OUTPUT_TOKENS = 512
+_NODE_EXPLAIN_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30
+_NODE_EXPLAIN_CACHE_PREFIX = "mindmap_node_explain"
+
 
 def _strip_json_fences(text: str) -> str:
     text = text.strip()
@@ -39,13 +47,17 @@ def _strip_json_fences(text: str) -> str:
     return text
 
 
-async def _collect_ai_response(prompt: str) -> tuple[str, int]:
+async def _collect_ai_response(
+    prompt: str,
+    *,
+    max_output_tokens: int = 8192,
+) -> tuple[str, int]:
     from google.genai import types as genai_types
 
     gemini = get_gemini_client()
     config = genai_types.GenerateContentConfig(
         temperature=0.3,
-        max_output_tokens=8192,
+        max_output_tokens=max_output_tokens,
     )
     stream = await gemini.aio.models.generate_content_stream(
         model=STUDY_MODEL,
@@ -510,3 +522,171 @@ async def generate_mindmap(
             await db.commit()
         except Exception:
             pass
+
+
+class MindmapNotReadyError(Exception):
+    pass
+
+
+class NodeNotFoundError(Exception):
+    pass
+
+
+def _node_explanation_cache_key(file_id: str, node_id: str, label: str) -> str:
+    label_hash = hashlib.sha256(label.strip().encode("utf-8")).hexdigest()[:16]
+    return f"{_NODE_EXPLAIN_CACHE_PREFIX}:{file_id}:{node_id}:{label_hash}"
+
+
+def _extract_excerpt_around(text: str, keyword: str) -> str:
+    if not text:
+        return ""
+    keyword_stripped = keyword.strip()
+    if not keyword_stripped:
+        return text[: _NODE_EXPLAIN_FALLBACK_EXCERPT_CHARS]
+
+    idx = text.lower().find(keyword_stripped.lower())
+    if idx < 0:
+        return text[: _NODE_EXPLAIN_FALLBACK_EXCERPT_CHARS]
+
+    start = max(0, idx - _NODE_EXPLAIN_EXCERPT_WINDOW_CHARS)
+    end = min(len(text), idx + len(keyword_stripped) + _NODE_EXPLAIN_EXCERPT_WINDOW_CHARS)
+    excerpt = text[start:end]
+    if start > 0:
+        excerpt = "..." + excerpt
+    if end < len(text):
+        excerpt = excerpt + "..."
+    return excerpt
+
+
+def _find_node_and_context(
+    mindmap_data: dict, node_id: str
+) -> tuple[str, str, str]:
+    nodes = mindmap_data.get("nodes", [])
+    edges = mindmap_data.get("edges", [])
+    if not isinstance(nodes, list) or not isinstance(edges, list):
+        raise NodeNotFoundError(f"Mindmap data malformed for lookup: {node_id}")
+
+    node_by_id: dict[str, dict] = {}
+    for n in nodes:
+        if isinstance(n, dict) and "id" in n:
+            node_by_id[str(n["id"])] = n
+
+    target = node_by_id.get(str(node_id))
+    if target is None:
+        raise NodeNotFoundError(f"Node {node_id} not found in mindmap")
+
+    label = str(target.get("data", {}).get("label", "")).strip()
+    if not label:
+        raise NodeNotFoundError(f"Node {node_id} has no label")
+
+    parents: list[str] = []
+    children: list[str] = []
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        src = str(edge.get("source", ""))
+        tgt = str(edge.get("target", ""))
+        if tgt == str(node_id) and src in node_by_id:
+            parent_label = str(node_by_id[src].get("data", {}).get("label", "")).strip()
+            if parent_label:
+                parents.append(parent_label)
+        elif src == str(node_id) and tgt in node_by_id:
+            child_label = str(node_by_id[tgt].get("data", {}).get("label", "")).strip()
+            if child_label:
+                children.append(child_label)
+
+    parent_ctx = ", ".join(parents) if parents else "(없음 - 최상위 개념)"
+    children_ctx = ", ".join(children[:8]) if children else "(없음)"
+    return label, parent_ctx, children_ctx
+
+
+async def generate_node_explanation(
+    file_id: str,
+    node_id: str,
+    db: AsyncSession,
+    redis_client,
+    *,
+    user_id: str = "",
+    credit_estimate: float = 0,
+) -> tuple[str, str, bool]:
+    mindmap_result = await db.execute(
+        select(StudyMindmap).where(
+            StudyMindmap.file_id == file_id,
+            StudyMindmap.deleted_at.is_(None),
+        )
+    )
+    mindmap = mindmap_result.scalar_one_or_none()
+    if (
+        mindmap is None
+        or mindmap.status != ContentStatus.completed
+        or not isinstance(mindmap.data, dict)
+    ):
+        status = mindmap.status.value if mindmap else ContentStatus.not_generated.value
+        raise MindmapNotReadyError(status)
+
+    label, parent_ctx, children_ctx = _find_node_and_context(mindmap.data, node_id)
+
+    cache_key = _node_explanation_cache_key(file_id, node_id, label)
+
+    if redis_client is not None:
+        try:
+            cached = await redis_client.get(cache_key)
+            if cached is not None:
+                text = cached.decode("utf-8") if isinstance(cached, bytes) else cached
+                if text:
+                    await _reconcile_credit(db, user_id, credit_estimate, 0)
+                    await db.commit()
+                    return label, text, True
+        except Exception as exc:
+            logger.warning(
+                "node_explanation: redis read failed for %s: %s", cache_key, exc
+            )
+
+    file_result = await db.execute(select(File).where(File.id == file_id))
+    file = file_result.scalar_one_or_none()
+    parsed_doc: ParsedDocument | None = file.parsed_document if file else None
+    source_text = (parsed_doc.normalized_text or "") if parsed_doc else ""
+    if len(source_text) > _MAX_TEXT_CHARS:
+        source_text = source_text[:_MAX_TEXT_CHARS]
+
+    excerpt = _extract_excerpt_around(source_text, label)
+    if not excerpt:
+        excerpt = "(원문 정보 없음 - 마인드맵 구조 맥락만으로 설명)"
+
+    prompt = NODE_EXPLANATION_PROMPT.format(
+        keyword=label,
+        parent_context=parent_ctx,
+        children_context=children_ctx,
+        document_excerpt=excerpt,
+    )
+
+    raw_text, total_tokens = await _collect_ai_response(
+        prompt, max_output_tokens=_NODE_EXPLAIN_MAX_OUTPUT_TOKENS
+    )
+    explanation = _strip_json_fences(raw_text).strip()
+    if not explanation:
+        raise ValueError("Empty explanation from model")
+
+    await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+    await db.commit()
+
+    if redis_client is not None:
+        try:
+            await redis_client.setex(
+                cache_key,
+                _NODE_EXPLAIN_CACHE_TTL_SECONDS,
+                explanation.encode("utf-8"),
+            )
+        except Exception as exc:
+            logger.warning(
+                "node_explanation: redis write failed for %s: %s", cache_key, exc
+            )
+
+    logger.info(
+        "node_explanation: generated for file=%s node=%s (%d chars, %d tokens)",
+        file_id,
+        node_id,
+        len(explanation),
+        total_tokens,
+    )
+    return label, explanation, False

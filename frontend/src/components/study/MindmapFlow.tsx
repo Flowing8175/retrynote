@@ -1,4 +1,12 @@
-import { ReactFlow, Background, Controls, Handle, BackgroundVariant, Position } from '@xyflow/react';
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  Handle,
+  BackgroundVariant,
+  Position,
+  type NodeMouseHandler,
+} from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 export interface MindmapFlowNode {
@@ -74,7 +82,10 @@ const HANDLE_STYLE: React.CSSProperties = {
 
 function MindmapNode({ data }: { data: { label: string; depth: number } }) {
   return (
-    <div style={getNodeStyle(data.depth)}>
+    <div
+      style={getNodeStyle(data.depth)}
+      className="cursor-pointer transition-[filter,transform] duration-150 ease-out-expo hover:brightness-125 active:scale-[0.98]"
+    >
       <Handle type="target" position={Position.Top} style={HANDLE_STYLE} />
       <span style={{ wordBreak: 'break-word' }}>{data.label}</span>
       <Handle type="source" position={Position.Bottom} style={HANDLE_STYLE} />
@@ -87,6 +98,7 @@ const NODE_TYPES = { mindmap: MindmapNode };
 interface MindmapFlowProps {
   nodes: MindmapFlowNode[];
   edges: MindmapFlowEdge[];
+  onNodeClick?: NodeMouseHandler;
 }
 
 const DEFAULT_EDGE_OPTIONS = {
@@ -94,7 +106,7 @@ const DEFAULT_EDGE_OPTIONS = {
   style: { stroke: '#4B5563', strokeWidth: 1.5 },
 };
 
-export default function MindmapFlow({ nodes, edges }: MindmapFlowProps) {
+export default function MindmapFlow({ nodes, edges, onNodeClick }: MindmapFlowProps) {
   return (
     <ReactFlow
       nodes={nodes}
@@ -106,6 +118,7 @@ export default function MindmapFlow({ nodes, edges }: MindmapFlowProps) {
       elementsSelectable={false}
       panOnDrag
       zoomOnScroll
+      onNodeClick={onNodeClick}
       nodeTypes={NODE_TYPES}
       nodeOrigin={[0.5, 0.5]}
       defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}

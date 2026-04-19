@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,8 @@ from app.models.user import User
 from app.schemas.billing import LimitExceededError
 from app.schemas.study import (
     GenerateRequest,
+    MindmapNodeExplanationRequest,
+    MindmapNodeExplanationResponse,
     StudyChatHistoryResponse,
     StudyChatMessageResponse,
     StudyFlashcardResponse,
@@ -26,6 +28,11 @@ from app.schemas.study import (
     StudyMindmapResponse,
     StudyStatusResponse,
     StudySummaryResponse,
+)
+from app.services.study_service import (
+    MindmapNotReadyError,
+    NodeNotFoundError,
+    generate_node_explanation,
 )
 from app.services.tutor_service import (
     create_new_chat,
@@ -429,6 +436,77 @@ async def generate_mindmap_endpoint(
 
     dispatch_task("generate_study_mindmap", [file_id, user.id, STUDY_CREDIT_ESTIMATE])
     return {"status": "dispatched"}
+
+
+@router.post(
+    "/{file_id}/mindmap/node-explanation",
+    response_model=MindmapNodeExplanationResponse,
+)
+async def get_mindmap_node_explanation(
+    file_id: str,
+    req: MindmapNodeExplanationRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _get_owned_file(file_id, db, user)
+
+    redis_client = getattr(request.app.state, "redis", None)
+
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed, _, _ = await usage_svc.check_and_consume(
+        db, user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다. 요금제를 업그레이드하거나 크레딧을 구매하세요.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+    await db.commit()
+
+    try:
+        label, explanation, from_cache = await generate_node_explanation(
+            file_id=file_id,
+            node_id=req.node_id,
+            db=db,
+            redis_client=redis_client,
+            user_id=user.id,
+            credit_estimate=STUDY_CREDIT_ESTIMATE,
+        )
+    except MindmapNotReadyError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Mindmap not available. Status: {exc}",
+        )
+    except NodeNotFoundError:
+        raise HTTPException(
+            status_code=404,
+            detail="Node not found in mindmap",
+        )
+    except Exception as exc:
+        logger.exception(
+            "node_explanation: generation failed for file=%s node=%s: %s",
+            file_id,
+            req.node_id,
+            exc,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="설명 생성에 실패했습니다. 잠시 후 다시 시도해주세요.",
+        )
+
+    return MindmapNodeExplanationResponse(
+        node_id=req.node_id,
+        node_label=label,
+        explanation=explanation,
+        cached=from_cache,
+    )
 
 
 @router.get("/{file_id}/chat/history", response_model=StudyChatHistoryResponse)

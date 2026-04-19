@@ -73,6 +73,18 @@ class StudyMindmapResponse(BaseModel):
     generated_at: datetime | None = None
 
 
+class MindmapNodeExplanationRequest(BaseModel):
+    node_id: str = Field(max_length=64)
+    node_label: str = Field(max_length=200)
+
+
+class MindmapNodeExplanationResponse(BaseModel):
+    node_id: str
+    node_label: str
+    explanation: str
+    cached: bool = False
+
+
 # ============================================================================
 # CHAT SCHEMAS
 # ============================================================================

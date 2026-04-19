@@ -1,9 +1,11 @@
-import { lazy, Suspense, useMemo, useEffect } from 'react';
+import { lazy, Suspense, useMemo, useEffect, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Network, RefreshCw } from 'lucide-react';
+import type { NodeMouseHandler } from '@xyflow/react';
 import { useStudyStatus, useStudyMindmap, useGenerateContent } from '@/api/study';
 import type { StudyMindmapNode, StudyMindmapEdge } from '@/types/study';
 import type { MindmapFlowNode, MindmapFlowEdge } from './MindmapFlow';
+import KeywordPopup, { type KeywordPopupNode, type KeywordPopupAnchor } from './KeywordPopup';
 
 const MindmapFlow = lazy(() => import('./MindmapFlow'));
 
@@ -133,13 +135,20 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
   });
   const { mutate: generate, isPending: isGenerating } = useGenerateContent(fileId);
 
+  const [selected, setSelected] = useState<
+    { node: KeywordPopupNode; anchor: KeywordPopupAnchor } | null
+  >(null);
+
   useEffect(() => {
     if (mindmapStatus === 'completed') {
       void queryClient.invalidateQueries({ queryKey: ['study', 'mindmap', fileId] });
     }
   }, [mindmapStatus, fileId, queryClient]);
 
-  // useMemo MUST be called before any conditional returns (Rules of Hooks)
+  useEffect(() => {
+    setSelected(null);
+  }, [fileId, mindmap?.generated_at]);
+
   const rawData = mindmap?.data;
   const hasData = rawData && Array.isArray(rawData.nodes) && rawData.nodes.length > 0;
 
@@ -147,6 +156,18 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
     () => (hasData ? enrichWithDepth(rawData.nodes, rawData.edges ?? []) : null),
     [hasData, rawData],
   );
+
+  const handleNodeClick = useCallback<NodeMouseHandler>((event, node) => {
+    const nodeData = node.data as { label?: unknown } | undefined;
+    const label = String(nodeData?.label ?? node.id).trim();
+    if (!label) return;
+    setSelected({
+      node: { id: node.id, label },
+      anchor: { x: event.clientX, y: event.clientY },
+    });
+  }, []);
+
+  const handleClosePopup = useCallback(() => setSelected(null), []);
 
   const status = mindmapStatus;
 
@@ -224,7 +245,7 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
           </div>
         }
       >
-        <MindmapFlow nodes={nodes} edges={edges} />
+        <MindmapFlow nodes={nodes} edges={edges} onNodeClick={handleNodeClick} />
       </Suspense>
       <button
         onClick={() => generate('mindmap')}
@@ -235,6 +256,12 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
         {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
         재생성
       </button>
+      <KeywordPopup
+        fileId={fileId}
+        node={selected?.node ?? null}
+        anchor={selected?.anchor ?? null}
+        onClose={handleClosePopup}
+      />
     </div>
   );
 }

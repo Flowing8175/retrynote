@@ -7,6 +7,7 @@ import type {
   StudyMindmap,
   StudyChatHistory,
   StudyContentType,
+  MindmapNodeExplanation,
 } from '@/types/study';
 
 export const studyApi = {
@@ -27,6 +28,18 @@ export const studyApi = {
 
   getMindmap: async (fileId: string): Promise<StudyMindmap> => {
     const response = await apiClient.get<StudyMindmap>(`/study/${fileId}/mindmap`);
+    return response.data;
+  },
+
+  getMindmapNodeExplanation: async (
+    fileId: string,
+    nodeId: string,
+    nodeLabel: string,
+  ): Promise<MindmapNodeExplanation> => {
+    const response = await apiClient.post<MindmapNodeExplanation>(
+      `/study/${fileId}/mindmap/node-explanation`,
+      { node_id: nodeId, node_label: nodeLabel },
+    );
     return response.data;
   },
 
@@ -89,6 +102,30 @@ export function useStudyMindmap(fileId: string, options?: { enabled?: boolean })
     queryKey: ['study', 'mindmap', fileId],
     queryFn: () => studyApi.getMindmap(fileId),
     enabled: (options?.enabled !== false) && !!fileId,
+  });
+}
+
+export function useMindmapNodeExplanation(
+  fileId: string,
+  nodeId: string | null,
+  nodeLabel: string | null,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: ['study', 'mindmap', fileId, 'node-explanation', nodeId],
+    queryFn: () =>
+      studyApi.getMindmapNodeExplanation(fileId, nodeId ?? '', nodeLabel ?? ''),
+    enabled:
+      (options?.enabled !== false) &&
+      !!fileId &&
+      !!nodeId &&
+      !!nodeLabel,
+    staleTime: Infinity,
+    gcTime: 1000 * 60 * 30,
+    retry: (_, error: unknown) => {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      return status !== 404 && status !== 403 && status !== 402;
+    },
   });
 }
 

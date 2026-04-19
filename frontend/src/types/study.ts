@@ -55,6 +55,13 @@ export interface StudyMindmap {
   status: ContentStatus;
 }
 
+export interface MindmapNodeExplanation {
+  node_id: string;
+  node_label: string;
+  explanation: string;
+  cached: boolean;
+}
+
 export interface StudyChatMessage {
   id: string;
   role: 'user' | 'assistant';
