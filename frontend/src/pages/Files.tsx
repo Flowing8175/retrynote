@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMutationWithInvalidation } from '@/hooks/useMutationWithInvalidation';
 import { Link, useNavigate } from 'react-router-dom';
@@ -134,6 +134,7 @@ export default function Files() {
   const folderDeleteModal = useModalState<{ id: string; name: string }>();
   const [moveTargetFolderId, setMoveTargetFolderId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   const upload = useMultiFileUpload({
@@ -255,6 +256,34 @@ export default function Files() {
   const files = data?.files ?? [];
   const folders = folderData ?? [];
   const selectedCount = selectedFileIds.length;
+
+  const visibleFileIds = useMemo(() => files.map((f) => f.id), [files]);
+  const selectedVisibleCount = useMemo(
+    () => visibleFileIds.filter((id) => selectedFileIds.includes(id)).length,
+    [visibleFileIds, selectedFileIds]
+  );
+  const allVisibleSelected =
+    visibleFileIds.length > 0 && selectedVisibleCount === visibleFileIds.length;
+  const someVisibleSelected =
+    selectedVisibleCount > 0 && selectedVisibleCount < visibleFileIds.length;
+
+  useLayoutEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = someVisibleSelected;
+    }
+  }, [someVisibleSelected]);
+
+  const handleSelectAllToggle = () => {
+    if (allVisibleSelected) {
+      setSelectedFileIds((prev) => prev.filter((id) => !visibleFileIds.includes(id)));
+    } else {
+      setSelectedFileIds((prev) => {
+        const merged = new Set(prev);
+        visibleFileIds.forEach((id) => merged.add(id));
+        return Array.from(merged);
+      });
+    }
+  };
 
   return (
     <SkeletonTransition loading={isLoading} skeleton={<FilesSkeleton />}>
@@ -432,6 +461,25 @@ export default function Files() {
                 <Link to="/quiz/new" className="bg-surface-deep border border-white/[0.05] text-white rounded-xl px-5 py-2 text-sm font-medium hover:bg-surface-hover transition-colors">새 퀴즈</Link>
               </div>
             </div>
+
+            {files.length > 0 && (
+              <label className="flex items-center gap-4 px-5 py-2 cursor-pointer select-none">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={handleSelectAllToggle}
+                  className="w-5 h-5 rounded border-white/[0.1] bg-surface text-brand-500 focus:ring-brand-500"
+                  aria-label={allVisibleSelected ? '전체 선택 해제' : '전체 선택'}
+                />
+                <span className="text-xs font-medium text-content-secondary">
+                  {allVisibleSelected ? '전체 선택 해제' : '전체 선택'}
+                </span>
+                <span className="ml-auto text-xs tabular-nums text-content-muted">
+                  {selectedVisibleCount} / {visibleFileIds.length}
+                </span>
+              </label>
+            )}
 
             {files.length === 0 ? (
               <div className="py-12 flex flex-col items-center gap-4 text-center bg-surface border border-white/[0.05] rounded-3xl">
