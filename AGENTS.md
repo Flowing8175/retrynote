@@ -1,5 +1,19 @@
 # RetryNote — Agent Memory
 
+## README Maintenance
+
+**After any effective change, update `README.md` to reflect reality.** The README is the canonical reference for humans and agents alike — keep it accurate.
+
+What counts as an effective change:
+- Adding, renaming, or removing API routes (`app/api/`, `app/main.py`)
+- Adding or removing env vars (`app/config.py`)
+- Changing default values in `app/config.py`
+- Restructuring backend or frontend directories
+- Changing the package manager, build tool, or dev workflow
+- Adding new integrations (storage, billing, OCR, etc.)
+
+Update the relevant sections only (don't rewrite the whole file). Sections most likely to drift: **Environment Variables**, **API Documentation**, **Project Structure**, **Local Development Setup**.
+
 ## Deployment
 
 **Edit locally → commit → push to `main` → GitHub Actions deploys automatically.**
