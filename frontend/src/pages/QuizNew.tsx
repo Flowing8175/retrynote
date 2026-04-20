@@ -25,12 +25,14 @@ const MODEL_TIER_LABELS: Record<string, string> = {
   ECO: 'ECO',
   BALANCED: 'BALANCED',
   PERFORMANCE: 'PERFORMANCE',
+  MAX: 'MAX',
 };
 
 const MODEL_TIER_COSTS: Record<string, number> = {
-  ECO: 1,
-  BALANCED: 3,
-  PERFORMANCE: 5,
+  ECO: 0.2,
+  BALANCED: 0.7,
+  PERFORMANCE: 0.3,
+  MAX: 1.6,
 };
 
 const DIFFICULTY_OPTIONS = [
@@ -120,7 +122,6 @@ export default function QuizNew() {
   const [selectedQuestionTypes, setSelectedQuestionTypes] = useState<string[]>([
     'multiple_choice', 'ox', 'short_answer', 'fill_blank',
   ]);
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [userInstruction, setUserInstruction] = useState('');
   const [preferredTier, setPreferredTierState] = useState<string | null>(
     () => localStorage.getItem('quiz_preferred_tier')
@@ -645,103 +646,85 @@ export default function QuizNew() {
           </div>
           <h2 className="text-xl font-semibold text-white">상세 설정</h2>
         </div>
-        <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-6">
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-medium text-content-primary">고급 옵션</div>
-            <button
-              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-              className="text-xs font-medium text-brand-300 hover:text-white transition-colors"
-            >
-              {showAdvancedOptions ? '닫기' : '열기'}
-            </button>
-          </div>
-
-          {showAdvancedOptions ? (
-            <div className="animate-fade-in-up space-y-8">
-              {generationModelOptions.length > 0 && (
-                <div className="space-y-4">
-                  <div className="text-xs font-medium text-content-muted">AI 모델</div>
-                  <OptionGroup
-                    options={generationModelOptions.map((option) => ({
-                      value: option.tier,
-                      label: MODEL_TIER_LABELS[option.tier] ?? option.tier,
-                      description: option.value,
-                      badge: `${MODEL_TIER_COSTS[option.tier] ?? 1}크레딧/퀴즈`,
-                    }))}
-                    value={activeTier ?? ''}
-                    onChange={(v) => setPreferredTier(v as string)}
-                    size="md"
-                    layout="grid-2"
-                  />
-                </div>
-              )}
-
-              <div className="space-y-4">
-                <div className="text-xs font-medium text-content-muted">난이도</div>
-                <OptionGroup
-                  options={DIFFICULTY_OPTIONS.map((opt) => ({
-                    value: opt.value,
-                    label: opt.label === '난이도 무관' ? '자동 (다양한 난이도)' : opt.label,
-                    description: opt.value === 'easy' ? '기본 개념 위주, 직관적 선택지'
-                      : opt.value === 'medium' ? '응용 개념 포함'
-                      : opt.value === 'hard' ? '함정 선택지, 세부 개념까지'
-                      : undefined,
-                  }))}
-                  value={difficulty}
-                  onChange={(v) => setDifficulty(v as string)}
-                  size="md"
-                  layout="grid-2"
-                />
-              </div>
-
-              <div className="space-y-4">
-                <div className="text-xs font-medium text-content-muted">문제 유형</div>
-                <OptionGroup
-                  options={QUESTION_TYPES.map((qt) => ({
-                    value: qt.value,
-                    label: qt.label,
-                    description: qt.value === 'essay' ? 'AI 채점 시 1크레딧 소모' : undefined,
-                  }))}
-                  value={selectedQuestionTypes}
-                  onChange={(v) => setSelectedQuestionTypes(v as string[])}
-                  multiple
-                  size="md"
-                  layout="grid-2"
-                />
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex items-baseline justify-between">
-                  <label htmlFor="user-instruction" className="text-xs font-medium text-content-muted">
-                    AI에게 추가 요청사항 <span className="text-content-muted/70">(선택)</span>
-                  </label>
-                  <span className={`text-[10px] tabular-nums ${userInstruction.length > 2000 ? 'text-semantic-error' : 'text-content-muted/70'}`}>
-                    {userInstruction.length}/2000
-                  </span>
-                </div>
-                <SavedPromptSlots
-                  currentValue={userInstruction}
-                  onLoad={(content) => setUserInstruction(content.slice(0, 2000))}
-                />
-                <textarea
-                  id="user-instruction"
-                  value={userInstruction}
-                  onChange={(e) => setUserInstruction(e.target.value.slice(0, 2000))}
-                  placeholder="예: 개념 이해 중심으로 출제해주세요 / 실제 사례를 포함해주세요 / 비교 문제 위주로 만들어주세요"
-                  rows={3}
-                  className="w-full rounded-xl border border-white/[0.05] bg-surface-deep px-4 py-3 text-sm text-content-primary placeholder:text-content-muted resize-y focus:outline-none focus:ring-1 focus:ring-brand-500"
-                  style={{ minHeight: '72px', maxHeight: '200px' }}
-                />
-                <p className="text-xs leading-relaxed text-content-muted">
-                  AI가 문제를 만들 때 참고할 추가 지시를 자유롭게 작성하세요. 시스템 출제 원칙(자료 기반, 품질 기준 등)과 충돌하는 요청은 반영되지 않을 수 있습니다.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-center h-32 bg-surface-deep rounded-2xl border border-white/[0.05]">
-              <p className="text-sm text-content-muted">기본 설정으로 최적화되어 있습니다.</p>
+        <div className="bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8 space-y-8">
+          {generationModelOptions.length > 0 && (
+            <div className="space-y-4">
+              <div className="text-xs font-medium text-content-muted">AI 모델</div>
+              <OptionGroup
+                options={generationModelOptions.map((option) => ({
+                  value: option.tier,
+                  label: MODEL_TIER_LABELS[option.tier] ?? option.tier,
+                  description: option.value,
+                  badge: `${(MODEL_TIER_COSTS[option.tier] ?? 0.2).toFixed(1)}크레딧/문제`,
+                }))}
+                value={activeTier ?? ''}
+                onChange={(v) => setPreferredTier(v as string)}
+                size="md"
+                layout="grid-2"
+              />
             </div>
           )}
+
+          <div className="space-y-4">
+            <div className="text-xs font-medium text-content-muted">난이도</div>
+            <OptionGroup
+              options={DIFFICULTY_OPTIONS.map((opt) => ({
+                value: opt.value,
+                label: opt.label === '난이도 무관' ? '자동 (다양한 난이도)' : opt.label,
+                description: opt.value === 'easy' ? '기본 개념 위주, 직관적 선택지'
+                  : opt.value === 'medium' ? '응용 개념 포함'
+                  : opt.value === 'hard' ? '함정 선택지, 세부 개념까지'
+                  : undefined,
+              }))}
+              value={difficulty}
+              onChange={(v) => setDifficulty(v as string)}
+              size="md"
+              layout="grid-2"
+            />
+          </div>
+
+          <div className="space-y-4">
+            <div className="text-xs font-medium text-content-muted">문제 유형</div>
+            <OptionGroup
+              options={QUESTION_TYPES.map((qt) => ({
+                value: qt.value,
+                label: qt.label,
+                description: qt.value === 'essay' ? 'AI 채점 시 1크레딧 소모' : undefined,
+              }))}
+              value={selectedQuestionTypes}
+              onChange={(v) => setSelectedQuestionTypes(v as string[])}
+              multiple
+              size="md"
+              layout="grid-2"
+            />
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-baseline justify-between">
+              <label htmlFor="user-instruction" className="text-xs font-medium text-content-muted">
+                AI에게 추가 요청사항 <span className="text-content-muted/70">(선택)</span>
+              </label>
+              <span className={`text-[10px] tabular-nums ${userInstruction.length > 2000 ? 'text-semantic-error' : 'text-content-muted/70'}`}>
+                {userInstruction.length}/2000
+              </span>
+            </div>
+            <SavedPromptSlots
+              currentValue={userInstruction}
+              onLoad={(content) => setUserInstruction(content.slice(0, 2000))}
+            />
+            <textarea
+              id="user-instruction"
+              value={userInstruction}
+              onChange={(e) => setUserInstruction(e.target.value.slice(0, 2000))}
+              placeholder="예: 개념 이해 중심으로 출제해주세요 / 실제 사례를 포함해주세요 / 비교 문제 위주로 만들어주세요"
+              rows={3}
+              className="w-full rounded-xl border border-white/[0.05] bg-surface-deep px-4 py-3 text-sm text-content-primary placeholder:text-content-muted resize-y focus:outline-none focus:ring-1 focus:ring-brand-500"
+              style={{ minHeight: '72px', maxHeight: '200px' }}
+            />
+            <p className="text-xs leading-relaxed text-content-muted">
+              AI가 문제를 만들 때 참고할 추가 지시를 자유롭게 작성하세요. 시스템 출제 원칙(자료 기반, 품질 기준 등)과 충돌하는 요청은 반영되지 않을 수 있습니다.
+            </p>
+          </div>
         </div>
       </section>
 
