@@ -5,6 +5,9 @@ import redis.asyncio as aioredis
 from fastapi import HTTPException, Request
 
 
+GUEST_IP_DAILY_LIMIT = 15
+
+
 async def guest_ip_rate_limit(request: Request) -> None:
     redis_client: aioredis.Redis = request.app.state.redis
 
@@ -26,7 +29,7 @@ async def guest_ip_rate_limit(request: Request) -> None:
     results = await pipe.execute()
 
     request_count = results[2]
-    if request_count > 3:
+    if request_count > GUEST_IP_DAILY_LIMIT:
         raise HTTPException(
             status_code=429,
             detail="일일 무료 체험 횟수를 초과했습니다. 가입하면 더 많은 퀴즈를 만들 수 있습니다.",
