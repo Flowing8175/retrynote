@@ -27,11 +27,13 @@ __all__ = [
     "stream_ai_text",
     "stream_ai_structured_with_thinking",
     "get_gemini_client",
+    "get_claude_client",
 ]
 
 client = AsyncOpenAI(api_key=settings.openai_api_key)
 
 _gemini_client = None
+_claude_client = None
 
 
 async def _log_token_usage(
@@ -83,6 +85,18 @@ def _get_gemini_client():
 
 
 get_gemini_client = _get_gemini_client
+
+
+def _get_claude_client():
+    global _claude_client
+    if _claude_client is None:
+        from anthropic import AsyncAnthropic
+
+        _claude_client = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    return _claude_client
+
+
+get_claude_client = _get_claude_client
 
 
 class _GeminiCacheRegistry:
@@ -541,6 +555,64 @@ async def _call_gemini_structured(
     return result, total_tokens
 
 
+async def _call_claude_structured(
+    prompt: str,
+    schema: dict,
+    system_message: str,
+    model: str,
+    temperature: float = 0.3,
+    max_tokens: int = 4096,
+    cache_key: str | None = None,
+) -> tuple[dict[str, Any], int]:
+    claude = _get_claude_client()
+    tool_name = "structured_response"
+    response = await claude.messages.create(
+        model=model,
+        max_tokens=max_tokens,
+        system=system_message,
+        messages=[{"role": "user", "content": prompt}],
+        tools=[
+            {
+                "name": tool_name,
+                "description": "Return the structured response matching the required schema.",
+                "input_schema": schema,
+            }
+        ],
+        tool_choice={"type": "tool", "name": tool_name},
+        temperature=temperature,
+        timeout=60,
+    )
+
+    result: dict[str, Any] | None = None
+    for block in response.content:
+        if (
+            getattr(block, "type", None) == "tool_use"
+            and getattr(block, "name", "") == tool_name
+        ):
+            result = block.input
+            break
+    if result is None:
+        raise ValueError("Claude returned no tool_use block matching schema")
+
+    usage = response.usage
+    prompt_tokens = getattr(usage, "input_tokens", 0) or 0
+    completion_tokens = getattr(usage, "output_tokens", 0) or 0
+    cached_tokens = getattr(usage, "cache_read_input_tokens", 0) or 0
+    total_tokens = prompt_tokens + completion_tokens
+
+    asyncio.create_task(
+        _log_token_usage(
+            model,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+            cached_tokens=cached_tokens,
+            cache_key=cache_key,
+        )
+    )
+    return result, total_tokens
+
+
 async def call_ai_structured(
     prompt: str,
     schema: dict,
@@ -556,6 +628,17 @@ async def call_ai_structured(
 
     if model.startswith("gemini-"):
         return await _call_gemini_structured(
+            prompt,
+            schema,
+            system_message,
+            model,
+            temperature,
+            max_tokens,
+            cache_key=cache_key,
+        )
+
+    if model.startswith("claude-"):
+        return await _call_claude_structured(
             prompt,
             schema,
             system_message,
@@ -822,6 +905,91 @@ async def _stream_openai_structured_with_reasoning(
     yield {"type": "result", "data": result, "tokens_used": total_tokens}
 
 
+_CLAUDE_THINKING_BUDGET_MAP: dict[str, int] = {
+    "MINIMAL": 1024,
+    "LOW": 2048,
+    "MEDIUM": 4096,
+    "HIGH": 8192,
+}
+
+
+async def _stream_claude_structured_with_thinking(
+    prompt: str,
+    schema: dict,
+    system_message: str,
+    model: str,
+    max_tokens: int,
+    cache_key: str | None,
+    thinking_level: str,
+):
+    claude = _get_claude_client()
+    tool_name = "structured_response"
+
+    budget_tokens = _CLAUDE_THINKING_BUDGET_MAP.get(thinking_level.upper(), 8192)
+    if budget_tokens >= max_tokens:
+        budget_tokens = max(1024, max_tokens // 2)
+
+    request_kwargs: dict[str, Any] = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system_message,
+        "messages": [{"role": "user", "content": prompt}],
+        "tools": [
+            {
+                "name": tool_name,
+                "description": "Return the structured response matching the required schema.",
+                "input_schema": schema,
+            }
+        ],
+        "tool_choice": {"type": "tool", "name": tool_name},
+        "thinking": {"type": "enabled", "budget_tokens": budget_tokens},
+        # Anthropic requires temperature=1.0 when extended thinking is enabled.
+        "temperature": 1.0,
+    }
+
+    async with claude.messages.stream(**request_kwargs) as stream:
+        async for event in stream:
+            etype = getattr(event, "type", None)
+            if etype != "content_block_delta":
+                continue
+            delta = getattr(event, "delta", None)
+            if getattr(delta, "type", None) == "thinking_delta":
+                text = getattr(delta, "thinking", "") or ""
+                if text:
+                    yield {"type": "thinking", "text": text}
+
+        final_message = await stream.get_final_message()
+
+    tool_input: dict[str, Any] | None = None
+    for block in final_message.content:
+        if (
+            getattr(block, "type", None) == "tool_use"
+            and getattr(block, "name", "") == tool_name
+        ):
+            tool_input = block.input
+            break
+    if tool_input is None:
+        raise ValueError("Claude returned no tool_use block matching schema")
+
+    usage = final_message.usage
+    prompt_tokens = getattr(usage, "input_tokens", 0) or 0
+    completion_tokens = getattr(usage, "output_tokens", 0) or 0
+    cached_tokens = getattr(usage, "cache_read_input_tokens", 0) or 0
+    total_tokens = prompt_tokens + completion_tokens
+
+    asyncio.create_task(
+        _log_token_usage(
+            model,
+            prompt_tokens,
+            completion_tokens,
+            total_tokens,
+            cached_tokens=cached_tokens,
+            cache_key=cache_key,
+        )
+    )
+    yield {"type": "result", "data": tool_input, "tokens_used": total_tokens}
+
+
 async def _stream_thinking_dispatch(
     prompt: str,
     schema: dict,
@@ -841,6 +1009,17 @@ async def _stream_thinking_dispatch(
             system_message=system_message,
             model=model,
             temperature=temperature,
+            max_tokens=max_tokens,
+            cache_key=cache_key,
+            thinking_level=thinking_level,
+        ):
+            yield event
+    elif model.startswith("claude-"):
+        async for event in _stream_claude_structured_with_thinking(
+            prompt=prompt,
+            schema=schema,
+            system_message=system_message,
+            model=model,
             max_tokens=max_tokens,
             cache_key=cache_key,
             thinking_level=thinking_level,
@@ -990,6 +1169,20 @@ async def stream_ai_text(
         async for chunk in stream:
             if chunk.text:
                 yield chunk.text
+        return
+
+    if model.startswith("claude-"):
+        claude = _get_claude_client()
+        async with claude.messages.stream(
+            model=model,
+            max_tokens=max_tokens,
+            system=system_message,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=temperature,
+        ) as stream:
+            async for text in stream.text_stream:
+                if text:
+                    yield text
         return
 
     token_limit_key = (
