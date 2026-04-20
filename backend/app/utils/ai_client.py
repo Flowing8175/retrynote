@@ -78,6 +78,8 @@ async def _log_token_usage(
 def _get_gemini_client():
     global _gemini_client
     if _gemini_client is None:
+        if not settings.gemini_api_key:
+            raise RuntimeError("GEMINI_API_KEY is not configured")
         from google import genai
 
         _gemini_client = genai.Client(api_key=settings.gemini_api_key)
@@ -90,6 +92,8 @@ get_gemini_client = _get_gemini_client
 def _get_claude_client():
     global _claude_client
     if _claude_client is None:
+        if not settings.anthropic_api_key:
+            raise RuntimeError("ANTHROPIC_API_KEY is not configured")
         from anthropic import AsyncAnthropic
 
         _claude_client = AsyncAnthropic(api_key=settings.anthropic_api_key)
