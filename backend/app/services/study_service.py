@@ -13,16 +13,18 @@ from app.models.study import (
     ContentStatus,
     StudyFlashcard,
     StudyFlashcardSet,
+    StudyItem,
+    StudyItemSet,
     StudyMindmap,
     StudySummary,
 )
 from app.prompts.study import (
-    FLASHCARD_PROMPT,
     MINDMAP_PROMPT,
     NODE_EXPLANATION_PROMPT,
     STUDY_MODEL,
     SUMMARY_PROMPT,
 )
+from app.prompts.study_items import build_study_prompt
 from app.services.usage_service import UsageService
 from app.tier_config import calculate_credit_cost
 from app.utils.ai_client import get_gemini_client
@@ -38,6 +40,18 @@ _NODE_EXPLAIN_MAX_OUTPUT_TOKENS = 512
 _NODE_EXPLAIN_CACHE_TTL_SECONDS = 60 * 60 * 24 * 30
 _NODE_EXPLAIN_CACHE_PREFIX = "mindmap_node_explain"
 
+_FLASHCARD_COUNT = 15
+_STUDY_ITEMS_MAX_OUTPUT_TOKENS = 8192
+
+_VALID_ITEM_TYPES = {"mcq", "ox", "cloze", "short_answer", "flashcard"}
+_VALID_DIFFICULTIES = {"easy", "medium", "hard", "mixed"}
+
+_ITEMS_ENVELOPE_REINFORCEMENT = (
+    '\n\n[중요] 반드시 순수 JSON 객체만 출력하세요.'
+    ' 코드 펜스·마크다운·설명 없이 {"items":[...], "error":null, "message":null}'
+    ' 형식의 JSON 객체만 반환하세요.'
+)
+
 
 def _strip_json_fences(text: str) -> str:
     text = text.strip()
@@ -45,6 +59,20 @@ def _strip_json_fences(text: str) -> str:
     if match:
         return match.group(1).strip()
     return text
+
+
+def _parse_items_envelope(raw_text: str) -> dict | None:
+    """Parse the `{"items":[...], "error":..., "message":...}` envelope.
+
+    Returns None on malformed JSON or non-dict top-level; caller retries.
+    """
+    try:
+        data = json.loads(_strip_json_fences(raw_text))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    return data
 
 
 async def _collect_ai_response(
@@ -292,40 +320,39 @@ async def generate_flashcards(
         if len(text) > _MAX_TEXT_CHARS:
             text = text[:_MAX_TEXT_CHARS]
 
-        prompt = FLASHCARD_PROMPT.format(document_text=text)
+        prompt = build_study_prompt(
+            document_text=text,
+            item_type="flashcard",
+            difficulty="mixed",
+            count=_FLASHCARD_COUNT,
+            language="auto",
+        )
         raw_text, total_tokens = await _collect_ai_response(prompt)
-        raw = _strip_json_fences(raw_text)
+        envelope = _parse_items_envelope(raw_text)
 
-        try:
-            cards_data = json.loads(raw)
-        except json.JSONDecodeError:
+        if envelope is None:
             logger.warning(
                 "generate_flashcards: JSON parse failed on first attempt for file %s, retrying",
                 file_id,
             )
-            retry_prompt = (
-                prompt + "\n\n[중요] 반드시 순수 JSON 배열만 출력하세요."
-                " 코드 펜스, 마크다운, 설명 없이 JSON 배열만 반환하세요."
-            )
+            retry_prompt = prompt + _ITEMS_ENVELOPE_REINFORCEMENT
             raw_text2, retry_tokens = await _collect_ai_response(retry_prompt)
             total_tokens += retry_tokens
-            raw2 = _strip_json_fences(raw_text2)
-            try:
-                cards_data = json.loads(raw2)
-            except json.JSONDecodeError as exc:
+            envelope = _parse_items_envelope(raw_text2)
+            if envelope is None:
                 logger.error(
-                    "generate_flashcards: JSON parse failed on retry for file %s: %s",
+                    "generate_flashcards: JSON parse failed on retry for file %s",
                     file_id,
-                    exc,
                 )
                 flashcard_set.status = ContentStatus.failed
                 await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
                 await db.commit()
                 return
 
+        cards_data = envelope.get("items", [])
         if not isinstance(cards_data, list):
             logger.error(
-                "generate_flashcards: unexpected JSON structure (not a list) for file %s",
+                "generate_flashcards: items field is not a list for file %s",
                 file_id,
             )
             flashcard_set.status = ContentStatus.failed
@@ -690,3 +717,288 @@ async def generate_node_explanation(
         total_tokens,
     )
     return label, explanation, False
+
+
+def _coerce_list_of_str(value) -> list[str] | None:
+    if not isinstance(value, list):
+        return None
+    out = [str(v) for v in value if v is not None]
+    return out or None
+
+
+def _coerce_options(value) -> list[dict] | None:
+    if not isinstance(value, list):
+        return None
+    out: list[dict] = []
+    for opt in value:
+        if not isinstance(opt, dict):
+            continue
+        out.append(
+            {
+                "label": str(opt.get("label", "")),
+                "text": str(opt.get("text", "")),
+                "correct": bool(opt.get("correct", False)),
+                "misconception_targeted": (
+                    str(opt["misconception_targeted"])
+                    if opt.get("misconception_targeted") is not None
+                    else None
+                ),
+            }
+        )
+    return out or None
+
+
+def _build_study_item(
+    raw_item: dict,
+    *,
+    item_set_id: str,
+    order: int,
+    default_item_type: str,
+) -> StudyItem | None:
+    if not isinstance(raw_item, dict):
+        return None
+    front = raw_item.get("front")
+    if not isinstance(front, str) or not front.strip():
+        return None
+    item_type = str(raw_item.get("item_type") or default_item_type)
+    back_raw = raw_item.get("back")
+    back = str(back_raw) if isinstance(back_raw, str) and back_raw.strip() else None
+
+    correct_raw = raw_item.get("correct_answer")
+    correct_answer = (
+        str(correct_raw) if correct_raw is not None and str(correct_raw).strip() else None
+    )
+
+    return StudyItem(
+        item_set_id=item_set_id,
+        order=order,
+        item_type=item_type,
+        front=front,
+        back=back,
+        options=_coerce_options(raw_item.get("options")),
+        correct_answer=correct_answer,
+        acceptable_answers=_coerce_list_of_str(raw_item.get("acceptable_answers")),
+        key_points=_coerce_list_of_str(raw_item.get("key_points")),
+        bloom_level=(
+            str(raw_item["bloom_level"])
+            if isinstance(raw_item.get("bloom_level"), str)
+            else None
+        ),
+        difficulty=(
+            str(raw_item["difficulty"])
+            if isinstance(raw_item.get("difficulty"), str)
+            else None
+        ),
+        source_span=(
+            str(raw_item["source_span"])
+            if isinstance(raw_item.get("source_span"), str)
+            else None
+        ),
+        explanation=(
+            str(raw_item["explanation"])
+            if isinstance(raw_item.get("explanation"), str)
+            else None
+        ),
+    )
+
+
+async def generate_study_items(
+    file_id: str,
+    db: AsyncSession,
+    *,
+    item_type: str,
+    difficulty: str = "medium",
+    count: int = 5,
+    language: str = "auto",
+    force_regenerate: bool = False,
+    user_id: str = "",
+    credit_estimate: float = 0,
+) -> None:
+    if item_type not in _VALID_ITEM_TYPES:
+        raise ValueError(f"invalid item_type: {item_type}")
+    if difficulty not in _VALID_DIFFICULTIES:
+        raise ValueError(f"invalid difficulty: {difficulty}")
+
+    result = await db.execute(
+        select(StudyItemSet).where(
+            StudyItemSet.file_id == file_id,
+            StudyItemSet.item_type == item_type,
+            StudyItemSet.difficulty == difficulty,
+            StudyItemSet.deleted_at.is_(None),
+        )
+    )
+    existing = result.scalar_one_or_none()
+
+    if existing is not None and existing.status == ContentStatus.generating:
+        item_set = existing
+    elif existing is not None and not force_regenerate:
+        logger.info(
+            "generate_study_items: set already exists for file=%s type=%s diff=%s",
+            file_id,
+            item_type,
+            difficulty,
+        )
+        return
+    else:
+        if existing is not None and force_regenerate:
+            existing.deleted_at = datetime.now(timezone.utc)
+            await db.flush()
+
+        item_set = StudyItemSet(
+            file_id=file_id,
+            item_type=item_type,
+            difficulty=difficulty,
+            count_requested=count,
+            language=language,
+            status=ContentStatus.generating,
+        )
+        db.add(item_set)
+        await db.flush()
+        await db.commit()
+
+    try:
+        file_result = await db.execute(select(File).where(File.id == file_id))
+        file = file_result.scalar_one_or_none()
+
+        if file is None:
+            logger.error("generate_study_items: file %s not found", file_id)
+            item_set.status = ContentStatus.failed
+            await db.commit()
+            return
+
+        parsed_doc: ParsedDocument | None = file.parsed_document
+        text = (parsed_doc.normalized_text or "") if parsed_doc else ""
+
+        if len(text) < _MIN_TEXT_CHARS:
+            logger.warning(
+                "generate_study_items: file %s text too short (%d chars)",
+                file_id,
+                len(text),
+            )
+            item_set.status = ContentStatus.failed
+            item_set.error_code = "insufficient_source"
+            item_set.error_message = "원문이 최소 100자에 미달합니다"
+            await db.commit()
+            return
+
+        if len(text) > _MAX_TEXT_CHARS:
+            text = text[:_MAX_TEXT_CHARS]
+
+        prompt = build_study_prompt(
+            document_text=text,
+            item_type=item_type,
+            difficulty=difficulty,
+            count=count,
+            language=language,
+        )
+
+        raw_text, total_tokens = await _collect_ai_response(
+            prompt, max_output_tokens=_STUDY_ITEMS_MAX_OUTPUT_TOKENS
+        )
+        envelope = _parse_items_envelope(raw_text)
+
+        if envelope is None:
+            logger.warning(
+                "generate_study_items: JSON parse failed on first attempt"
+                " for file=%s type=%s diff=%s, retrying",
+                file_id,
+                item_type,
+                difficulty,
+            )
+            retry_prompt = prompt + _ITEMS_ENVELOPE_REINFORCEMENT
+            raw_text2, retry_tokens = await _collect_ai_response(
+                retry_prompt, max_output_tokens=_STUDY_ITEMS_MAX_OUTPUT_TOKENS
+            )
+            total_tokens += retry_tokens
+            envelope = _parse_items_envelope(raw_text2)
+            if envelope is None:
+                logger.error(
+                    "generate_study_items: JSON parse failed on retry for file=%s",
+                    file_id,
+                )
+                item_set.status = ContentStatus.failed
+                await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+                await db.commit()
+                return
+
+        raw_items = envelope.get("items", [])
+        error_code = envelope.get("error")
+        error_message = envelope.get("message")
+        if not isinstance(raw_items, list):
+            logger.error(
+                "generate_study_items: items field not a list for file=%s", file_id
+            )
+            item_set.status = ContentStatus.failed
+            item_set.error_code = str(error_code) if error_code else None
+            item_set.error_message = str(error_message) if error_message else None
+            await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+            await db.commit()
+            return
+
+        items: list[StudyItem] = []
+        for idx, raw_item in enumerate(raw_items):
+            built = _build_study_item(
+                raw_item,
+                item_set_id=item_set.id,
+                order=idx,
+                default_item_type=item_type,
+            )
+            if built is not None:
+                items.append(built)
+
+        if error_code in {"insufficient_source", "count_exceeded"}:
+            item_set.status = ContentStatus.failed
+            item_set.error_code = str(error_code)
+            item_set.error_message = (
+                str(error_message) if error_message else None
+            )
+            await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+            await db.commit()
+            return
+
+        if not items:
+            logger.error(
+                "generate_study_items: no valid items parsed for file=%s type=%s",
+                file_id,
+                item_type,
+            )
+            item_set.status = ContentStatus.failed
+            item_set.error_code = str(error_code) if error_code else None
+            item_set.error_message = str(error_message) if error_message else None
+            await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+            await db.commit()
+            return
+
+        await db.execute(
+            delete(StudyItem).where(StudyItem.item_set_id == item_set.id)
+        )
+        db.add_all(items)
+        item_set.status = ContentStatus.completed
+        item_set.generated_at = datetime.now(timezone.utc)
+        item_set.model_used = STUDY_MODEL
+        item_set.error_code = str(error_code) if error_code else None
+        item_set.error_message = str(error_message) if error_message else None
+        await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+        await db.commit()
+
+        logger.info(
+            "generate_study_items: completed for file=%s type=%s diff=%s (%d items)",
+            file_id,
+            item_type,
+            difficulty,
+            len(items),
+        )
+
+    except Exception as exc:
+        logger.exception(
+            "generate_study_items: failed for file=%s type=%s diff=%s: %s",
+            file_id,
+            item_type,
+            difficulty,
+            exc,
+        )
+        try:
+            item_set.status = ContentStatus.failed
+            await db.commit()
+        except Exception:
+            pass

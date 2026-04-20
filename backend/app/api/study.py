@@ -12,8 +12,11 @@ from app.models.study import (
     ContentStatus,
     StudyFlashcard,
     StudyFlashcardSet,
+    StudyItem,
+    StudyItemSet,
     StudyMindmap,
     StudySummary,
+    StudyVisit,
 )
 from app.models.user import User
 from app.schemas.billing import LimitExceededError
@@ -23,12 +26,22 @@ from app.schemas.study import (
     MindmapNodeExplanationResponse,
     StudyChatHistoryResponse,
     StudyChatMessageResponse,
+    StudyDifficulty,
     StudyFlashcardResponse,
     StudyFlashcardSetResponse,
+    StudyHistoryItem,
+    StudyHistoryResponse,
+    StudyItemGenerateRequest,
+    StudyItemResponse,
+    StudyItemSetResponse,
+    StudyItemType,
     StudyMindmapResponse,
     StudyStatusResponse,
     StudySummaryResponse,
+    StudyVisitResponse,
 )
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+
 from app.services.study_service import (
     MindmapNotReadyError,
     NodeNotFoundError,
@@ -59,6 +72,88 @@ async def _get_owned_file(file_id: str, db: AsyncSession, user: User) -> File:
     if file.user_id != user.id:
         raise HTTPException(status_code=403, detail="Access denied")
     return file
+
+
+@router.get("/history", response_model=StudyHistoryResponse)
+async def get_study_history(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(
+            File.id.label("file_id"),
+            File.original_filename,
+            File.file_type,
+            File.file_size_bytes,
+            File.source_type,
+            File.status,
+            File.folder_id,
+            StudyVisit.last_visited_at,
+            StudyVisit.visit_count,
+        )
+        .join(StudyVisit, StudyVisit.file_id == File.id)
+        .where(
+            StudyVisit.user_id == user.id,
+            File.user_id == user.id,
+            File.deleted_at.is_(None),
+        )
+        .order_by(StudyVisit.last_visited_at.desc())
+        .limit(limit)
+    )
+    rows = result.all()
+    items = [
+        StudyHistoryItem(
+            file_id=row.file_id,
+            original_filename=row.original_filename,
+            file_type=row.file_type,
+            file_size_bytes=row.file_size_bytes,
+            source_type=row.source_type.value if hasattr(row.source_type, "value") else row.source_type,
+            status=row.status.value if hasattr(row.status, "value") else row.status,
+            folder_id=row.folder_id,
+            last_visited_at=row.last_visited_at,
+            visit_count=row.visit_count,
+        )
+        for row in rows
+    ]
+    return StudyHistoryResponse(items=items, total=len(items))
+
+
+@router.post("/{file_id}/visit", response_model=StudyVisitResponse)
+async def record_study_visit(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _get_owned_file(file_id, db, user)
+
+    now = datetime.now(timezone.utc)
+    stmt = (
+        pg_insert(StudyVisit)
+        .values(
+            user_id=user.id,
+            file_id=file_id,
+            last_visited_at=now,
+            visit_count=1,
+        )
+        .on_conflict_do_update(
+            index_elements=["user_id", "file_id"],
+            set_={
+                "last_visited_at": now,
+                "visit_count": StudyVisit.__table__.c.visit_count + 1,
+                "updated_at": now,
+            },
+        )
+        .returning(StudyVisit.last_visited_at, StudyVisit.visit_count)
+    )
+    result = await db.execute(stmt)
+    row = result.one()
+    await db.commit()
+    return StudyVisitResponse(
+        status="ok",
+        last_visited_at=row.last_visited_at,
+        visit_count=row.visit_count,
+    )
 
 
 @router.get("/{file_id}/chat/stream")
@@ -562,3 +657,190 @@ async def list_chat_sessions(
         {"chat_id": session.id, "created_at": session.created_at}
         for session in sessions
     ]
+
+
+@router.post("/{file_id}/items/generate")
+async def generate_study_items_endpoint(
+    file_id: str,
+    req: StudyItemGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    file = await _get_owned_file(file_id, db, user)
+
+    if file.status != FileStatus.ready:
+        raise HTTPException(
+            status_code=400,
+            detail="File is not ready for study material generation",
+        )
+
+    result = await db.execute(
+        select(StudyItemSet).where(
+            StudyItemSet.file_id == file_id,
+            StudyItemSet.item_type == req.item_type,
+            StudyItemSet.difficulty == req.difficulty,
+            StudyItemSet.deleted_at.is_(None),
+        )
+    )
+    item_set = result.scalar_one_or_none()
+
+    if item_set and item_set.status == ContentStatus.generating:
+        raise HTTPException(
+            status_code=409,
+            detail="Study item generation already in progress",
+        )
+
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed, _, _ = await usage_svc.check_and_consume(
+        db, user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다. 요금제를 업그레이드하거나 크레딧을 구매하세요.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+
+    if req.force_regenerate and item_set:
+        item_set.deleted_at = datetime.now(timezone.utc)
+        await db.flush()
+        item_set = None
+
+    if item_set is None:
+        item_set = StudyItemSet(
+            file_id=file_id,
+            item_type=req.item_type,
+            difficulty=req.difficulty,
+            count_requested=req.count,
+            language=req.language,
+            status=ContentStatus.generating,
+        )
+        db.add(item_set)
+    else:
+        item_set.status = ContentStatus.generating
+        item_set.count_requested = req.count
+        item_set.language = req.language
+        item_set.error_code = None
+        item_set.error_message = None
+    await db.commit()
+
+    dispatch_task(
+        "generate_study_items",
+        [
+            file_id,
+            user.id,
+            STUDY_CREDIT_ESTIMATE,
+            req.item_type,
+            req.difficulty,
+            req.count,
+            req.language,
+            req.force_regenerate,
+        ],
+    )
+    return {"status": "dispatched"}
+
+
+@router.get("/{file_id}/items", response_model=StudyItemSetResponse)
+async def get_study_items(
+    file_id: str,
+    item_type: StudyItemType = Query(...),
+    difficulty: StudyDifficulty = Query("medium"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _get_owned_file(file_id, db, user)
+
+    result = await db.execute(
+        select(StudyItemSet).where(
+            StudyItemSet.file_id == file_id,
+            StudyItemSet.item_type == item_type,
+            StudyItemSet.difficulty == difficulty,
+            StudyItemSet.deleted_at.is_(None),
+        )
+    )
+    item_set = result.scalar_one_or_none()
+
+    if item_set is None or item_set.status != ContentStatus.completed:
+        status = (
+            item_set.status.value
+            if item_set
+            else ContentStatus.not_generated.value
+        )
+        raise HTTPException(
+            status_code=404,
+            detail=f"Study items not available. Status: {status}",
+        )
+
+    items_result = await db.execute(
+        select(StudyItem)
+        .where(StudyItem.item_set_id == item_set.id)
+        .order_by(StudyItem.order)
+    )
+    items = items_result.scalars().all()
+
+    return StudyItemSetResponse.model_validate(
+        {
+            "id": item_set.id,
+            "file_id": item_set.file_id,
+            "item_type": item_set.item_type,
+            "difficulty": item_set.difficulty,
+            "count_requested": item_set.count_requested,
+            "language": item_set.language,
+            "status": item_set.status.value,
+            "error_code": item_set.error_code,
+            "error_message": item_set.error_message,
+            "model_used": item_set.model_used,
+            "generated_at": item_set.generated_at,
+            "items": [StudyItemResponse.model_validate(i) for i in items],
+        }
+    )
+
+
+@router.get("/{file_id}/items/status")
+async def get_study_items_status(
+    file_id: str,
+    item_type: StudyItemType = Query(...),
+    difficulty: StudyDifficulty = Query("medium"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _get_owned_file(file_id, db, user)
+
+    result = await db.execute(
+        select(StudyItemSet).where(
+            StudyItemSet.file_id == file_id,
+            StudyItemSet.item_type == item_type,
+            StudyItemSet.difficulty == difficulty,
+            StudyItemSet.deleted_at.is_(None),
+        )
+    )
+    item_set = result.scalar_one_or_none()
+
+    count_generated = 0
+    if item_set and item_set.status == ContentStatus.completed:
+        from sqlalchemy import func
+        count_result = await db.execute(
+            select(func.count(StudyItem.id)).where(
+                StudyItem.item_set_id == item_set.id
+            )
+        )
+        count_generated = count_result.scalar_one() or 0
+
+    return {
+        "file_id": file_id,
+        "item_type": item_type,
+        "difficulty": difficulty,
+        "status": (
+            item_set.status.value
+            if item_set
+            else ContentStatus.not_generated.value
+        ),
+        "error_code": item_set.error_code if item_set else None,
+        "error_message": item_set.error_message if item_set else None,
+        "count_generated": count_generated,
+    }

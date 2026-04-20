@@ -47,6 +47,9 @@ from app.models.study import (
     StudyMindmap,
     StudyChat,
     StudyMessage,
+    StudyVisit,
+    StudyItemSet,
+    StudyItem,
 )
 
 __all__ = [
@@ -97,4 +100,7 @@ __all__ = [
     "StudyMindmap",
     "StudyChat",
     "StudyMessage",
+    "StudyVisit",
+    "StudyItemSet",
+    "StudyItem",
 ]
