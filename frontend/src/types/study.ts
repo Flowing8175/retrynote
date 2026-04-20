@@ -75,3 +75,26 @@ export interface StudyChatHistory {
 }
 
 export type StudyContentType = 'summary' | 'flashcards' | 'mindmap';
+
+export interface StudyHistoryItem {
+  file_id: string;
+  original_filename: string | null;
+  file_type: string | null;
+  file_size_bytes: number;
+  source_type: string;
+  status: string;
+  folder_id: string | null;
+  last_visited_at: string;
+  visit_count: number;
+}
+
+export interface StudyHistoryResponse {
+  items: StudyHistoryItem[];
+  total: number;
+}
+
+export interface StudyVisitResponse {
+  status: string;
+  last_visited_at: string;
+  visit_count: number;
+}

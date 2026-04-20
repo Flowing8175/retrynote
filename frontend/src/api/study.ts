@@ -8,6 +8,8 @@ import type {
   StudyChatHistory,
   StudyContentType,
   MindmapNodeExplanation,
+  StudyHistoryResponse,
+  StudyVisitResponse,
 } from '@/types/study';
 
 export const studyApi = {
@@ -53,6 +55,16 @@ export const studyApi = {
 
   getChatHistory: async (fileId: string): Promise<StudyChatHistory> => {
     const response = await apiClient.get<StudyChatHistory>(`/study/${fileId}/chat/history`);
+    return response.data;
+  },
+
+  trackVisit: async (fileId: string): Promise<StudyVisitResponse> => {
+    const response = await apiClient.post<StudyVisitResponse>(`/study/${fileId}/visit`);
+    return response.data;
+  },
+
+  getHistory: async (limit = 20): Promise<StudyHistoryResponse> => {
+    const response = await apiClient.get<StudyHistoryResponse>(`/study/history`, { params: { limit } });
     return response.data;
   },
 };
@@ -144,5 +156,24 @@ export function useChatHistory(fileId: string) {
     queryKey: ['study', 'chat', 'history', fileId],
     queryFn: () => studyApi.getChatHistory(fileId),
     enabled: !!fileId,
+  });
+}
+
+export function useStudyHistory(limit = 20, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['study', 'history', limit],
+    queryFn: () => studyApi.getHistory(limit),
+    enabled: options?.enabled !== false,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useTrackStudyVisit() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (fileId: string) => studyApi.trackVisit(fileId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['study', 'history'] });
+    },
   });
 }

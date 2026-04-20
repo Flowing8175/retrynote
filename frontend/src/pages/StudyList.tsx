@@ -1,9 +1,10 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, AlertTriangle, BookOpen, Sparkles, PenLine } from 'lucide-react';
+import { ChevronRight, AlertTriangle, BookOpen, Sparkles, PenLine, History } from 'lucide-react';
 import { filesApi } from '@/api';
 import { StatusBadge, SkeletonTransition } from '@/components';
+import { StudyHistoryPanel } from '@/components/study/StudyHistoryPanel';
 import { OptionGroup } from '@/components/ui';
 import { isFileProcessingStatus } from '@/types/file';
 import { formatFileSize, formatFileSource } from '@/utils/formatters';
@@ -56,6 +57,7 @@ export default function StudyList() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const { data: foldersData } = useQuery({
     queryKey: ['folders'],
@@ -150,13 +152,21 @@ export default function StudyList() {
     {filesLoading ? null : (
     <div className="max-w-4xl mx-auto space-y-16 py-8 animate-fade-in">
       <section className="animate-fade-in-up space-y-6">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between border-b border-white/[0.05] pb-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between border-b border-white/[0.05] pb-6">
           <div className="space-y-2">
             <h1 className="text-3xl font-semibold tracking-tight text-white md:text-4xl">학습 시작</h1>
             <p className="text-base text-content-secondary max-w-xl leading-relaxed">
               학습할 자료를 선택하여 요약, 플래시카드, 마인드맵으로 학습을 시작합니다.
             </p>
           </div>
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            className="group inline-flex items-center gap-2 self-start px-4 py-2.5 bg-surface-raised hover:bg-surface-hover text-content-secondary hover:text-white text-sm font-medium rounded-xl border border-white/[0.05] hover:border-white/[0.1] transition-colors lg:self-end"
+          >
+            <History size={16} className="transition-transform group-hover:-translate-x-0.5" />
+            학습 기록
+          </button>
         </div>
       </section>
 
@@ -361,6 +371,7 @@ export default function StudyList() {
           </button>
         </div>
       </section>
+      <StudyHistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </div>
     )}
     </SkeletonTransition>

@@ -1,8 +1,8 @@
-import { useState, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, FileText, FileX2, X, Circle, Loader2, Check, AlertTriangle, Pencil } from 'lucide-react';
 import { PdfViewer } from '@/components/study/PdfViewer';
-import { useStudyStatus } from '@/api/study';
+import { useStudyStatus, useTrackStudyVisit } from '@/api/study';
 import { API_BASE_URL } from '@/api/createApiClient';
 import type { ContentStatus } from '@/types/study';
 
@@ -67,6 +67,14 @@ export default function StudyViewer() {
   const [showPdfOverlay, setShowPdfOverlay] = useState(false);
 
   const { data: status, isError, error } = useStudyStatus(fileId ?? '');
+
+  const trackVisit = useTrackStudyVisit();
+  useEffect(() => {
+    if (fileId) {
+      trackVisit.mutate(fileId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId]);
 
   const is404 = isError && (error as { response?: { status?: number } })?.response?.status === 404;
   const isPdf = status?.file_type?.toLowerCase() === 'pdf';
