@@ -5,6 +5,7 @@ import { X, CreditCard, HardDrive, CheckCircle } from 'lucide-react';
 import { billingApi } from '@/api/billing';
 import { openPaddleCheckout } from '@/lib/paddle';
 import { useUsageStatus } from '@/lib/useUsageStatus';
+import { useAuthStore } from '@/stores/authStore';
 import type { ResourceType } from '@/types/billing';
 
 function formatBytes(bytes: number): string {
@@ -207,6 +208,7 @@ export default function BillingPage() {
     if (isSuccess) {
       queryClient.invalidateQueries({ queryKey: ['usageStatus'] });
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
+      void useAuthStore.getState().refetchUser();
     }
   }, [isSuccess, queryClient]);
 
@@ -214,6 +216,7 @@ export default function BillingPage() {
     setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
       queryClient.invalidateQueries({ queryKey: ['usageStatus'] });
+      void useAuthStore.getState().refetchUser();
     }, 2000);
   }, [queryClient]);
 

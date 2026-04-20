@@ -9,6 +9,7 @@ import { isFileProcessingStatus } from '@/types';
 import type { FileDetail } from '@/types';
 import { useModalState } from '@/hooks/useModalState';
 import { useMultiFileUpload } from '@/hooks/useMultiFileUpload';
+import { useAuthStore } from '@/stores/authStore';
 
 const failedStatuses = ['failed_partial', 'failed_terminal'];
 
@@ -137,9 +138,12 @@ export default function Files() {
   const selectAllRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
+  const maxUploadMB = useAuthStore((s) => s.user?.max_upload_mb);
+
   const upload = useMultiFileUpload({
     concurrency: 3,
     folderId: selectedFolderId,
+    maxSizeMB: maxUploadMB,
   });
 
   const { data: folderData } = useQuery({

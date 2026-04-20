@@ -35,11 +35,15 @@ class Settings(BaseSettings):
 
     gemini_api_key: str = ""
 
+    anthropic_api_key: str = ""
+
     # Provider-agnostic model tiers — set to any model string; provider is
-    # auto-detected from the model name prefix (e.g. "gemini-" → Gemini API).
+    # auto-detected from the model name prefix (e.g. "gemini-" → Gemini API,
+    # "claude-" → Anthropic API).
     eco_generation_model: str = "gpt-5.4-nano"
     balanced_generation_model: str = "gpt-5.4-mini"
     performance_generation_model: str = "gemini-3-flash"
+    max_generation_model: str = "claude-sonnet-4-6"
 
     gemini_context_cache_enabled: bool = True
     gemini_context_cache_ttl_seconds: int = 3600

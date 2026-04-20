@@ -424,3 +424,25 @@ class TestQuizCreationPolicy:
         record = result.scalar_one_or_none()
         assert record is not None
         assert record.consumed == TIER_ESTIMATES[MODEL_PERFORMANCE]
+
+    async def test_max_model_exceeds_free_quota(
+        self, free_auth_client: AsyncClient, free_user_ready_file
+    ):
+        """MAX model (claude-sonnet-4-6) costs 8 credits — exceeds free tier's 5.0 quiz quota in a single call."""
+        from app.config import settings
+        from app.tier_config import TIER_ESTIMATES, TIER_LIMITS, MODEL_MAX, UserTier
+
+        assert TIER_ESTIMATES[MODEL_MAX] > TIER_LIMITS[UserTier.free].quiz_per_window
+
+        resp = await free_auth_client.post(
+            "/quiz-sessions",
+            json={
+                "mode": "normal",
+                "selected_file_ids": [free_user_ready_file.id],
+                "question_count": 3,
+                "source_mode": "document_based",
+                "preferred_model": settings.max_generation_model,
+            },
+        )
+        assert resp.status_code == 402
+        assert resp.json()["detail"]["limit_type"] == "quiz"

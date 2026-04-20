@@ -13,6 +13,7 @@ from app.tier_config import (
     MODEL_ECO,
     MODEL_BALANCED,
     MODEL_PERFORMANCE,
+    MODEL_MAX,
 )
 from app.models.quiz import (
     QuizSession,
@@ -146,6 +147,8 @@ async def create_retry_set(
         model_tier_label = MODEL_BALANCED
     elif preferred == cfg.performance_generation_model:
         model_tier_label = MODEL_PERFORMANCE
+    elif preferred == cfg.max_generation_model:
+        model_tier_label = MODEL_MAX
     estimate = TIER_ESTIMATES.get(model_tier_label, 1.0) if model_tier_label else 1.0
 
     usage_svc = UsageService()

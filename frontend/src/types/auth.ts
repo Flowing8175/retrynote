@@ -28,10 +28,12 @@ export interface UserProfile {
   username: string;
   email: string;
   role: string;
+  tier: string;
   is_active: boolean;
   email_verified: boolean;
   storage_used_bytes: number;
   storage_quota_bytes: number;
+  max_upload_mb: number;
   last_login_at: string | null;
   created_at?: string;
 }

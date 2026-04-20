@@ -38,6 +38,7 @@ class RetrySetCreate(BaseModel):
                 cfg.eco_generation_model,
                 cfg.balanced_generation_model,
                 cfg.performance_generation_model,
+                cfg.max_generation_model,
             ]
             if model_name
         }

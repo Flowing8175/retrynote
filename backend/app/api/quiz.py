@@ -84,6 +84,7 @@ async def get_quiz_config(
         ("ECO", cfg.eco_generation_model),
         ("BALANCED", cfg.balanced_generation_model),
         ("PERFORMANCE", cfg.performance_generation_model),
+        ("MAX", cfg.max_generation_model),
     ]
 
     generation_model_options = [
@@ -192,6 +193,7 @@ def _resolve_model_and_cost(
         MODEL_ECO,
         MODEL_BALANCED,
         MODEL_PERFORMANCE,
+        MODEL_MAX,
         TIER_ESTIMATES,
     )
 
@@ -203,6 +205,8 @@ def _resolve_model_and_cost(
         model_tier_label = MODEL_BALANCED
     elif preferred == cfg.performance_generation_model:
         model_tier_label = MODEL_PERFORMANCE
+    elif preferred == cfg.max_generation_model:
+        model_tier_label = MODEL_MAX
 
     cost = TIER_ESTIMATES.get(model_tier_label, 1.0) if model_tier_label else 1.0
     return preferred, cost

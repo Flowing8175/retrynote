@@ -39,6 +39,7 @@ interface AuthState {
   impersonationId: string | null;
   adminToken: string | null;
   setUser: (user: UserProfile | null) => void;
+  refetchUser: () => Promise<void>;
   setTokens: (accessToken: string, refreshToken: string) => void;
   setRememberMe: (value: boolean) => void;
   logout: () => void;
@@ -67,6 +68,18 @@ export const useAuthStore = create<AuthState>()(
       setUser: (user) => {
         if (user) localStorage.setItem(HAS_ACCOUNT_KEY, 'true');
         set({ user, isAuthenticated: !!user, isAdmin: user?.role === 'admin' || user?.role === 'super_admin' });
+      },
+
+      refetchUser: async () => {
+        // Dynamic import: '@/api/auth' imports this store, so a static import here would cycle.
+        const { authApi } = await import('@/api/auth');
+        const user = await authApi.getMe();
+        if (user) localStorage.setItem(HAS_ACCOUNT_KEY, 'true');
+        set({
+          user,
+          isAuthenticated: !!user,
+          isAdmin: user?.role === 'admin' || user?.role === 'super_admin',
+        });
       },
 
       setTokens: (accessToken, refreshToken) => set({ accessToken, refreshToken }),

@@ -21,9 +21,10 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.config import settings, Settings
+from app.config import settings
 from app.models.file import File, FileSourceType, FileStatus, Folder
 from app.models.user import User
+from app.tier_config import TIER_LIMITS, UserTier
 from app.models.search import Job
 from app.schemas.file import (
     FileUploadResponse,
@@ -33,7 +34,7 @@ from app.schemas.file import (
     FolderDetail,
 )
 from app.middleware.auth import get_current_user, get_impersonation_context
-from app.middleware.rate_limit_pro import pro_rate_limit
+from app.middleware.rate_limit_upload import upload_rate_limit
 from app.workers.celery_app import dispatch_task
 from app.utils.db_helpers import paginate
 
@@ -85,11 +86,23 @@ async def get_owned_folder(folder_id: str, db: AsyncSession, user: User) -> Fold
     return folder
 
 
+def _resolve_max_upload_mb(user: User) -> int:
+    try:
+        return TIER_LIMITS[UserTier(user.tier)].max_upload_mb
+    except (ValueError, KeyError):
+        logger.warning(
+            "Unknown tier '%s' for user %s; falling back to free-tier upload limit",
+            user.tier,
+            user.id,
+        )
+        return TIER_LIMITS[UserTier.free].max_upload_mb
+
+
 async def _read_and_validate_upload(
     file: UploadFile | None,
     manual_text: str | None,
     source_url: str | None,
-    settings_ref: Settings,
+    user: User,
 ) -> tuple[bytes | None, str | None, str | None, FileSourceType, str | None, int]:
     """Read and validate the upload input.
 
@@ -100,10 +113,11 @@ async def _read_and_validate_upload(
         original_filename = file.filename
         ext = os.path.splitext(file.filename or "")[1].lstrip(".").lower()
 
-        if ext not in settings_ref.allowed_file_types.split(","):
+        if ext not in settings.allowed_file_types.split(","):
             raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
 
-        max_size = settings_ref.max_upload_size_mb * 1024 * 1024
+        max_mb = _resolve_max_upload_mb(user)
+        max_size = max_mb * 1024 * 1024
         chunks = []
         total_size = 0
         while True:
@@ -114,7 +128,7 @@ async def _read_and_validate_upload(
             if total_size > max_size:
                 raise HTTPException(
                     status_code=413,
-                    detail=f"File too large. Maximum size is {settings_ref.max_upload_size_mb}MB.",
+                    detail=f"File too large. Maximum size is {max_mb}MB.",
                 )
             chunks.append(chunk)
         content = b"".join(chunks)
@@ -219,7 +233,7 @@ async def upload_file(
     folder_id: str | None = Form(default=None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
-    _rate_limit: None = Depends(pro_rate_limit),
+    _rate_limit: None = Depends(upload_rate_limit),
 ):
     effective_user, _ = await get_impersonation_context(request, user, db)
 
@@ -240,7 +254,7 @@ async def upload_file(
         source_type,
         content_hash,
         file_size,
-    ) = await _read_and_validate_upload(file, manual_text, source_url, settings)
+    ) = await _read_and_validate_upload(file, manual_text, source_url, effective_user)
 
     if content is not None and content_hash:
         duplicate_result = await db.execute(

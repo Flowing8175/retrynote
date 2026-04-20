@@ -39,6 +39,7 @@ class UserProfile(BaseModel):
     email_verified: bool = False
     storage_used_bytes: int
     storage_quota_bytes: int
+    max_upload_mb: int
     last_login_at: datetime | None = None
 
 

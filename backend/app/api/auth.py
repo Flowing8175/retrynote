@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.database import get_db
 from app.models.user import User
+from app.tier_config import TIER_LIMITS, UserTier
 from app.models.search import PasswordResetToken, RefreshToken, EmailVerificationToken
 from app.models.quiz import (
     QuizSession,
@@ -282,6 +283,7 @@ async def convert_guest(
             email_verified=user.email_verified,
             storage_used_bytes=user.storage_used_bytes,
             storage_quota_bytes=user.storage_quota_bytes,
+            max_upload_mb=TIER_LIMITS[UserTier(user.tier)].max_upload_mb,
             last_login_at=user.last_login_at,
         ),
     )
@@ -325,6 +327,7 @@ async def login(
         email_verified=user.email_verified,
         storage_used_bytes=user.storage_used_bytes,
         storage_quota_bytes=user.storage_quota_bytes,
+        max_upload_mb=TIER_LIMITS[UserTier(user.tier)].max_upload_mb,
         last_login_at=user.last_login_at,
     )
 
@@ -584,6 +587,7 @@ async def get_me(user: User = Depends(get_current_user)):
         email_verified=user.email_verified,
         storage_used_bytes=user.storage_used_bytes,
         storage_quota_bytes=user.storage_quota_bytes,
+        max_upload_mb=TIER_LIMITS[UserTier(user.tier)].max_upload_mb,
         last_login_at=user.last_login_at,
     )
 

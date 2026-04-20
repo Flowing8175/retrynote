@@ -92,6 +92,7 @@ export default function PricingPage() {
     setTimeout(() => {
       queryClient.invalidateQueries({ queryKey: ['subscription'] });
       queryClient.invalidateQueries({ queryKey: ['usageStatus'] });
+      void useAuthStore.getState().refetchUser();
     }, 2000);
   }, [queryClient]);
 

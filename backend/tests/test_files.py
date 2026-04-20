@@ -4,9 +4,30 @@ import uuid
 import zipfile
 import zlib
 
+import pytest
 from httpx import AsyncClient
+from app.middleware.auth import create_access_token, hash_password
+from app.models import User, UserRole
 from app.models.file import File, FileSourceType, FileStatus
 from app.models.search import Job
+
+
+async def _make_user_with_tier(db, tier: str) -> User:
+    suffix = uuid.uuid4().hex[:8]
+    user = User(
+        id=str(uuid.uuid4()),
+        username=f"{tier}_{suffix}",
+        email=f"{tier}_{suffix}@test.example",
+        password_hash=hash_password("TestPass123!"),
+        role=UserRole.user,
+        tier=tier,
+        is_active=True,
+        email_verified=True,
+    )
+    db.add(user)
+    await db.commit()
+    await db.refresh(user)
+    return user
 
 
 def _make_docx_bytes() -> bytes:
@@ -396,3 +417,51 @@ class TestFileStatusTransitions:
         file.is_quiz_eligible = True
         await db_session.commit()
         assert file.status == FileStatus.ready
+
+
+class TestUploadSizeByTier:
+    @pytest.mark.parametrize(
+        "tier,max_mb",
+        [("free", 5), ("lite", 50), ("standard", 100), ("pro", 200)],
+    )
+    async def test_accept_one_mb_under_tier_limit(
+        self, client: AsyncClient, db_session, tier, max_mb
+    ):
+        user = await _make_user_with_tier(db_session, tier)
+        token = create_access_token(user.id, user.role.value)
+        client.headers["Authorization"] = f"Bearer {token}"
+
+        payload = b"a" * ((max_mb - 1) * 1024 * 1024)
+        resp = await client.post(
+            "/files",
+            files={"file": ("boundary.txt", payload, "text/plain")},
+        )
+        assert resp.status_code == 200, (
+            f"tier={tier} size={max_mb - 1}MB expected 200, "
+            f"got {resp.status_code}: {resp.text[:200]}"
+        )
+
+    @pytest.mark.parametrize(
+        "tier,max_mb",
+        [("free", 5), ("lite", 50), ("standard", 100), ("pro", 200)],
+    )
+    async def test_reject_one_mb_over_tier_limit(
+        self, client: AsyncClient, db_session, tier, max_mb
+    ):
+        user = await _make_user_with_tier(db_session, tier)
+        token = create_access_token(user.id, user.role.value)
+        client.headers["Authorization"] = f"Bearer {token}"
+
+        payload = b"a" * ((max_mb + 1) * 1024 * 1024)
+        resp = await client.post(
+            "/files",
+            files={"file": ("boundary.txt", payload, "text/plain")},
+        )
+        assert resp.status_code == 413, (
+            f"tier={tier} size={max_mb + 1}MB expected 413, got {resp.status_code}"
+        )
+        detail = resp.json().get("detail", "")
+        detail_str = str(detail) if not isinstance(detail, str) else detail
+        assert str(max_mb) in detail_str, (
+            f"tier={tier} expected limit '{max_mb}' in error detail, got: {detail_str}"
+        )
