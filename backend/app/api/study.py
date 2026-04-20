@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import datetime, timezone
 
@@ -566,13 +567,21 @@ async def get_mindmap_node_explanation(
     await db.commit()
 
     try:
-        label, explanation, from_cache = await generate_node_explanation(
-            file_id=file_id,
-            node_id=req.node_id,
-            db=db,
-            redis_client=redis_client,
-            user_id=user.id,
-            credit_estimate=STUDY_CREDIT_ESTIMATE,
+        label, explanation, from_cache = await asyncio.wait_for(
+            generate_node_explanation(
+                file_id=file_id,
+                node_id=req.node_id,
+                db=db,
+                redis_client=redis_client,
+                user_id=user.id,
+                credit_estimate=STUDY_CREDIT_ESTIMATE,
+            ),
+            timeout=30,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=504,
+            detail="설명 생성 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.",
         )
     except MindmapNotReadyError as exc:
         raise HTTPException(

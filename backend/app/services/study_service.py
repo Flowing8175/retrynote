@@ -42,6 +42,8 @@ _NODE_EXPLAIN_CACHE_PREFIX = "mindmap_node_explain"
 
 _FLASHCARD_COUNT = 15
 _STUDY_ITEMS_MAX_OUTPUT_TOKENS = 8192
+_MAX_ITEMS_PER_SET = 200
+_MAX_ITEM_TEXT_CHARS = 10_000
 
 _VALID_ITEM_TYPES = {"mcq", "ox", "cloze", "short_answer", "flashcard"}
 _VALID_DIFFICULTIES = {"easy", "medium", "hard", "mixed"}
@@ -359,11 +361,12 @@ async def generate_flashcards(
             await db.commit()
             return
 
+        cards_data = cards_data[:_MAX_ITEMS_PER_SET]
         flashcards = [
             StudyFlashcard(
                 flashcard_set_id=flashcard_set.id,
-                front=str(card.get("front", "")),
-                back=str(card.get("back", "")),
+                front=str(card.get("front", ""))[:_MAX_ITEM_TEXT_CHARS],
+                back=str(card.get("back", ""))[:_MAX_ITEM_TEXT_CHARS],
                 order=idx,
             )
             for idx, card in enumerate(cards_data)
@@ -503,6 +506,9 @@ async def generate_mindmap(
             mindmap.status = ContentStatus.failed
             await db.commit()
             return
+
+        nodes = nodes[:500]
+        edges = edges[:1000]
 
         needs_layout = False
         for node in nodes:
@@ -760,9 +766,10 @@ def _build_study_item(
     front = raw_item.get("front")
     if not isinstance(front, str) or not front.strip():
         return None
+    front = front[:_MAX_ITEM_TEXT_CHARS]
     item_type = str(raw_item.get("item_type") or default_item_type)
     back_raw = raw_item.get("back")
-    back = str(back_raw) if isinstance(back_raw, str) and back_raw.strip() else None
+    back = str(back_raw)[:_MAX_ITEM_TEXT_CHARS] if isinstance(back_raw, str) and back_raw.strip() else None
 
     correct_raw = raw_item.get("correct_answer")
     correct_answer = (
@@ -924,6 +931,8 @@ async def generate_study_items(
         raw_items = envelope.get("items", [])
         error_code = envelope.get("error")
         error_message = envelope.get("message")
+        if isinstance(raw_items, list):
+            raw_items = raw_items[:_MAX_ITEMS_PER_SET]
         if not isinstance(raw_items, list):
             logger.error(
                 "generate_study_items: items field not a list for file=%s", file_id
