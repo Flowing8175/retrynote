@@ -1,83 +1,67 @@
+version: '3.8'
+
 services:
   db:
-    image: pgvector/pgvector:pg15
-    env_file: .env
+    image: postgres:16-alpine
+    restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-quiz}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-      POSTGRES_DB: ${POSTGRES_DB:-quizmanager}
-    ports:
-      - "127.0.0.1:5432:5432"
+      POSTGRES_USER: quiz
+      POSTGRES_PASSWORD: quiz
+      POSTGRES_DB: quizmanager
     volumes:
-      - pgdata:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quiz} -d ${POSTGRES_DB:-quizmanager}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 1G
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
 
   redis:
     image: redis:7-alpine
-    command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set}
-    env_file: .env
+    restart: always
     ports:
-      - "127.0.0.1:6379:6379"
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 256M
+      - "6379:6379"
 
-  api:
-    image: ghcr.io/flowing8175/quiz-manager-backend:latest
+  backend:
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    ports:
-      - "127.0.0.1:8001:8000"
-    env_file: .env
+    restart: always
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=postgresql+asyncpg://quiz:quiz@db:5432/quizmanager
+      - DATABASE_URL_SYNC=postgresql://quiz:quiz@db:5432/quizmanager
+      - REDIS_URL=redis://redis:6379/0
+      # Add other required env vars here or via .env file
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
+      - db
+      - redis
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/storage:/app/storage
 
   worker:
-    image: ghcr.io/flowing8175/quiz-manager-backend:latest
     build:
       context: ./backend
-      dockerfile: Dockerfile
-    command: celery -A app.workers.celery_app worker --loglevel=info --concurrency=2
-    env_file: .env
+    restart: always
+    command: celery -A app.workers.celery_app worker --loglevel=info
+    environment:
+      - APP_ENV=development
+      - DATABASE_URL=postgresql+asyncpg://quiz:quiz@db:5432/quizmanager
+      - DATABASE_URL_SYNC=postgresql://quiz:quiz@db:5432/quizmanager
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
-    deploy:
-      resources:
-        limits:
-          memory: 1G
+      - db
+      - redis
+      - backend
+    volumes:
+      - ./backend/storage:/app/storage
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: always
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
 
 volumes:
-  pgdata:
+  postgres_data:

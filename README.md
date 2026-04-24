@@ -43,17 +43,16 @@ cp .env.example .env
 
 # 3. .env 파일에서 필수 값 수정
 # - OPENAI_API_KEY 또는 GEMINI_API_KEY 중 하나 이상 설정
-# - POSTGRES_PASSWORD, REDIS_PASSWORD 설정 필수
 # - 기타 필요한 환경 변수 값 확인 후 수정
 
 # 4. Docker Compose로 실행
-docker-compose up --build
+docker compose up --build -d
 
 # 5. 서비스 접속
-# Frontend: http://localhost:5173
-# API: http://localhost:8001
-# API Docs (Swagger): http://localhost:8001/docs
-# API Docs (ReDoc): http://localhost:8001/redoc
+# Frontend: http://localhost:3000
+# API: http://localhost:8000
+# API Docs (Swagger): http://localhost:8000/docs
+# API Docs (ReDoc): http://localhost:8000/redoc
 ```
 
 ## Local Development Setup
