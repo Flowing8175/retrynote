@@ -80,27 +80,50 @@ async def _collect_ai_response(
     *,
     max_output_tokens: int = 8192,
 ) -> tuple[str, int]:
-    from google.genai import types as genai_types
-
-    gemini = get_gemini_client()
-    config = genai_types.GenerateContentConfig(
-        temperature=0.3,
-        max_output_tokens=max_output_tokens,
-    )
-    stream = await gemini.aio.models.generate_content_stream(
-        model=STUDY_MODEL,
-        contents=prompt,
-        config=config,
-    )
-
     chunks: list[str] = []
     total_tokens = 0
-    async for chunk in stream:
-        if chunk.text:
-            chunks.append(chunk.text)
-        usage = getattr(chunk, "usage_metadata", None)
-        if usage:
-            total_tokens = getattr(usage, "total_token_count", 0) or 0
+
+    if STUDY_MODEL.startswith("gemini-"):
+        from google.genai import types as genai_types
+
+        gemini = get_gemini_client()
+        config = genai_types.GenerateContentConfig(
+            temperature=0.3,
+            max_output_tokens=max_output_tokens,
+        )
+        stream = await gemini.aio.models.generate_content_stream(
+            model=STUDY_MODEL,
+            contents=prompt,
+            config=config,
+        )
+        async for chunk in stream:
+            if chunk.text:
+                chunks.append(chunk.text)
+            usage = getattr(chunk, "usage_metadata", None)
+            if usage:
+                total_tokens = getattr(usage, "total_token_count", 0) or 0
+    else:
+        from typing import Any
+        from app.utils.ai_client import client as openai_client
+
+        token_limit_key = (
+            "max_completion_tokens" if STUDY_MODEL.startswith("gpt-5") else "max_tokens"
+        )
+        openai_kwargs: dict[str, Any] = {
+            "model": STUDY_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.3,
+            token_limit_key: max_output_tokens,
+            "stream": True,
+            "stream_options": {"include_usage": True},
+        }
+        stream = await openai_client.chat.completions.create(**openai_kwargs)  # type: ignore[call-overload]
+        async for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta and delta.content:
+                chunks.append(delta.content)
+            if chunk.usage:
+                total_tokens = chunk.usage.total_tokens or 0
 
     return "".join(chunks).strip(), total_tokens
 
