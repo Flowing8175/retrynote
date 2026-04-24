@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, type ReactNode } from 'react';
-import { AlertCircle, RefreshCw, Sparkles, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AlertCircle, RefreshCw, Sparkles, X, Send } from 'lucide-react';
 import { useMindmapNodeExplanation } from '@/api/study';
 
 export interface KeywordPopupAnchor {
@@ -68,6 +68,13 @@ export default function KeywordPopup({ fileId, node, anchor, onClose }: KeywordP
     () => (anchor ? computePopupPosition(anchor) : null),
     [anchor],
   );
+
+  const [question, setQuestion] = useState('');
+
+  const onQuestionSubmit = () => {
+    console.log('Question:', question);
+    setQuestion('');
+  };
 
   const {
     data,
@@ -187,9 +194,38 @@ export default function KeywordPopup({ fileId, node, anchor, onClose }: KeywordP
         )}
 
         {data && !isError && (
-          <p className="text-sm leading-relaxed text-content-secondary animate-fade-in">
-            {renderInlineBold(data.explanation)}
-          </p>
+          <>
+            <p className="text-sm leading-relaxed text-content-secondary animate-fade-in">
+              {renderInlineBold(data.explanation)}
+            </p>
+
+            <div className="mt-3 border-t border-white/[0.05] pt-3">
+              <textarea
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && question.trim()) {
+                    e.preventDefault();
+                    onQuestionSubmit();
+                  }
+                }}
+                placeholder="추가 질문하기..."
+                rows={2}
+                className="w-full resize-none rounded-xl border border-white/[0.07] bg-surface-raised px-3 py-2 text-sm text-content-primary placeholder:text-content-muted focus:border-brand-400/50 focus:outline-none focus:ring-1 focus:ring-brand-400/20 transition-colors"
+              />
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={onQuestionSubmit}
+                  disabled={!question.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-surface-raised px-3 py-1.5 text-xs font-medium text-content-secondary transition-colors hover:border-brand-400/30 hover:text-brand-400 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Send size={11} />
+                  질문
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
