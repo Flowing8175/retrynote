@@ -60,7 +60,7 @@ TIER_LIMITS: dict[UserTier, TierLimits] = {
 MODEL_CREDIT_RATES: dict[str, float] = {
     MODEL_ECO: 0.10,  # gpt-5.4-nano — cheapest
     MODEL_BALANCED: 0.35,  # gpt-5.4-mini — mid-range
-    MODEL_PERFORMANCE: 0.15,  # gemini-3-flash — efficient
+    MODEL_PERFORMANCE: 0.65,  # gemini-3.1-pro-preview — high quality
     MODEL_MAX: 0.80,  # claude-sonnet-4-6 — top-tier reasoning
 }
 
@@ -69,7 +69,7 @@ MODEL_CREDIT_RATES: dict[str, float] = {
 TIER_ESTIMATES: dict[str, float] = {
     MODEL_ECO: 1.0,
     MODEL_BALANCED: 3.5,
-    MODEL_PERFORMANCE: 1.5,
+    MODEL_PERFORMANCE: 6.5,
     MODEL_MAX: 8.0,
 }
 
