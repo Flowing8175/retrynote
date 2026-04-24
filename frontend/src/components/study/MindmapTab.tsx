@@ -193,8 +193,10 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
   >(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const flowInstanceRef = useRef<MindmapFlowInstance | null>(null);
+  const lastToggledRef = useRef<string | null>(null);
 
   const handleToggle = useCallback((id: string) => {
+    lastToggledRef.current = id;
     setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
@@ -218,14 +220,6 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
     setCollapsed(new Set());
   }, [fileId, mindmap?.generated_at]);
 
-  useEffect(() => {
-    if (!flowInstanceRef.current) return;
-    const timer = setTimeout(() => {
-      flowInstanceRef.current?.fitView({ padding: 0.25, duration: 500 });
-    }, 80);
-    return () => clearTimeout(timer);
-  }, [collapsed]);
-
   const rawData = mindmap?.data;
   const hasData = rawData && Array.isArray(rawData.nodes) && rawData.nodes.length > 0;
 
@@ -236,6 +230,20 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
         : null,
     [hasData, rawData, collapsed, handleToggle],
   );
+
+  useEffect(() => {
+    const toggledId = lastToggledRef.current;
+    if (!toggledId || !flowInstanceRef.current || !layout) return;
+    lastToggledRef.current = null;
+    const toggledNode = layout.nodes.find((n) => n.id === toggledId);
+    if (!toggledNode) return;
+    const { x, y } = toggledNode.position;
+    const instance = flowInstanceRef.current;
+    const timer = setTimeout(() => {
+      instance.setCenter(x, y, { duration: 500, zoom: instance.getZoom() });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [collapsed, layout]);
 
   const handleNodeClick = useCallback<NodeMouseHandler>((event, node) => {
     const target = event.target as HTMLElement | null;
