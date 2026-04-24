@@ -863,10 +863,15 @@ async def _stream_openai_structured_with_reasoning(
     prompt_tokens = 0
     completion_tokens = 0
     cached_tokens = 0
+    summary_parts_seen = 0
 
     async for event in stream:
         et = getattr(event, "type", None)
-        if et in (
+        if et == "response.reasoning_summary_part.added":
+            if summary_parts_seen > 0:
+                yield {"type": "thinking", "text": "\n\n"}
+            summary_parts_seen += 1
+        elif et in (
             "response.reasoning_summary_text.delta",
             "response.reasoning_text.delta",
         ):
