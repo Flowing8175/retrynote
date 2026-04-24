@@ -18,7 +18,11 @@ Helpers:
   build_study_prompt(document_text, item_type, difficulty, count, language) -> rendered prompt
 """
 
-STUDY_ITEMS_MODEL = "gemini-3.1-flash-lite-preview"
+from app.prompts.study import STUDY_MODEL as _STUDY_MODEL
+
+# Single source of truth: mirror STUDY_MODEL from study.py so both modules
+# always stay in sync. Avoid redefining the model string literal here.
+STUDY_ITEMS_MODEL = _STUDY_MODEL
 
 
 _SHARED_BASE = """[역할]
