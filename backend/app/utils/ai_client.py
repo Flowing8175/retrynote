@@ -188,10 +188,10 @@ _OPTIONS_PROPERTIES = {
 }
 
 _OPTION_DESCRIPTIONS_PROPERTIES = {
-    "a": {"type": "string"},
-    "b": {"type": "string"},
-    "c": {"type": "string"},
-    "d": {"type": "string"},
+    "a": {"type": ["string", "null"]},
+    "b": {"type": ["string", "null"]},
+    "c": {"type": ["string", "null"]},
+    "d": {"type": ["string", "null"]},
 }
 
 _CORRECT_ANSWER_PROPERTIES = {
