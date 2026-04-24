@@ -2,7 +2,7 @@ import { normalizeOxValue } from '@/utils/quizConstants';
 
 interface QuizChoiceOptionsProps {
   options: Record<string, string>;
-  optionDescriptions?: Record<string, string> | null;
+  optionDescriptions?: Record<string, string | null> | null;
   selectedAnswer: string;
   correctAnswer?: string | null;
   judgement?: string | null;

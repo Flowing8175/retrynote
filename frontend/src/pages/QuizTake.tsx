@@ -675,7 +675,7 @@ export default function QuizTake() {
   const choiceOptions = isChoiceQuestion
     ? (hasOptions ? rawOptions : (currentQuestionType === 'ox' ? DEFAULT_OX_OPTIONS : null))
     : null;
-  const optionDescriptions = currentItem?.option_descriptions as Record<string, string> | null;
+  const optionDescriptions = currentItem?.option_descriptions as Record<string, string | null> | null;
 
   const handleAnswerGrade = (itemId: string, answer: string, localResult: LocalGradeResult) => {
     const syntheticResult = buildSyntheticResult(localResult, answer);
@@ -1029,7 +1029,7 @@ export default function QuizTake() {
               <span className="text-xs font-medium text-brand-300 bg-brand-500/10 px-2.5 py-1 rounded-md border border-brand-500/20">
                 {currentQuestionType ? (QUESTION_TYPE_LABELS[currentQuestionType] ?? currentQuestionType.replace('_', ' ')) : '문항'}
               </span>
-              {currentQuestionType !== 'short_answer' && (
+              {currentQuestionType !== 'short_answer' && currentQuestionType !== 'fill_blank' && (
                 <span className="text-xs font-medium text-content-muted">
                   {currentItem.concept_label || '개념'}
                 </span>
