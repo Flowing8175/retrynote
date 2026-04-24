@@ -9,7 +9,7 @@ This module provides prompts for:
 """
 
 # Model constant — ALL study features MUST use this exact model
-STUDY_MODEL = "gemini-3.1-flash-lite-preview"
+STUDY_MODEL = "gpt-5.4-nano"
 
 SUMMARY_PROMPT = """너는 학습 자료를 정리하는 AI다.
 
