@@ -49,6 +49,7 @@ export interface QuizSessionDetail {
   items_count: number;
   created_at: string;
   error_message?: string | null;
+  is_first_quiz_today?: boolean;
 }
 
 export interface QuizSessionHistoryItem {

@@ -86,6 +86,7 @@ class QuizSessionDetail(BaseModel):
     items_count: int = 0
     created_at: datetime
     error_message: str | None = None
+    is_first_quiz_today: bool = False
 
 
 class QuizSessionHistoryItem(BaseModel):

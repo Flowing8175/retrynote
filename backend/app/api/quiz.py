@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select, func
+from sqlalchemy import select, func, cast, Date
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
@@ -402,6 +402,26 @@ async def get_quiz_session(
     )
     job = job_result.scalar_one_or_none()
 
+    is_first_quiz_today = False
+    if user.id and session.graded_at:
+        graded_statuses = [
+            QuizSessionStatus.graded,
+            QuizSessionStatus.regraded,
+            QuizSessionStatus.closed,
+            QuizSessionStatus.objection_pending,
+        ]
+        other_graded_today = await db.execute(
+            select(func.count())
+            .select_from(QuizSession)
+            .where(
+                QuizSession.user_id == user.id,
+                QuizSession.id != session_id,
+                QuizSession.status.in_(graded_statuses),
+                cast(QuizSession.graded_at, Date) == cast(func.now(), Date),
+            )
+        )
+        is_first_quiz_today = (other_graded_today.scalar() or 0) == 0
+
     return QuizSessionDetail(
         id=session.id,
         mode=session.mode.value,
@@ -418,6 +438,7 @@ async def get_quiz_session(
         items_count=items_count.scalar() or 0,
         created_at=session.created_at,
         error_message=job.error_message if job else None,
+        is_first_quiz_today=is_first_quiz_today,
     )
 
 
