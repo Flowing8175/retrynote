@@ -28,7 +28,7 @@ import {
 const COMPLETED_STATUSES = new Set(['submitted', 'grading', 'graded', 'regraded', 'closed']);
 
 const QUIZ_REFRESH_INTERVAL_MS = 2000;
-const GENERATING_TIMEOUT_MS = 180_000;
+const GENERATING_TIMEOUT_MS = 300_000;
 
 const STAGE_LABELS: Record<string, string> = {
   analyzing: '학습 자료를 분석하고 있습니다...',
