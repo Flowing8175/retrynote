@@ -504,7 +504,7 @@ async def _call_gemini_structured(
             kwargs["system_instruction"] = system_message
         return types.GenerateContentConfig(**kwargs)
 
-    _GEMINI_REQUEST_TIMEOUT = 120
+    _GEMINI_REQUEST_TIMEOUT = 180
 
     try:
         response = await asyncio.wait_for(
@@ -580,7 +580,7 @@ async def _call_claude_structured(
         ],
         tool_choice={"type": "tool", "name": tool_name},
         temperature=temperature,
-        timeout=60,
+        timeout=180,
     )
 
     result: dict[str, Any] | None = None
@@ -670,7 +670,7 @@ async def call_ai_structured(
     else:
         completion_kwargs["max_tokens"] = max_tokens
 
-    response = await client.chat.completions.create(**completion_kwargs, timeout=60)
+    response = await client.chat.completions.create(**completion_kwargs, timeout=180)
     content = response.choices[0].message.content
     if content is None:
         raise ValueError("AI returned empty response")
