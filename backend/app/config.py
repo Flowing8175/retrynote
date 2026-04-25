@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "noreply@example.com"
 
-    generation_timeout: int = 120
+    generation_timeout: int = 300
     grading_timeout: int = 60
     objection_review_timeout: int = 90
     file_processing_timeout: int = 300
