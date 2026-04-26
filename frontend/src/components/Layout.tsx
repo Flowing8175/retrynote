@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutDashboard, FolderOpen, CircleHelp, History, TriangleAlert, RefreshCw, Search, Menu, X, CreditCard, BookOpen } from 'lucide-react';
 import AnnouncementBanner from './AnnouncementBanner';
+import StorageWarningBanner from './StorageWarningBanner';
 import Navbar from './Navbar';
 import UsageBar from './UsageBar';
 import { TourProvider } from '@/components/OnboardingTour';
@@ -128,6 +129,7 @@ export default function Layout({ children, showSidebar = true }: LayoutProps) {
             </div>
           )}
           <AnnouncementBanner />
+          <StorageWarningBanner />
           <div className="animate-fade-in stagger-1">
             {children}
           </div>

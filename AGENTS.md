@@ -149,10 +149,10 @@ Use the Doppler SSH pattern (see "Running Commands on Server with Doppler" above
 
 ### Storage quota bytes by tier
 ```
-free     →  157_286_400   (150 MB)
-lite     →  3_221_225_472  (3 GB)
-standard → 16_106_127_360  (15 GB)
-pro      → 53_687_091_200  (50 GB)
+free     →   52_428_800    (50 MB)
+lite     →  2_147_483_648  (2 GB)
+standard → 10_737_418_240  (10 GB)
+pro      → 21_474_836_480  (20 GB)
 ```
 
 ### Operations

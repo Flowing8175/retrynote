@@ -37,6 +37,9 @@ class Subscription(CommonMixin, Base):
     current_period_end: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    canceled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     reset_tz: Mapped[str] = mapped_column(String(50), default="Asia/Seoul")
 
 

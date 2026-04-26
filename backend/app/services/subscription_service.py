@@ -94,6 +94,7 @@ class SubscriptionService:
         sub.status = "active"
         sub.current_period_end = current_period_end
         sub.reset_tz = reset_tz
+        sub.canceled_at = None
 
         user_result = await db.execute(select(User).where(User.id == user_id))
         user = user_result.scalar_one_or_none()
@@ -114,6 +115,7 @@ class SubscriptionService:
         sub = result.scalar_one_or_none()
         if sub:
             sub.status = "canceled"
+            sub.canceled_at = datetime.now(timezone.utc)
 
         user_result = await db.execute(select(User).where(User.id == user_id))
         user = user_result.scalar_one_or_none()

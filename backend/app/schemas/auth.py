@@ -41,6 +41,7 @@ class UserProfile(BaseModel):
     storage_quota_bytes: int
     max_upload_mb: int
     last_login_at: datetime | None = None
+    storage_deletion_deadline: datetime | None = None
 
 
 class PasswordResetRequest(BaseModel):

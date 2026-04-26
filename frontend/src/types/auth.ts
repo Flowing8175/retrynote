@@ -36,6 +36,7 @@ export interface UserProfile {
   max_upload_mb: number;
   last_login_at: string | null;
   created_at?: string;
+  storage_deletion_deadline: string | null;
 }
 
 export interface PasswordResetRequest {

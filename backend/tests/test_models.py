@@ -60,7 +60,7 @@ class TestUserModel:
         await db_session.commit()
         await db_session.refresh(user)
         assert user.storage_used_bytes == 0
-        assert user.storage_quota_bytes == 104857600
+        assert user.storage_quota_bytes == 52428800
 
     async def test_user_enum_values(self, db_session):
         """All UserRole values (user, admin, super_admin) work"""

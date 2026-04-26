@@ -127,6 +127,74 @@ def cleanup_guest_data_task():
     _run_async_task(_run())
 
 
+@celery_app.task(name="cleanup_canceled_storage")
+def cleanup_canceled_storage_task():
+    async def _run():
+        from datetime import datetime, timezone, timedelta
+        from sqlalchemy import select
+        from app.database import async_session
+        from app.models.billing import Subscription
+        from app.models.user import User
+        from app.models.file import File, FileStatus
+        from app.services import storage as _storage
+        from app.tier_config import STORAGE_CLEANUP_GRACE_DAYS
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=STORAGE_CLEANUP_GRACE_DAYS)
+
+        async with async_session() as db:
+            subs = (
+                await db.execute(
+                    select(Subscription).where(
+                        Subscription.status == "canceled",
+                        Subscription.canceled_at.isnot(None),
+                        Subscription.canceled_at < cutoff,
+                    )
+                )
+            ).scalars().all()
+
+            for sub in subs:
+                user = (
+                    await db.execute(select(User).where(User.id == sub.user_id))
+                ).scalar_one_or_none()
+                if not user or user.storage_used_bytes <= user.storage_quota_bytes:
+                    continue
+
+                files = (
+                    await db.execute(
+                        select(File)
+                        .where(
+                            File.user_id == user.id,
+                            File.status != FileStatus.deleted,
+                            File.deleted_at.is_(None),
+                        )
+                        .order_by(File.created_at.asc())
+                    )
+                ).scalars().all()
+
+                for file in files:
+                    if user.storage_used_bytes <= user.storage_quota_bytes:
+                        break
+                    if file.stored_path:
+                        await _storage.delete_file(file.stored_path)
+                    user.storage_used_bytes = max(
+                        0, user.storage_used_bytes - (file.file_size_bytes or 0)
+                    )
+                    file.status = FileStatus.deleted
+                    file.deleted_at = datetime.now(timezone.utc)
+                    file.is_searchable = False
+                    file.is_quiz_eligible = False
+
+                await db.commit()
+                logger.info(
+                    "Cleaned storage for user %s: now %d / %d bytes",
+                    user.id,
+                    user.storage_used_bytes,
+                    user.storage_quota_bytes,
+                )
+
+    _run_async_task(_run())
+
+
 from celery.schedules import crontab
 from app.workers import study_tasks as _study_tasks  # noqa: F401
 
@@ -134,6 +202,10 @@ celery_app.conf.beat_schedule = {
     **getattr(celery_app.conf, "beat_schedule", {}),
     "guest-cleanup": {
         "task": "cleanup_guest_data",
-        "schedule": crontab(minute=0),  # every hour
+        "schedule": crontab(minute=0),
+    },
+    "canceled-storage-cleanup": {
+        "task": "cleanup_canceled_storage",
+        "schedule": crontab(hour=3, minute=0),
     },
 }

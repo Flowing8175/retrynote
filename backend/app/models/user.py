@@ -32,8 +32,8 @@ class User(CommonMixin, Base):
     )
     storage_used_bytes: Mapped[int] = mapped_column(BigInteger, default=0)
     storage_quota_bytes: Mapped[int] = mapped_column(
-        BigInteger, default=104857600
-    )  # 100MB (Free tier default)
+        BigInteger, default=52428800
+    )  # 50MB (Free tier default)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     last_login_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

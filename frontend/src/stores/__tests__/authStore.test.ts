@@ -10,6 +10,7 @@ const makeUser = (overrides: Partial<UserProfile> = {}): UserProfile => ({
   storage_used_bytes: 0,
   storage_quota_bytes: 1_000_000,
   last_login_at: null,
+  storage_deletion_deadline: null,
   ...overrides,
 });
 

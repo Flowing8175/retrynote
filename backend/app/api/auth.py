@@ -13,7 +13,8 @@ from pydantic import BaseModel, Field
 from app.config import settings
 from app.database import get_db
 from app.models.user import User
-from app.tier_config import TIER_LIMITS, UserTier
+from app.tier_config import TIER_LIMITS, STORAGE_CLEANUP_GRACE_DAYS, UserTier
+from app.models.billing import Subscription
 from app.models.search import PasswordResetToken, RefreshToken, EmailVerificationToken
 from app.models.quiz import (
     QuizSession,
@@ -51,6 +52,24 @@ from app.utils.turnstile import verify_turnstile_token
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+async def _storage_deletion_deadline(
+    db: AsyncSession, user: User
+) -> datetime | None:
+    if user.storage_used_bytes <= user.storage_quota_bytes:
+        return None
+    result = await db.execute(
+        select(Subscription).where(
+            Subscription.user_id == user.id,
+            Subscription.status == "canceled",
+            Subscription.canceled_at.isnot(None),
+        )
+    )
+    sub = result.scalar_one_or_none()
+    if not sub or not sub.canceled_at:
+        return None
+    return sub.canceled_at + timedelta(days=STORAGE_CLEANUP_GRACE_DAYS)
 
 
 async def _flush_or_conflict(db: AsyncSession, detail: str) -> None:
@@ -316,6 +335,7 @@ async def login(
         )
 
     user.last_login_at = datetime.now(timezone.utc)
+    deadline = await _storage_deletion_deadline(db, user)
 
     profile = UserProfile(
         id=user.id,
@@ -329,6 +349,7 @@ async def login(
         storage_quota_bytes=user.storage_quota_bytes,
         max_upload_mb=TIER_LIMITS[UserTier(user.tier)].max_upload_mb,
         last_login_at=user.last_login_at,
+        storage_deletion_deadline=deadline,
     )
 
     jti = str(uuid.uuid4())
@@ -576,7 +597,11 @@ async def logout(req: RefreshTokenRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me", response_model=UserProfile)
-async def get_me(user: User = Depends(get_current_user)):
+async def get_me(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    deadline = await _storage_deletion_deadline(db, user)
     return UserProfile(
         id=user.id,
         username=user.username,
@@ -589,6 +614,7 @@ async def get_me(user: User = Depends(get_current_user)):
         storage_quota_bytes=user.storage_quota_bytes,
         max_upload_mb=TIER_LIMITS[UserTier(user.tier)].max_upload_mb,
         last_login_at=user.last_login_at,
+        storage_deletion_deadline=deadline,
     )
 
 
