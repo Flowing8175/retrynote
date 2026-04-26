@@ -2,10 +2,11 @@ import { lazy, Suspense, useMemo, useEffect, useState, useCallback, useRef } fro
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2, AlertCircle, Network, RefreshCw } from 'lucide-react';
 import type { NodeMouseHandler } from '@xyflow/react';
-import { useStudyStatus, useStudyMindmap, useGenerateContent } from '@/api/study';
+import { useStudyStatus, useStudyMindmap, useGenerateContent, useContentVersions, useMindmapVersion } from '@/api/study';
 import type { StudyMindmapNode, StudyMindmapEdge } from '@/types/study';
 import type { MindmapFlowNode, MindmapFlowEdge, MindmapFlowInstance } from './MindmapFlow';
 import KeywordPopup, { type KeywordPopupNode, type KeywordPopupAnchor } from './KeywordPopup';
+import { VersionNavigator } from './VersionNavigator';
 
 const MindmapFlow = lazy(() => import('./MindmapFlow'));
 
@@ -188,6 +189,17 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
   });
   const { mutate: generate, isPending: isGenerating } = useGenerateContent(fileId);
 
+  const { data: versionsData } = useContentVersions(fileId, 'mindmap', {
+    enabled: mindmapStatus === 'completed',
+  });
+  const versions = versionsData?.versions ?? [];
+  const [versionIndex, setVersionIndex] = useState<number | null>(null);
+
+  const isViewingOldVersion = versionIndex !== null && versions.length > 0 && versionIndex < versions.length - 1;
+  const selectedVersionId = isViewingOldVersion ? versions[versionIndex]?.id ?? null : null;
+
+  const { data: oldVersionData } = useMindmapVersion(fileId, selectedVersionId);
+
   const [selected, setSelected] = useState<
     { node: KeywordPopupNode; anchor: KeywordPopupAnchor } | null
   >(null);
@@ -212,15 +224,27 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
   useEffect(() => {
     if (mindmapStatus === 'completed') {
       void queryClient.invalidateQueries({ queryKey: ['study', 'mindmap', fileId] });
+      void queryClient.invalidateQueries({ queryKey: ['study', 'versions', fileId, 'mindmap'] });
     }
   }, [mindmapStatus, fileId, queryClient]);
+
+  useEffect(() => {
+    setVersionIndex(null);
+  }, [fileId]);
+
+  useEffect(() => {
+    if (versions.length > 0 && versionIndex === null) {
+      setVersionIndex(versions.length - 1);
+    }
+  }, [versions.length, versionIndex]);
 
   useEffect(() => {
     setSelected(null);
     setCollapsed(new Set());
   }, [fileId, mindmap?.generated_at]);
 
-  const rawData = mindmap?.data;
+  const displayMindmap = isViewingOldVersion ? oldVersionData : mindmap;
+  const rawData = displayMindmap?.data;
   const hasData = rawData && Array.isArray(rawData.nodes) && rawData.nodes.length > 0;
 
   const layout = useMemo(
@@ -342,15 +366,32 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
           onInit={handleInit}
         />
       </Suspense>
-      <button
-        onClick={() => generate('mindmap')}
-        disabled={isGenerating}
-        className="absolute bottom-4 right-4 z-10 flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface-raised disabled:opacity-50 text-content-secondary text-xs rounded-xl border border-white/[0.05] transition-colors"
-        title="마인드맵 재생성"
-      >
-        {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-        재생성
-      </button>
+      <div className="absolute bottom-4 right-4 z-10 flex items-center gap-2">
+        <VersionNavigator
+          current={(versionIndex ?? versions.length - 1) + 1}
+          total={versions.length}
+          onPrev={() => {
+            setVersionIndex((i) => Math.max(0, (i ?? versions.length - 1) - 1));
+            setCollapsed(new Set());
+          }}
+          onNext={() => {
+            setVersionIndex((i) => Math.min(versions.length - 1, (i ?? versions.length - 1) + 1));
+            setCollapsed(new Set());
+          }}
+        />
+        <button
+          onClick={() => {
+            generate('mindmap');
+            setVersionIndex(null);
+          }}
+          disabled={isGenerating}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface-raised disabled:opacity-50 text-content-secondary text-xs rounded-xl border border-white/[0.05] transition-colors"
+          title="마인드맵 재생성"
+        >
+          {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+          재생성
+        </button>
+      </div>
       <KeywordPopup
         fileId={fileId}
         node={selected?.node ?? null}

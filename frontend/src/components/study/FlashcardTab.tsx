@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, RotateCw, Layers, AlertCircle, Clock } from 'lucide-react';
-import { useStudyStatus, useStudyFlashcards, useGenerateContent } from '@/api/study';
+import { useStudyStatus, useStudyFlashcards, useGenerateContent, useContentVersions, useFlashcardsVersion } from '@/api/study';
+import { VersionNavigator } from './VersionNavigator';
 
 interface FlashcardTabProps {
   fileId: string;
@@ -17,16 +18,39 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
   });
   const generateMutation = useGenerateContent(fileId);
 
+  const { data: versionsData } = useContentVersions(fileId, 'flashcards', {
+    enabled: flashcardsStatus === 'completed',
+  });
+  const versions = versionsData?.versions ?? [];
+  const [versionIndex, setVersionIndex] = useState<number | null>(null);
+
+  const isViewingOldVersion = versionIndex !== null && versions.length > 0 && versionIndex < versions.length - 1;
+  const selectedVersionId = isViewingOldVersion ? versions[versionIndex]?.id ?? null : null;
+
+  const { data: oldVersionData } = useFlashcardsVersion(fileId, selectedVersionId);
+
+  useEffect(() => {
+    setVersionIndex(null);
+  }, [fileId]);
+
+  useEffect(() => {
+    if (versions.length > 0 && versionIndex === null) {
+      setVersionIndex(versions.length - 1);
+    }
+  }, [versions.length, versionIndex]);
+
   useEffect(() => {
     if (flashcardsStatus === 'completed') {
       void queryClient.invalidateQueries({ queryKey: ['study', 'flashcards', fileId] });
+      void queryClient.invalidateQueries({ queryKey: ['study', 'versions', fileId, 'flashcards'] });
     }
   }, [flashcardsStatus, fileId, queryClient]);
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
 
-  const cards = data?.cards ?? [];
+  const displayData = isViewingOldVersion ? oldVersionData : data;
+  const cards = displayData?.cards ?? [];
   const status = flashcardsStatus;
   const total = cards.length;
   const currentCard = cards[currentIndex];
@@ -78,9 +102,12 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [goToPrev, goToNext, flipCard]);
 
-  const handleGenerate = () => {
+  const handleGenerate = useCallback(() => {
     generateMutation.mutate('flashcards');
-  };
+    setVersionIndex(null);
+    setCurrentIndex(0);
+    setIsFlipped(false);
+  }, [generateMutation]);
 
   if (status === 'generating' || (status === 'completed' && isLoading)) {
     return (
@@ -248,34 +275,50 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
         </button>
       </div>
 
-      <div className="flex items-center gap-4">
-        <button
-          onClick={goToPrev}
-          disabled={currentIndex === 0}
-          aria-label="이전 카드"
-          className="flex items-center justify-center w-11 h-11 rounded-full bg-surface-raised hover:bg-surface-hover disabled:bg-surface disabled:text-content-muted text-content-secondary transition-colors disabled:cursor-not-allowed border border-white/[0.05]"
-        >
-          <ChevronLeft className="w-5 h-5" />
-        </button>
+      <div className="flex flex-col items-center gap-2">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={goToPrev}
+            disabled={currentIndex === 0}
+            aria-label="이전 카드"
+            className="flex items-center justify-center w-11 h-11 rounded-full bg-surface-raised hover:bg-surface-hover disabled:bg-surface disabled:text-content-muted text-content-secondary transition-colors disabled:cursor-not-allowed border border-white/[0.05]"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
 
-        <button
-          onClick={handleGenerate}
-          disabled={generateMutation.isPending}
-          aria-label="다시 생성"
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-raised hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed text-content-muted hover:text-content-primary text-xs transition-colors border border-white/[0.05]"
-        >
-          <RotateCw className={`w-3.5 h-3.5 ${generateMutation.isPending ? 'animate-spin' : ''}`} />
-          재생성
-        </button>
+          <button
+            onClick={handleGenerate}
+            disabled={generateMutation.isPending}
+            aria-label="다시 생성"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-raised hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed text-content-muted hover:text-content-primary text-xs transition-colors border border-white/[0.05]"
+          >
+            <RotateCw className={`w-3.5 h-3.5 ${generateMutation.isPending ? 'animate-spin' : ''}`} />
+            재생성
+          </button>
 
-        <button
-          onClick={goToNext}
-          disabled={currentIndex === total - 1}
-          aria-label="다음 카드"
-          className="flex items-center justify-center w-11 h-11 rounded-full bg-surface-raised hover:bg-surface-hover disabled:bg-surface disabled:text-content-muted text-content-secondary transition-colors disabled:cursor-not-allowed border border-white/[0.05]"
-        >
-          <ChevronRight className="w-5 h-5" />
-        </button>
+          <button
+            onClick={goToNext}
+            disabled={currentIndex === total - 1}
+            aria-label="다음 카드"
+            className="flex items-center justify-center w-11 h-11 rounded-full bg-surface-raised hover:bg-surface-hover disabled:bg-surface disabled:text-content-muted text-content-secondary transition-colors disabled:cursor-not-allowed border border-white/[0.05]"
+          >
+            <ChevronRight className="w-5 h-5" />
+          </button>
+        </div>
+        <VersionNavigator
+          current={(versionIndex ?? versions.length - 1) + 1}
+          total={versions.length}
+          onPrev={() => {
+            setVersionIndex((i) => Math.max(0, (i ?? versions.length - 1) - 1));
+            setCurrentIndex(0);
+            setIsFlipped(false);
+          }}
+          onNext={() => {
+            setVersionIndex((i) => Math.min(versions.length - 1, (i ?? versions.length - 1) + 1));
+            setCurrentIndex(0);
+            setIsFlipped(false);
+          }}
+        />
       </div>
 
       <p className="text-xs text-content-muted">

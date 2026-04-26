@@ -192,7 +192,10 @@ def _compute_tree_layout(nodes: list[dict], edges: list[dict]) -> list[dict]:
 
 async def _get_or_create_summary(db: AsyncSession, file_id: str) -> StudySummary:
     result = await db.execute(
-        select(StudySummary).where(StudySummary.file_id == file_id)
+        select(StudySummary).where(
+            StudySummary.file_id == file_id,
+            StudySummary.deleted_at.is_(None),
+        )
     )
     summary = result.scalar_one_or_none()
     if summary is not None:
@@ -205,7 +208,10 @@ async def _get_or_create_summary(db: AsyncSession, file_id: str) -> StudySummary
     except IntegrityError:
         await db.rollback()
         result = await db.execute(
-            select(StudySummary).where(StudySummary.file_id == file_id)
+            select(StudySummary).where(
+                StudySummary.file_id == file_id,
+                StudySummary.deleted_at.is_(None),
+            )
         )
         summary = result.scalar_one()
     return summary

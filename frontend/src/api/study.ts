@@ -10,6 +10,7 @@ import type {
   MindmapNodeExplanation,
   StudyHistoryResponse,
   StudyVisitResponse,
+  ContentVersionsResponse,
 } from '@/types/study';
 
 export const studyApi = {
@@ -65,6 +66,26 @@ export const studyApi = {
 
   getHistory: async (limit = 20): Promise<StudyHistoryResponse> => {
     const response = await apiClient.get<StudyHistoryResponse>(`/study/history`, { params: { limit } });
+    return response.data;
+  },
+
+  getContentVersions: async (fileId: string, type: StudyContentType): Promise<ContentVersionsResponse> => {
+    const response = await apiClient.get<ContentVersionsResponse>(`/study/${fileId}/${type}/versions`);
+    return response.data;
+  },
+
+  getSummaryVersion: async (fileId: string, versionId: string): Promise<StudySummary> => {
+    const response = await apiClient.get<StudySummary>(`/study/${fileId}/summary`, { params: { version_id: versionId } });
+    return response.data;
+  },
+
+  getFlashcardsVersion: async (fileId: string, versionId: string): Promise<StudyFlashcardSet> => {
+    const response = await apiClient.get<StudyFlashcardSet>(`/study/${fileId}/flashcards`, { params: { version_id: versionId } });
+    return response.data;
+  },
+
+  getMindmapVersion: async (fileId: string, versionId: string): Promise<StudyMindmap> => {
+    const response = await apiClient.get<StudyMindmap>(`/study/${fileId}/mindmap`, { params: { version_id: versionId } });
     return response.data;
   },
 };
@@ -175,5 +196,37 @@ export function useTrackStudyVisit() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['study', 'history'] });
     },
+  });
+}
+
+export function useContentVersions(fileId: string, type: StudyContentType, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['study', 'versions', fileId, type],
+    queryFn: () => studyApi.getContentVersions(fileId, type),
+    enabled: (options?.enabled !== false) && !!fileId,
+  });
+}
+
+export function useSummaryVersion(fileId: string, versionId: string | null) {
+  return useQuery({
+    queryKey: ['study', 'summary', fileId, 'version', versionId],
+    queryFn: () => studyApi.getSummaryVersion(fileId, versionId!),
+    enabled: !!fileId && !!versionId,
+  });
+}
+
+export function useFlashcardsVersion(fileId: string, versionId: string | null) {
+  return useQuery({
+    queryKey: ['study', 'flashcards', fileId, 'version', versionId],
+    queryFn: () => studyApi.getFlashcardsVersion(fileId, versionId!),
+    enabled: !!fileId && !!versionId,
+  });
+}
+
+export function useMindmapVersion(fileId: string, versionId: string | null) {
+  return useQuery({
+    queryKey: ['study', 'mindmap', fileId, 'version', versionId],
+    queryFn: () => studyApi.getMindmapVersion(fileId, versionId!),
+    enabled: !!fileId && !!versionId,
   });
 }

@@ -98,3 +98,15 @@ export interface StudyVisitResponse {
   last_visited_at: string;
   visit_count: number;
 }
+
+export interface ContentVersion {
+  id: string;
+  generated_at: string | null;
+  model_used: string | null;
+  is_current: boolean;
+}
+
+export interface ContentVersionsResponse {
+  versions: ContentVersion[];
+  total: number;
+}

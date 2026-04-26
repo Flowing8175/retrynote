@@ -122,6 +122,18 @@ class GenerateRequest(BaseModel):
     force_regenerate: bool = False
 
 
+class ContentVersionItem(BaseModel):
+    id: str
+    generated_at: datetime | None = None
+    model_used: str | None = None
+    is_current: bool = False
+
+
+class ContentVersionsResponse(BaseModel):
+    versions: list[ContentVersionItem]
+    total: int
+
+
 class StudyStatusResponse(BaseModel):
     file_id: str
     filename: str | None = None

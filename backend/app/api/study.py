@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
@@ -21,6 +22,8 @@ from app.models.study import (
 from app.models.user import User
 from app.schemas.billing import LimitExceededError
 from app.schemas.study import (
+    ContentVersionItem,
+    ContentVersionsResponse,
     GenerateRequest,
     MindmapNodeExplanationRequest,
     MindmapNodeExplanationResponse,
@@ -211,7 +214,10 @@ async def get_study_status(
     file = await _get_owned_file(file_id, db, user)
 
     summary_result = await db.execute(
-        select(StudySummary).where(StudySummary.file_id == file_id)
+        select(StudySummary).where(
+            StudySummary.file_id == file_id,
+            StudySummary.deleted_at.is_(None),
+        )
     )
     summary = summary_result.scalar_one_or_none()
 
@@ -258,14 +264,27 @@ async def get_study_status(
 @router.get("/{file_id}/summary", response_model=StudySummaryResponse)
 async def get_summary(
     file_id: str,
+    version_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     await _get_owned_file(file_id, db, user)
 
-    result = await db.execute(
-        select(StudySummary).where(StudySummary.file_id == file_id)
-    )
+    if version_id:
+        result = await db.execute(
+            select(StudySummary).where(
+                StudySummary.id == version_id,
+                StudySummary.file_id == file_id,
+                StudySummary.status == ContentStatus.completed,
+            )
+        )
+    else:
+        result = await db.execute(
+            select(StudySummary).where(
+                StudySummary.file_id == file_id,
+                StudySummary.deleted_at.is_(None),
+            )
+        )
     summary = result.scalar_one_or_none()
 
     if (
@@ -298,7 +317,10 @@ async def generate_summary_endpoint(
         )
 
     result = await db.execute(
-        select(StudySummary).where(StudySummary.file_id == file_id)
+        select(StudySummary).where(
+            StudySummary.file_id == file_id,
+            StudySummary.deleted_at.is_(None),
+        )
     )
     summary = result.scalar_one_or_none()
 
@@ -323,12 +345,12 @@ async def generate_summary_endpoint(
             ).model_dump(),
         )
 
-    if summary is None:
-        summary = StudySummary(file_id=file_id, status=ContentStatus.generating)
-        db.add(summary)
-    else:
-        summary.status = ContentStatus.generating
-        summary.content = None
+    if summary is not None:
+        summary.deleted_at = datetime.now(timezone.utc)
+        await db.flush()
+
+    new_summary = StudySummary(file_id=file_id, status=ContentStatus.generating)
+    db.add(new_summary)
     await db.commit()
 
     dispatch_task("generate_study_summary", [file_id, user.id, STUDY_CREDIT_ESTIMATE])
@@ -338,17 +360,27 @@ async def generate_summary_endpoint(
 @router.get("/{file_id}/flashcards", response_model=StudyFlashcardSetResponse)
 async def get_flashcards(
     file_id: str,
+    version_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     await _get_owned_file(file_id, db, user)
 
-    result = await db.execute(
-        select(StudyFlashcardSet).where(
-            StudyFlashcardSet.file_id == file_id,
-            StudyFlashcardSet.deleted_at.is_(None),
+    if version_id:
+        result = await db.execute(
+            select(StudyFlashcardSet).where(
+                StudyFlashcardSet.id == version_id,
+                StudyFlashcardSet.file_id == file_id,
+                StudyFlashcardSet.status == ContentStatus.completed,
+            )
         )
-    )
+    else:
+        result = await db.execute(
+            select(StudyFlashcardSet).where(
+                StudyFlashcardSet.file_id == file_id,
+                StudyFlashcardSet.deleted_at.is_(None),
+            )
+        )
     flashcard_set = result.scalar_one_or_none()
 
     if flashcard_set is None or flashcard_set.status != ContentStatus.completed:
@@ -422,18 +454,14 @@ async def generate_flashcards_endpoint(
             ).model_dump(),
         )
 
-    if req.force_regenerate and flashcard_set:
+    if flashcard_set is not None:
         flashcard_set.deleted_at = datetime.now(timezone.utc)
         await db.flush()
-        flashcard_set = None
 
-    if flashcard_set is None:
-        flashcard_set = StudyFlashcardSet(
-            file_id=file_id, status=ContentStatus.generating
-        )
-        db.add(flashcard_set)
-    else:
-        flashcard_set.status = ContentStatus.generating
+    new_set = StudyFlashcardSet(
+        file_id=file_id, status=ContentStatus.generating
+    )
+    db.add(new_set)
     await db.commit()
 
     dispatch_task(
@@ -445,17 +473,27 @@ async def generate_flashcards_endpoint(
 @router.get("/{file_id}/mindmap", response_model=StudyMindmapResponse)
 async def get_mindmap(
     file_id: str,
+    version_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     await _get_owned_file(file_id, db, user)
 
-    result = await db.execute(
-        select(StudyMindmap).where(
-            StudyMindmap.file_id == file_id,
-            StudyMindmap.deleted_at.is_(None),
+    if version_id:
+        result = await db.execute(
+            select(StudyMindmap).where(
+                StudyMindmap.id == version_id,
+                StudyMindmap.file_id == file_id,
+                StudyMindmap.status == ContentStatus.completed,
+            )
         )
-    )
+    else:
+        result = await db.execute(
+            select(StudyMindmap).where(
+                StudyMindmap.file_id == file_id,
+                StudyMindmap.deleted_at.is_(None),
+            )
+        )
     mindmap = result.scalar_one_or_none()
 
     if (
@@ -516,17 +554,12 @@ async def generate_mindmap_endpoint(
             ).model_dump(),
         )
 
-    if req.force_regenerate and mindmap:
+    if mindmap is not None:
         mindmap.deleted_at = datetime.now(timezone.utc)
         await db.flush()
-        mindmap = None
 
-    if mindmap is None:
-        mindmap = StudyMindmap(file_id=file_id, status=ContentStatus.generating)
-        db.add(mindmap)
-    else:
-        mindmap.status = ContentStatus.generating
-        mindmap.data = None
+    new_mindmap = StudyMindmap(file_id=file_id, status=ContentStatus.generating)
+    db.add(new_mindmap)
     await db.commit()
 
     dispatch_task("generate_study_mindmap", [file_id, user.id, STUDY_CREDIT_ESTIMATE])
@@ -602,6 +635,48 @@ async def get_mindmap_node_explanation(
         explanation=explanation,
         cached=from_cache,
     )
+
+
+@router.get(
+    "/{file_id}/{content_type}/versions",
+    response_model=ContentVersionsResponse,
+)
+async def get_content_versions(
+    file_id: str,
+    content_type: Literal["summary", "flashcards", "mindmap"],
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _get_owned_file(file_id, db, user)
+
+    model_map = {
+        "summary": StudySummary,
+        "flashcards": StudyFlashcardSet,
+        "mindmap": StudyMindmap,
+    }
+    model = model_map[content_type]
+
+    result = await db.execute(
+        select(model)
+        .where(
+            model.file_id == file_id,
+            model.status == ContentStatus.completed,
+        )
+        .order_by(model.created_at.asc())
+    )
+    records = result.scalars().all()
+
+    versions = [
+        ContentVersionItem(
+            id=r.id,
+            generated_at=r.generated_at,
+            model_used=r.model_used,
+            is_current=r.deleted_at is None,
+        )
+        for r in records
+    ]
+
+    return ContentVersionsResponse(versions=versions, total=len(versions))
 
 
 @router.get("/{file_id}/chat/history", response_model=StudyChatHistoryResponse)

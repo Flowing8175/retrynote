@@ -1,10 +1,11 @@
-import { useMemo, useEffect } from 'react';
+import { useMemo, useEffect, useState, useCallback } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { RefreshCw, FileText, AlertCircle, Sparkles } from 'lucide-react';
-import { useStudyStatus, useStudySummary, useGenerateContent } from '@/api/study';
+import { useStudyStatus, useStudySummary, useGenerateContent, useContentVersions, useSummaryVersion } from '@/api/study';
+import { VersionNavigator } from './VersionNavigator';
 
 interface SummaryTabProps {
   fileId: string;
@@ -49,16 +50,45 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
   });
   const { mutate: generateContent, isPending: isGenerating } = useGenerateContent(fileId);
 
+  const { data: versionsData } = useContentVersions(fileId, 'summary', {
+    enabled: summaryStatus === 'completed',
+  });
+  const versions = versionsData?.versions ?? [];
+  const [versionIndex, setVersionIndex] = useState<number | null>(null);
+
+  const isViewingOldVersion = versionIndex !== null && versions.length > 0 && versionIndex < versions.length - 1;
+  const selectedVersionId = isViewingOldVersion ? versions[versionIndex]?.id ?? null : null;
+
+  const { data: oldVersionData } = useSummaryVersion(fileId, selectedVersionId);
+
+  useEffect(() => {
+    setVersionIndex(null);
+  }, [fileId]);
+
+  useEffect(() => {
+    if (versions.length > 0 && versionIndex === null) {
+      setVersionIndex(versions.length - 1);
+    }
+  }, [versions.length, versionIndex]);
+
+  const handleRegenerate = useCallback(() => {
+    generateContent('summary');
+    setVersionIndex(null);
+  }, [generateContent]);
+
   useEffect(() => {
     if (summaryStatus === 'completed') {
       void queryClient.invalidateQueries({ queryKey: ['study', 'summary', fileId] });
+      void queryClient.invalidateQueries({ queryKey: ['study', 'versions', fileId, 'summary'] });
     }
   }, [summaryStatus, fileId, queryClient]);
 
+  const displayContent = isViewingOldVersion ? oldVersionData?.content : summary?.content;
+
   const processedContent = useMemo(() => {
-    if (!summary?.content) return '';
-    return summary.content.replace(/\(p\.(\d+)\)/g, '[p.$1](#page-$1)');
-  }, [summary?.content]);
+    if (!displayContent) return '';
+    return displayContent.replace(/\(p\.(\d+)\)/g, '[p.$1](#page-$1)');
+  }, [displayContent]);
 
   const markdownComponents: Components = useMemo(
     () => ({
@@ -204,15 +234,23 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
           )}
         </div>
         {canRegenerate && (
-          <button
-            type="button"
-            onClick={() => generateContent('summary')}
-            disabled={isGenerating}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:text-content-primary bg-surface-raised hover:bg-surface-hover border border-surface-border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <RefreshCw className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
-            다시 생성
-          </button>
+          <div className="flex items-center gap-2">
+            <VersionNavigator
+              current={(versionIndex ?? versions.length - 1) + 1}
+              total={versions.length}
+              onPrev={() => setVersionIndex((i) => Math.max(0, (i ?? versions.length - 1) - 1))}
+              onNext={() => setVersionIndex((i) => Math.min(versions.length - 1, (i ?? versions.length - 1) + 1))}
+            />
+            <button
+              type="button"
+              onClick={handleRegenerate}
+              disabled={isGenerating}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:text-content-primary bg-surface-raised hover:bg-surface-hover border border-surface-border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
+              다시 생성
+            </button>
+          </div>
         )}
       </div>
 
@@ -227,7 +265,7 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
           </div>
         )}
 
-        {!isShowingLoader && effectiveStatus === 'completed' && summary?.content && (
+        {!isShowingLoader && effectiveStatus === 'completed' && displayContent && (
           <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
             {processedContent}
           </Markdown>
@@ -244,7 +282,7 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
             </div>
             <button
               type="button"
-              onClick={() => generateContent('summary')}
+              onClick={handleRegenerate}
               disabled={isGenerating}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-content-inverse bg-brand-500 hover:bg-brand-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
