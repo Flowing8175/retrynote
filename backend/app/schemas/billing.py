@@ -65,6 +65,22 @@ class ManageUrlsResponse(_CamelModel):
     cancel_url: str | None
 
 
+class CreditPackSchema(_CamelModel):
+    credit_type: str
+    pack_size: str
+    label: str
+    price: str
+    unit_price: str
+    currency_code: str
+    amount_raw: int
+    popular: bool = False
+
+
+class CreditPacksResponse(_CamelModel):
+    storage: list[CreditPackSchema]
+    ai: list[CreditPackSchema]
+
+
 class LimitExceededError(_CamelModel):
     detail: str
     limit_type: str

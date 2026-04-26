@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { billingApi } from '@/api/billing';
 import { openPaddleCheckout } from '@/lib/paddle';
 import { useAuthStore } from '@/stores/authStore';
@@ -62,34 +62,6 @@ const FEATURES: FeatureRow[] = [
   { label: '파일 크기 제한', free: '5 MB', lite: '50 MB', standard: '100 MB', pro: '200 MB' },
 ];
 
-interface CreditPack {
-  label: string;
-  price: string;
-  unitPrice: string;
-  type: string;
-  size: string;
-}
-
-const CREDIT_PACKS: CreditPack[] = [
-  { label: '+5GB 저장공간', price: '₩3,900', unitPrice: '₩780/GB', type: 'storage', size: '5gb' },
-  { label: '+20GB 저장공간', price: '₩12,900', unitPrice: '₩645/GB', type: 'storage', size: '20gb' },
-  { label: '+50GB 저장공간', price: '₩27,900', unitPrice: '₩558/GB', type: 'storage', size: '50gb' },
-];
-
-interface AICreditPack {
-  label: string;
-  price: string;
-  unitPrice: string;
-  size: string;
-  popular?: boolean;
-}
-
-const AI_CREDIT_PACKS: AICreditPack[] = [
-  { label: '+50 AI 크레딧', price: '₩3,900', unitPrice: '크레딧당 ₩78', size: '50' },
-  { label: '+200 AI 크레딧', price: '₩12,900', unitPrice: '크레딧당 ₩64.5', size: '200', popular: true },
-  { label: '+500 AI 크레딧', price: '₩27,900', unitPrice: '크레딧당 ₩55.8', size: '500' },
-];
-
 const TIERS: UserTier[] = ['free', 'lite', 'standard', 'pro'];
 
 export default function PricingPage() {
@@ -98,6 +70,15 @@ export default function PricingPage() {
   const [loadingTier, setLoadingTier] = useState<'lite' | 'standard' | 'pro' | null>(null);
   const [loadingCredit, setLoadingCredit] = useState<string | null>(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  const { data: creditPacks } = useQuery({
+    queryKey: ['creditPacks'],
+    queryFn: billingApi.getCreditPacks,
+    staleTime: 300_000,
+  });
+
+  const storagePacks = creditPacks?.storage ?? [];
+  const aiPacks = creditPacks?.ai ?? [];
 
   const user = useAuthStore((s) => s.user);
   const usageStatus = useAuthStore((s) => s.usageStatus);
@@ -348,8 +329,8 @@ export default function PricingPage() {
         </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          {CREDIT_PACKS.map((pack) => {
-            const key = `${pack.type}-${pack.size}`;
+          {storagePacks.map((pack) => {
+            const key = `${pack.creditType}-${pack.packSize}`;
             const isLoading = loadingCredit === key;
             return (
               <div
@@ -358,7 +339,7 @@ export default function PricingPage() {
                 style={{ backgroundColor: 'oklch(0.20 0.01 250)' }}
               >
                 <div>
-                  {pack.size === '20gb' && (
+                  {pack.popular && (
                     <span className="text-[0.6rem] font-bold uppercase tracking-widest text-semantic-success">인기</span>
                   )}
                   <p className="text-sm font-semibold text-content-primary">{pack.label}</p>
@@ -366,7 +347,7 @@ export default function PricingPage() {
                   <p className="mt-0.5 text-xs text-content-muted">{pack.unitPrice}</p>
                 </div>
                 <button
-                  onClick={() => handleCreditPurchase(pack.type, pack.size, key)}
+                  onClick={() => handleCreditPurchase(pack.creditType, pack.packSize, key)}
                   disabled={isLoading}
                   className="mt-auto rounded-xl border border-brand-500/50 py-2 text-sm font-medium text-brand-400 transition-colors hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >
@@ -385,8 +366,8 @@ export default function PricingPage() {
         </p>
 
         <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          {AI_CREDIT_PACKS.map((pack) => {
-            const key = `ai-${pack.size}`;
+          {aiPacks.map((pack) => {
+            const key = `ai-${pack.packSize}`;
             const isLoading = loadingCredit === key;
             return (
               <div
@@ -403,8 +384,8 @@ export default function PricingPage() {
                   <p className="mt-0.5 text-xs text-content-muted">{pack.unitPrice}</p>
                 </div>
                 <button
-                  data-testid={`pricing-ai-pack-${pack.size}`}
-                  onClick={() => handleCreditPurchase('ai', pack.size, key)}
+                  data-testid={`pricing-ai-pack-${pack.packSize}`}
+                  onClick={() => handleCreditPurchase('ai', pack.packSize, key)}
                   disabled={isLoading}
                   className="mt-auto rounded-xl border border-brand-500/50 py-2 text-sm font-medium text-brand-400 transition-colors hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >

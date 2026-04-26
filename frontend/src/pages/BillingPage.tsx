@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, CreditCard, HardDrive, CheckCircle, Zap } from 'lucide-react';
+import type { CreditPackInfo } from '@/types/billing';
 import { billingApi } from '@/api/billing';
 import { openPaddleCheckout } from '@/lib/paddle';
 import { useUsageStatus } from '@/lib/useUsageStatus';
@@ -72,63 +73,14 @@ const STATUS_BADGE: Record<string, string> = {
   trialing: 'bg-brand-500/10 text-brand-300 border border-brand-500/20',
 };
 
-interface CreditPack {
-  label: string;
-  description: string;
-  creditType: string;
-  packSize: string;
-  icon: React.ReactNode;
-  popular?: boolean;
+function packIcon(creditType: string) {
+  return creditType === 'storage' ? <HardDrive size={16} /> : <Zap size={16} />;
 }
 
-const CREDIT_PACKS: CreditPack[] = [
-  {
-    label: '+5GB 저장소',
-    description: '₩3,900 · ₩780/GB · 영구',
-    creditType: 'storage',
-    packSize: '5gb',
-    icon: <HardDrive size={16} />,
-  },
-  {
-    label: '+20GB 저장소',
-    description: '₩12,900 · ₩645/GB · 영구',
-    creditType: 'storage',
-    packSize: '20gb',
-    icon: <HardDrive size={16} />,
-  },
-  {
-    label: '+50GB 저장소',
-    description: '₩27,900 · ₩558/GB · 영구',
-    creditType: 'storage',
-    packSize: '50gb',
-    icon: <HardDrive size={16} />,
-  },
-];
-
-const AI_CREDIT_PACKS: CreditPack[] = [
-  {
-    label: 'AI 50 크레딧',
-    description: '₩3,900 · 크레딧당 ₩78 · 3개월',
-    creditType: 'ai',
-    packSize: '50',
-    icon: <Zap size={16} />,
-  },
-  {
-    label: 'AI 200 크레딧',
-    description: '₩12,900 · 크레딧당 ₩64.5 · 3개월',
-    creditType: 'ai',
-    packSize: '200',
-    icon: <Zap size={16} />,
-    popular: true,
-  },
-  {
-    label: 'AI 500 크레딧',
-    description: '₩27,900 · 크레딧당 ₩55.8 · 3개월',
-    creditType: 'ai',
-    packSize: '500',
-    icon: <Zap size={16} />,
-  },
-];
+function packDescription(pack: CreditPackInfo): string {
+  const expiry = pack.creditType === 'storage' ? '영구' : '3개월';
+  return `${pack.price} · ${pack.unitPrice} · ${expiry}`;
+}
 
 function UsageBar({ consumed, limit }: { consumed: number; limit: number }) {
   const pct = limit > 0 ? Math.min((consumed / limit) * 100, 100) : 0;
@@ -254,6 +206,15 @@ export default function BillingPage() {
     }, 2000);
   }, [queryClient]);
 
+  const { data: creditPacks } = useQuery({
+    queryKey: ['creditPacks'],
+    queryFn: billingApi.getCreditPacks,
+    staleTime: 300_000,
+  });
+
+  const storagePacks = creditPacks?.storage ?? [];
+  const aiPacks = creditPacks?.ai ?? [];
+
   const { data: usageData, isLoading: usageLoading } = useUsageStatus();
 
   const { data: subscription, isLoading: subLoading } = useQuery({
@@ -288,7 +249,7 @@ export default function BillingPage() {
     }
   }
 
-  async function handlePurchasePack(pack: CreditPack) {
+  async function handlePurchasePack(pack: CreditPackInfo) {
     const key = `${pack.creditType}:${pack.packSize}`;
     setPurchasingPack(key);
     setCheckoutError(null);
@@ -516,7 +477,7 @@ export default function BillingPage() {
               추가 사용량이 필요하면 크레딧을 구매하세요. 구독 용량에 더해집니다.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              {CREDIT_PACKS.map((pack) => {
+              {storagePacks.map((pack) => {
                 const key = `${pack.creditType}:${pack.packSize}`;
                 const buying = purchasingPack === key;
                 return (
@@ -525,12 +486,12 @@ export default function BillingPage() {
                     className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-surface-deep p-4"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="shrink-0 text-brand-400">{pack.icon}</span>
+                      <span className="shrink-0 text-brand-400">{packIcon(pack.creditType)}</span>
                       <div className="min-w-0">
                         <p className="text-sm font-medium text-content-primary truncate">
                           {pack.label}
                         </p>
-                        <p className="text-xs text-content-muted">{pack.description}</p>
+                        <p className="text-xs text-content-muted">{packDescription(pack)}</p>
                       </div>
                     </div>
                     <button
@@ -553,7 +514,7 @@ export default function BillingPage() {
               AI 기능 사용에 필요한 크레딧을 구매하세요. 구독 한도에 더해집니다.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
-              {AI_CREDIT_PACKS.map((pack) => {
+              {aiPacks.map((pack) => {
                 const key = `${pack.creditType}:${pack.packSize}`;
                 const buying = purchasingPack === key;
                 return (
@@ -566,7 +527,7 @@ export default function BillingPage() {
                     }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <span className="shrink-0 text-brand-400">{pack.icon}</span>
+                      <span className="shrink-0 text-brand-400">{packIcon(pack.creditType)}</span>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-medium text-content-primary truncate">
@@ -578,7 +539,7 @@ export default function BillingPage() {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-content-muted">{pack.description}</p>
+                        <p className="text-xs text-content-muted">{packDescription(pack)}</p>
                       </div>
                     </div>
                     <button

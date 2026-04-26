@@ -15,6 +15,8 @@ from app.schemas.billing import (
     CheckoutRequest,
     CheckoutResponse,
     CreditCheckoutRequest,
+    CreditPackSchema,
+    CreditPacksResponse,
     ManageUrlsResponse,
     PaddleConfigResponse,
     SubscriptionResponse,
@@ -41,6 +43,15 @@ async def get_usage_status(
     user: User = Depends(get_current_user),
 ):
     return await usage_svc.get_usage_status(db, user)
+
+
+@router.get("/credit-packs", response_model=CreditPacksResponse)
+async def get_credit_packs():
+    packs = await credit_svc.get_all_credit_packs()
+    return CreditPacksResponse(
+        storage=[CreditPackSchema(**p) for p in packs["storage"]],
+        ai=[CreditPackSchema(**p) for p in packs["ai"]],
+    )
 
 
 @router.get("/paddle-config", response_model=PaddleConfigResponse)

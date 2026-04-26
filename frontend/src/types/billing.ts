@@ -40,6 +40,22 @@ export interface ManageUrlsResponse {
   cancelUrl: string | null;
 }
 
+export interface CreditPackInfo {
+  creditType: string;
+  packSize: string;
+  label: string;
+  price: string;
+  unitPrice: string;
+  currencyCode: string;
+  amountRaw: number;
+  popular: boolean;
+}
+
+export interface CreditPacksData {
+  storage: CreditPackInfo[];
+  ai: CreditPackInfo[];
+}
+
 export interface UpgradePromptPayload {
   detail: string;
   limitType: ResourceType | 'model_access';

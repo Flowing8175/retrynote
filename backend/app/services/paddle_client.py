@@ -79,6 +79,9 @@ class PaddleClient:
             },
         )
 
+    async def get_price(self, price_id: str) -> dict:
+        return await self._request("GET", f"/prices/{price_id}")
+
     async def get_subscription(self, subscription_id: str) -> dict:
         return await self._request("GET", f"/subscriptions/{subscription_id}")
 

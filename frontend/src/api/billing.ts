@@ -2,6 +2,7 @@ import type {
   UsageStatus,
   Subscription,
   CheckoutSessionResponse,
+  CreditPacksData,
   ManageUrlsResponse,
 } from '../types/billing';
 import type { ApiStatusResponse } from '../types';
@@ -18,6 +19,9 @@ export const billingApi = {
 
   getPaddleConfig: (): Promise<PaddleConfig> =>
     apiClient.get<PaddleConfig>('/billing/paddle-config').then((r) => r.data),
+
+  getCreditPacks: (): Promise<CreditPacksData> =>
+    apiClient.get<CreditPacksData>('/billing/credit-packs').then((r) => r.data),
 
   getSubscription: (): Promise<Subscription | null> =>
     apiClient.get<Subscription | null>('/billing/subscription').then((r) => r.data),
