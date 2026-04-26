@@ -164,6 +164,9 @@ docker-compose up db redis
 | `PADDLE_STANDARD_QUARTERLY_PRICE_ID` | Standard 분기 Price ID | |
 | `PADDLE_PRO_MONTHLY_PRICE_ID` | Pro 월정액 Price ID | |
 | `PADDLE_PRO_QUARTERLY_PRICE_ID` | Pro 분기 Price ID | |
+| `PADDLE_AI_50_PRICE_ID` | AI 50 크레딧 팩 Price ID | |
+| `PADDLE_AI_200_PRICE_ID` | AI 200 크레딧 팩 Price ID | |
+| `PADDLE_AI_500_PRICE_ID` | AI 500 크레딧 팩 Price ID | |
 | **Cloudflare** | | |
 | `CLOUDFLARE_TURNSTILE_SECRET_KEY` | Cloudflare Turnstile Secret Key | |
 | **Job Timeouts** | | |
