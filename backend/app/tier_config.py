@@ -32,41 +32,36 @@ MODEL_MAX = "MAX"
 TIER_LIMITS: dict[UserTier, TierLimits] = {
     UserTier.free: TierLimits(
         storage_bytes=FREE_STORAGE_BYTES,
-        quiz_per_window=50.0,
-        ocr_pages_per_window=50,
+        quiz_per_window=5.0,
+        ocr_pages_per_window=5,
         max_upload_mb=5,
     ),
     UserTier.lite: TierLimits(
         storage_bytes=LITE_STORAGE_BYTES,
-        quiz_per_window=600.0,
-        ocr_pages_per_window=1000,
+        quiz_per_window=60.0,
+        ocr_pages_per_window=100,
         max_upload_mb=50,
     ),
     UserTier.standard: TierLimits(
         storage_bytes=STANDARD_STORAGE_BYTES,
-        quiz_per_window=2000.0,
-        ocr_pages_per_window=5000,
+        quiz_per_window=200.0,
+        ocr_pages_per_window=500,
         max_upload_mb=100,
     ),
     UserTier.pro: TierLimits(
         storage_bytes=PRO_STORAGE_BYTES,
-        quiz_per_window=7000.0,
-        ocr_pages_per_window=20000,
+        quiz_per_window=700.0,
+        ocr_pages_per_window=2000,
         max_upload_mb=200,
     ),
 }
 
-# Credits per 1K tokens, by model tier.
-# Rates calibrated from actual API pricing (Apr 2026):
-#   gpt-5.4-nano      — $0.20/$1.25 per 1M (in/out)
-#   gpt-5.4-mini      — $0.75/$4.50 per 1M (in/out)
-#   gemini-3-flash     — $0.50/$3.00 per 1M (in/out)
-#   claude-sonnet-4-6  — $3.00/$15.00 per 1M (in/out)
+# Credits per 1K tokens, by model tier (10x markup on API cost)
 MODEL_CREDIT_RATES: dict[str, float] = {
     MODEL_ECO: 0.10,  # gpt-5.4-nano — cheapest
     MODEL_BALANCED: 0.35,  # gpt-5.4-mini — mid-range
-    MODEL_PERFORMANCE: 0.25,  # gemini-3-flash — fast & affordable
-    MODEL_MAX: 1.20,  # claude-sonnet-4-6 — top-tier reasoning
+    MODEL_PERFORMANCE: 0.65,  # gemini-3.1-pro-preview — high quality
+    MODEL_MAX: 0.80,  # claude-sonnet-4-6 — top-tier reasoning
 }
 
 # Pre-charge estimates for async operations (quiz gen, retry, objection).
@@ -74,8 +69,8 @@ MODEL_CREDIT_RATES: dict[str, float] = {
 TIER_ESTIMATES: dict[str, float] = {
     MODEL_ECO: 1.0,
     MODEL_BALANCED: 3.5,
-    MODEL_PERFORMANCE: 2.5,
-    MODEL_MAX: 12.0,
+    MODEL_PERFORMANCE: 6.5,
+    MODEL_MAX: 8.0,
 }
 
 # Pre-charge estimate for study AI calls (summary, flashcards, mindmap, chat).

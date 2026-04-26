@@ -36,10 +36,10 @@ def _make_user(tier: str = "free") -> User:
 
 class TestTierConfig:
     def test_free_quiz_quota(self):
-        assert TIER_LIMITS[UserTier.free].quiz_per_window == 50.0
+        assert TIER_LIMITS[UserTier.free].quiz_per_window == 5.0
 
-    def test_free_ocr_quota_is_50(self):
-        assert TIER_LIMITS[UserTier.free].ocr_pages_per_window == 50
+    def test_free_ocr_quota_is_5(self):
+        assert TIER_LIMITS[UserTier.free].ocr_pages_per_window == 5
 
     def test_tier_limits_has_no_allowed_models_field(self):
         assert not hasattr(TierLimits, "allowed_models")
@@ -321,7 +321,7 @@ class TestQuizCreationPolicy:
             resource_type="quiz",
             window_start=now,
             window_end=now + timedelta(days=30),
-            consumed=50,  # fully exhausted against 50.0 quiz_per_window quota
+            consumed=5,  # fully exhausted against 5.0 quiz_per_window quota
         )
         db_session.add(record)
         await db_session.commit()
@@ -426,30 +426,13 @@ class TestQuizCreationPolicy:
         assert record.consumed == TIER_ESTIMATES[MODEL_PERFORMANCE]
 
     async def test_max_model_exceeds_free_quota(
-        self, free_auth_client: AsyncClient, free_user_ready_file, db_session
+        self, free_auth_client: AsyncClient, free_user_ready_file
     ):
-        """MAX model costs 12 credits — rejected when remaining quota < estimate."""
-        from datetime import datetime, timedelta, timezone
+        """MAX model (claude-sonnet-4-6) costs 8 credits — exceeds free tier's 5.0 quiz quota in a single call."""
         from app.config import settings
         from app.tier_config import TIER_ESTIMATES, TIER_LIMITS, MODEL_MAX, UserTier
-        from app.models.billing import UsageRecord
 
-        free_tier_limit = TIER_LIMITS[UserTier.free].quiz_per_window
-        max_estimate = TIER_ESTIMATES[MODEL_MAX]
-        assert max_estimate <= free_tier_limit
-
-        now = datetime.now(timezone.utc)
-        user_resp = await free_auth_client.get("/auth/me")
-        user_id = user_resp.json()["id"]
-        record = UsageRecord(
-            user_id=user_id,
-            resource_type="quiz",
-            window_start=now,
-            window_end=now + timedelta(days=30),
-            consumed=free_tier_limit - max_estimate + 1,
-        )
-        db_session.add(record)
-        await db_session.commit()
+        assert TIER_ESTIMATES[MODEL_MAX] > TIER_LIMITS[UserTier.free].quiz_per_window
 
         resp = await free_auth_client.post(
             "/quiz-sessions",
