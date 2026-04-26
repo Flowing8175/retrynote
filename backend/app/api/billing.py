@@ -242,24 +242,41 @@ async def _handle_transaction_completed(db: AsyncSession, data: dict) -> None:
     subscription_id = data.get("subscription_id")
     custom_data = data.get("custom_data") or {}
     user_id = custom_data.get("user_id")
+    credit_type = custom_data.get("credit_type")
+    transaction_id = data.get("id")
 
-    if subscription_id or not user_id or not custom_data.get("credit_type"):
+    if subscription_id or not user_id or not credit_type:
         return
-    storage_bytes = int(custom_data.get("storage_bytes", 0))
-    if storage_bytes not in VALID_STORAGE_CREDIT_BYTES:
-        logger.error(
-            "Webhook: unexpected storage_bytes value %d for transaction %s",
-            storage_bytes,
-            data.get("id"),
+
+    if credit_type == "storage":
+        storage_bytes = int(custom_data.get("storage_bytes", 0))
+        if storage_bytes not in VALID_STORAGE_CREDIT_BYTES:
+            logger.error(
+                "Webhook: unexpected storage_bytes value %d for transaction %s",
+                storage_bytes,
+                transaction_id,
+            )
+            storage_bytes = 0
+        await credit_svc.add_credits(
+            db=db,
+            user_id=user_id,
+            storage_bytes=storage_bytes,
+            paddle_transaction_id=transaction_id,
         )
-        storage_bytes = 0
-    await credit_svc.add_credits(
-        db=db,
-        user_id=user_id,
-        storage_bytes=storage_bytes,
-        ai_count=int(custom_data.get("ai_count", 0)),
-        paddle_transaction_id=data.get("id"),
-    )
+    elif credit_type == "ai":
+        ai_count = int(custom_data.get("ai_count", 0))
+        if ai_count <= 0:
+            logger.warning(
+                "transaction.completed AI pack with invalid ai_count: %s",
+                custom_data,
+            )
+            return
+        await credit_svc.add_credits(
+            db=db,
+            user_id=user_id,
+            ai_count=ai_count,
+            paddle_transaction_id=transaction_id,
+        )
 
 
 @router.post("/webhook/paddle", include_in_schema=False)

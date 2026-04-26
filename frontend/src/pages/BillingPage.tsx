@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { X, CreditCard, HardDrive, CheckCircle } from 'lucide-react';
+import { X, CreditCard, HardDrive, CheckCircle, Zap } from 'lucide-react';
 import { billingApi } from '@/api/billing';
 import { openPaddleCheckout } from '@/lib/paddle';
 import { useUsageStatus } from '@/lib/useUsageStatus';
@@ -25,6 +25,14 @@ function formatWindowTime(iso: string): string {
   const h = String(d.getHours()).padStart(2, '0');
   const min = String(d.getMinutes()).padStart(2, '0');
   return `${h}:${min}`;
+}
+
+function formatExpiryDate(iso: string): string {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}.${m}.${day}`;
 }
 
 const RESOURCE_LABELS: Record<ResourceType, string> = {
@@ -70,6 +78,7 @@ interface CreditPack {
   creditType: string;
   packSize: string;
   icon: React.ReactNode;
+  popular?: boolean;
 }
 
 const CREDIT_PACKS: CreditPack[] = [
@@ -93,6 +102,32 @@ const CREDIT_PACKS: CreditPack[] = [
     creditType: 'storage',
     packSize: '50gb',
     icon: <HardDrive size={16} />,
+  },
+];
+
+// TODO(billing): set price after Paddle dashboard configuration
+const AI_CREDIT_PACKS: CreditPack[] = [
+  {
+    label: 'AI 50 크레딧',
+    description: '₩—',
+    creditType: 'ai',
+    packSize: '50',
+    icon: <Zap size={16} />,
+  },
+  {
+    label: 'AI 200 크레딧',
+    description: '₩—',
+    creditType: 'ai',
+    packSize: '200',
+    icon: <Zap size={16} />,
+    popular: true,
+  },
+  {
+    label: 'AI 500 크레딧',
+    description: '₩—',
+    creditType: 'ai',
+    packSize: '500',
+    icon: <Zap size={16} />,
   },
 ];
 
@@ -373,17 +408,54 @@ export default function BillingPage() {
             </SectionCard>
           )}
 
-          {credits && credits.storageCreditsBytes > 0 && (
+          {credits && (
             <SectionCard>
               <SectionTitle>크레딧 잔액</SectionTitle>
-              <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-surface-deep px-4 py-3 w-fit">
-                <HardDrive size={18} className="text-brand-400 shrink-0" />
-                <div>
-                  <p className="text-xs text-content-muted">저장소 크레딧</p>
-                  <p className="text-base font-semibold text-content-primary">
-                    {formatBytes(credits.storageCreditsBytes)}
-                  </p>
-                </div>
+              <div className="flex flex-wrap gap-3">
+                {credits.storageCreditsBytes > 0 && (
+                  <div className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-surface-deep px-4 py-3">
+                    <HardDrive size={18} className="text-brand-400 shrink-0" />
+                    <div>
+                      <p className="text-xs text-content-muted">저장소 크레딧</p>
+                      <p className="text-base font-semibold text-content-primary">
+                        {formatBytes(credits.storageCreditsBytes)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {credits.aiCreditsBalance > 0 ? (
+                  <div
+                    data-testid="ai-credits-balance"
+                    className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-surface-deep px-4 py-3"
+                  >
+                    <Zap size={18} className="text-brand-400 shrink-0" />
+                    <div>
+                      <p className="text-xs text-content-muted">AI 크레딧</p>
+                      <p className="text-base font-semibold text-content-primary">
+                        {credits.aiCreditsBalance.toFixed(1)} 크레딧
+                      </p>
+                      {credits.aiCreditsExpiresAt && (
+                        <p
+                          data-testid="ai-credits-expires-at"
+                          className="text-xs text-content-muted"
+                        >
+                          {formatExpiryDate(credits.aiCreditsExpiresAt)} 만료
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    data-testid="ai-credits-balance"
+                    className="flex items-center gap-3 rounded-xl border border-white/[0.06] bg-surface-deep px-4 py-3"
+                  >
+                    <Zap size={18} className="text-content-muted shrink-0" />
+                    <div>
+                      <p className="text-xs text-content-muted">AI 크레딧</p>
+                      <p className="text-sm text-content-muted">없음</p>
+                    </div>
+                  </div>
+                )}
               </div>
             </SectionCard>
           )}
@@ -464,6 +536,55 @@ export default function BillingPage() {
                     </div>
                     <button
                       type="button"
+                      onClick={() => handlePurchasePack(pack)}
+                      disabled={buying || purchasingPack !== null}
+                      className="shrink-0 rounded-lg border border-brand-500/40 px-3 py-1.5 text-xs font-semibold text-brand-300 transition-colors hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {buying ? '…' : '구매'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </SectionCard>
+
+          <SectionCard>
+            <SectionTitle>AI 크레딧</SectionTitle>
+            <p className="text-sm text-content-secondary">
+              AI 기능 사용에 필요한 크레딧을 구매하세요. 구독 한도에 더해집니다.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {AI_CREDIT_PACKS.map((pack) => {
+                const key = `${pack.creditType}:${pack.packSize}`;
+                const buying = purchasingPack === key;
+                return (
+                  <div
+                    key={key}
+                    className={`flex items-center justify-between gap-3 rounded-xl border p-4 ${
+                      pack.popular
+                        ? 'border-brand-500/40 bg-surface-deep'
+                        : 'border-white/[0.06] bg-surface-deep'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="shrink-0 text-brand-400">{pack.icon}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-content-primary truncate">
+                            {pack.label}
+                          </p>
+                          {pack.popular && (
+                            <span className="shrink-0 rounded-full bg-brand-500/15 px-2 py-0.5 text-xs font-semibold text-brand-300">
+                              인기
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-content-muted">{pack.description}</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      data-testid={`ai-credit-pack-${pack.packSize}`}
                       onClick={() => handlePurchasePack(pack)}
                       disabled={buying || purchasingPack !== null}
                       className="shrink-0 rounded-lg border border-brand-500/40 px-3 py-1.5 text-xs font-semibold text-brand-300 transition-colors hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:opacity-50"

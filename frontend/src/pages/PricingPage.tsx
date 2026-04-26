@@ -76,6 +76,21 @@ const CREDIT_PACKS: CreditPack[] = [
   { label: '+50GB 저장공간', price: '₩27,900', unitPrice: '₩558/GB', type: 'storage', size: '50gb' },
 ];
 
+interface AICreditPack {
+  label: string;
+  // TODO(billing): set price after Paddle dashboard configuration
+  price: string;
+  unitPrice: string;
+  size: string;
+  popular?: boolean;
+}
+
+const AI_CREDIT_PACKS: AICreditPack[] = [
+  { label: '+50 AI 크레딧', price: '₩—', unitPrice: '크레딧당 ₩—', size: '50' },
+  { label: '+200 AI 크레딧', price: '₩—', unitPrice: '크레딧당 ₩—', size: '200', popular: true },
+  { label: '+500 AI 크레딧', price: '₩—', unitPrice: '크레딧당 ₩—', size: '500' },
+];
+
 const TIERS: UserTier[] = ['free', 'lite', 'standard', 'pro'];
 
 export default function PricingPage() {
@@ -353,6 +368,44 @@ export default function PricingPage() {
                 </div>
                 <button
                   onClick={() => handleCreditPurchase(pack.type, pack.size, key)}
+                  disabled={isLoading}
+                  className="mt-auto rounded-xl border border-brand-500/50 py-2 text-sm font-medium text-brand-400 transition-colors hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isLoading ? '처리 중…' : '구매'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-12">
+        <h2 className="text-xl font-semibold text-content-primary">AI 크레딧</h2>
+        <p className="mt-1 text-sm text-content-secondary">
+          AI 기능에 사용되는 크레딧을 추가로 구매할 수 있습니다.
+        </p>
+
+        <div className="mt-6 grid gap-4 sm:grid-cols-3">
+          {AI_CREDIT_PACKS.map((pack) => {
+            const key = `ai-${pack.size}`;
+            const isLoading = loadingCredit === key;
+            return (
+              <div
+                key={key}
+                className="flex flex-col gap-4 rounded-2xl border border-white/[0.08] bg-surface p-6"
+                style={{ backgroundColor: 'oklch(0.20 0.01 250)' }}
+              >
+                <div>
+                  {pack.popular && (
+                    <span className="text-[0.6rem] font-bold uppercase tracking-widest text-semantic-success">인기</span>
+                  )}
+                  <p className="text-sm font-semibold text-content-primary">{pack.label}</p>
+                  <p className="mt-1 text-lg font-semibold text-brand-300">{pack.price}</p>
+                  <p className="mt-0.5 text-xs text-content-muted">{pack.unitPrice}</p>
+                </div>
+                <button
+                  data-testid={`pricing-ai-pack-${pack.size}`}
+                  onClick={() => handleCreditPurchase('ai', pack.size, key)}
                   disabled={isLoading}
                   className="mt-auto rounded-xl border border-brand-500/50 py-2 text-sm font-medium text-brand-400 transition-colors hover:bg-brand-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                 >

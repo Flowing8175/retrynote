@@ -315,10 +315,13 @@ class UsageService:
             )
         )
 
+        ai_balance, ai_expires = await self.get_ai_credit_balance(db, user.id)
         return UsageStatusResponse(
             tier=user.tier,
             windows=windows,
             credits=CreditBalanceSchema(
                 storage_credits_bytes=balance.storage_credits_bytes,
+                ai_credits_balance=ai_balance,
+                ai_credits_expires_at=ai_expires,
             ),
         )
