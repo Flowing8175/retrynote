@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # "claude-" → Anthropic API).
     eco_generation_model: str = "gpt-5.4-nano"
     balanced_generation_model: str = "gpt-5.4-mini"
-    performance_generation_model: str = "gemini-3-flash"
+    performance_generation_model: str = "gemini-3-flash-preview"
     max_generation_model: str = "claude-sonnet-4-6"
 
     gemini_context_cache_enabled: bool = True

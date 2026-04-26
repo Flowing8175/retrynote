@@ -56,12 +56,12 @@ TIER_LIMITS: dict[UserTier, TierLimits] = {
     ),
 }
 
-# Credits per 1K tokens, by model tier (10x markup on API cost)
+# Credits per 1K tokens, by model tier
 MODEL_CREDIT_RATES: dict[str, float] = {
     MODEL_ECO: 0.10,  # gpt-5.4-nano — cheapest
     MODEL_BALANCED: 0.35,  # gpt-5.4-mini — mid-range
-    MODEL_PERFORMANCE: 0.65,  # gemini-3.1-pro-preview — high quality
-    MODEL_MAX: 0.80,  # claude-sonnet-4-6 — top-tier reasoning
+    MODEL_PERFORMANCE: 0.65,  # gemini-3-flash-preview — premium pricing
+    MODEL_MAX: 1.20,  # claude-sonnet-4-6 — top-tier reasoning
 }
 
 # Pre-charge estimates for async operations (quiz gen, retry, objection).
@@ -70,7 +70,7 @@ TIER_ESTIMATES: dict[str, float] = {
     MODEL_ECO: 1.0,
     MODEL_BALANCED: 3.5,
     MODEL_PERFORMANCE: 6.5,
-    MODEL_MAX: 8.0,
+    MODEL_MAX: 12.0,
 }
 
 # Pre-charge estimate for study AI calls (summary, flashcards, mindmap, chat).

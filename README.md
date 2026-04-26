@@ -128,7 +128,7 @@ docker-compose up db redis
 | **AI — 모델 티어 (공통)** | | |
 | `ECO_GENERATION_MODEL` | 절약형 티어 모델 (모델명으로 provider 자동 감지) | `gpt-5.4-nano` |
 | `BALANCED_GENERATION_MODEL` | 균형형 티어 모델 (모델명으로 provider 자동 감지) | `gpt-5.4-mini` |
-| `PERFORMANCE_GENERATION_MODEL` | 고성능 티어 모델 (모델명으로 provider 자동 감지) | `gemini-3-flash` |
+| `PERFORMANCE_GENERATION_MODEL` | 고성능 티어 모델 (모델명으로 provider 자동 감지) | `gemini-3-flash-preview` |
 | `MAX_GENERATION_MODEL` | 최상위 티어 모델 (모델명으로 provider 자동 감지) | `claude-sonnet-4-6` |
 | **File Storage** | | |
 | `UPLOAD_DIR` | 파일 업로드 경로 | `storage/uploads` |
