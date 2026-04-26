@@ -32,26 +32,26 @@ MODEL_MAX = "MAX"
 TIER_LIMITS: dict[UserTier, TierLimits] = {
     UserTier.free: TierLimits(
         storage_bytes=FREE_STORAGE_BYTES,
-        quiz_per_window=100.0,
-        ocr_pages_per_window=100,
+        quiz_per_window=50.0,
+        ocr_pages_per_window=50,
         max_upload_mb=5,
     ),
     UserTier.lite: TierLimits(
         storage_bytes=LITE_STORAGE_BYTES,
-        quiz_per_window=1200.0,
-        ocr_pages_per_window=2000,
+        quiz_per_window=600.0,
+        ocr_pages_per_window=1000,
         max_upload_mb=50,
     ),
     UserTier.standard: TierLimits(
         storage_bytes=STANDARD_STORAGE_BYTES,
-        quiz_per_window=4000.0,
-        ocr_pages_per_window=10000,
+        quiz_per_window=2000.0,
+        ocr_pages_per_window=5000,
         max_upload_mb=100,
     ),
     UserTier.pro: TierLimits(
         storage_bytes=PRO_STORAGE_BYTES,
-        quiz_per_window=14000.0,
-        ocr_pages_per_window=40000,
+        quiz_per_window=7000.0,
+        ocr_pages_per_window=20000,
         max_upload_mb=200,
     ),
 }

@@ -155,7 +155,7 @@ export default function TryQuizResults() {
                 <ul className="space-y-2 mb-6 text-sm text-content-secondary">
                    <li>✓ 방금 풀었던 퀴즈 결과가 자동 저장됩니다</li>
                    <li>✓ 틀린 문제만 모아서 다시 풀 수 있습니다</li>
-                   <li>✓ 매달 무료 100 크레딧</li>
+                   <li>✓ 매달 무료 50 크레딧</li>
                  </ul>
                 <div className="flex flex-col gap-3">
                   <Link

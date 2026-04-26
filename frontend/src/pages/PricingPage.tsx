@@ -57,8 +57,8 @@ interface FeatureRow {
 
 const FEATURES: FeatureRow[] = [
   { label: '저장 공간', free: '150 MB', lite: '3 GB', standard: '15 GB', pro: '50 GB' },
-  { label: '크레딧 (30일)', free: '100 크레딧', lite: '1,200 크레딧', standard: '4,000 크레딧', pro: '14,000 크레딧' },
-  { label: 'OCR 페이지 (30일)', free: '100페이지', lite: '2,000페이지', standard: '10,000페이지', pro: '40,000페이지' },
+  { label: '크레딧 (30일)', free: '50 크레딧', lite: '600 크레딧', standard: '2,000 크레딧', pro: '7,000 크레딧' },
+  { label: 'OCR 페이지 (30일)', free: '50페이지', lite: '1,000페이지', standard: '5,000페이지', pro: '20,000페이지' },
   { label: '파일 크기 제한', free: '5 MB', lite: '50 MB', standard: '100 MB', pro: '200 MB' },
 ];
 
