@@ -36,10 +36,10 @@ def _make_user(tier: str = "free") -> User:
 
 class TestTierConfig:
     def test_free_quiz_quota(self):
-        assert TIER_LIMITS[UserTier.free].quiz_per_window == 50.0
+        assert TIER_LIMITS[UserTier.free].quiz_per_window == 100.0
 
-    def test_free_ocr_quota_is_50(self):
-        assert TIER_LIMITS[UserTier.free].ocr_pages_per_window == 50
+    def test_free_ocr_quota_is_100(self):
+        assert TIER_LIMITS[UserTier.free].ocr_pages_per_window == 100
 
     def test_tier_limits_has_no_allowed_models_field(self):
         assert not hasattr(TierLimits, "allowed_models")
@@ -321,7 +321,7 @@ class TestQuizCreationPolicy:
             resource_type="quiz",
             window_start=now,
             window_end=now + timedelta(days=30),
-            consumed=50,  # fully exhausted against 50.0 quiz_per_window quota
+            consumed=100,  # fully exhausted against 100.0 quiz_per_window quota
         )
         db_session.add(record)
         await db_session.commit()
