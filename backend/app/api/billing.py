@@ -20,7 +20,7 @@ from app.schemas.billing import (
     SubscriptionResponse,
     UsageStatusResponse,
 )
-from app.services.credit_service import CreditService
+from app.services.credit_service import CreditService, VALID_AI_PACK_SIZES
 from app.services.paddle_client import paddle, PaddleError, parse_paddle_datetime
 from app.services.subscription_service import SubscriptionService
 from app.services.usage_service import UsageService
@@ -116,6 +116,25 @@ async def checkout_credits(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    if req.credit_type == "storage":
+        storage_bytes = int(req.pack_size.rstrip("gb")) * 1024**3
+        if storage_bytes not in VALID_STORAGE_CREDIT_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid storage pack size: {req.pack_size}",
+            )
+    elif req.credit_type == "ai":
+        if req.pack_size not in VALID_AI_PACK_SIZES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid AI pack size: {req.pack_size}",
+            )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid credit_type: {req.credit_type}",
+        )
+
     customer_id = await subscription_svc.get_or_create_paddle_customer(db, user)
     try:
         txn_id = await credit_svc.create_credit_checkout(

@@ -88,6 +88,26 @@ class CreditPurchase(CommonMixin, Base):
     )
 
 
+class AICreditBatch(CommonMixin, Base):
+    __tablename__ = "ai_credit_batches"
+    __table_args__ = (Index("ix_ai_credit_batches_user_expires", "user_id", "expires_at"),)
+
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    amount_total: Mapped[float] = mapped_column(Float, nullable=False)
+    amount_remaining: Mapped[float] = mapped_column(Float, nullable=False)
+    purchased_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    paddle_transaction_id: Mapped[str | None] = mapped_column(
+        String(100), unique=True, nullable=True
+    )
+
+
 class WebhookEvent(Base):
     """No CommonMixin — uses event_id as PK, no soft-delete."""
 

@@ -65,7 +65,7 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        allowed, remaining, source = await svc.check_and_consume(
+        allowed, remaining, source, _ = await svc.check_and_consume(
             db_session, user, "quiz", 1
         )
         assert allowed is True
@@ -79,7 +79,7 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        allowed, remaining, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
+        allowed, remaining, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
         assert allowed is True
         assert remaining == 0
 
@@ -90,7 +90,7 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 6)
+        allowed, _, _, _ = await svc.check_and_consume(db_session, user, "quiz", 6)
         assert allowed is False
 
     async def test_quota_accumulates_across_calls(self, db_session):
@@ -101,10 +101,10 @@ class TestUsageServiceQuota:
 
         svc = UsageService()
         for _ in range(5):
-            allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 1)
+            allowed, _, _, _ = await svc.check_and_consume(db_session, user, "quiz", 1)
             assert allowed is True
 
-        allowed, remaining, _ = await svc.check_and_consume(db_session, user, "quiz", 1)
+        allowed, remaining, _, _ = await svc.check_and_consume(db_session, user, "quiz", 1)
         assert allowed is False
         assert remaining == 0
 
@@ -115,10 +115,10 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 3)
+        allowed, _, _, _ = await svc.check_and_consume(db_session, user, "quiz", 3)
         assert allowed is True
 
-        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 3)
+        allowed, _, _, _ = await svc.check_and_consume(db_session, user, "quiz", 3)
         assert allowed is False
 
     async def test_performance_cost_consumes_5(self, db_session):
@@ -128,10 +128,10 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
+        allowed, _, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
         assert allowed is True
 
-        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
+        allowed, _, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
         assert allowed is False
 
     async def test_window_reset_restores_quota(self, db_session):
@@ -141,7 +141,7 @@ class TestUsageServiceQuota:
         await db_session.refresh(user)
 
         svc = UsageService()
-        allowed, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
+        allowed, _, _, _ = await svc.check_and_consume(db_session, user, "quiz", 5)
         assert allowed is True
 
         result = await db_session.execute(
@@ -154,7 +154,7 @@ class TestUsageServiceQuota:
         record.window_end = datetime.now(timezone.utc) - timedelta(seconds=1)
         await db_session.commit()
 
-        allowed, remaining, _ = await svc.check_and_consume(db_session, user, "quiz", 1)
+        allowed, remaining, _, _ = await svc.check_and_consume(db_session, user, "quiz", 1)
         assert allowed is True
         assert remaining == 4
 

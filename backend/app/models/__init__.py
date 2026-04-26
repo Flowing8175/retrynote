@@ -36,6 +36,7 @@ from app.models.billing import (
     UsageRecord,
     CreditBalance,
     CreditPurchase,
+    AICreditBatch,
     WebhookEvent,
 )
 from app.models.study import (
@@ -91,6 +92,7 @@ __all__ = [
     "UsageRecord",
     "CreditBalance",
     "CreditPurchase",
+    "AICreditBatch",
     "WebhookEvent",
     "ContentStatus",
     "MessageRole",

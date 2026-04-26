@@ -93,6 +93,9 @@ class Settings(BaseSettings):
     paddle_storage_5gb_price_id: str = ""
     paddle_storage_20gb_price_id: str = ""
     paddle_storage_50gb_price_id: str = ""
+    paddle_ai_50_price_id: str = ""
+    paddle_ai_200_price_id: str = ""
+    paddle_ai_500_price_id: str = ""
 
     # Cloudflare Turnstile — production keys must be set via Doppler
     # Development test key: 1x0000000000000000000000000000000AA (always passes)

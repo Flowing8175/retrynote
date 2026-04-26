@@ -6,14 +6,25 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="generate_study_summary")
-def generate_summary_task(file_id: str, user_id: str = "", credit_estimate: float = 0):
+def generate_summary_task(
+    file_id: str,
+    user_id: str = "",
+    credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list | None = None,
+):
     async def _run():
         from app.database import async_session
         from app.services.study_service import generate_summary
 
         async with async_session() as db:
             await generate_summary(
-                file_id, db, user_id=user_id, credit_estimate=credit_estimate
+                file_id,
+                db,
+                user_id=user_id,
+                credit_estimate=credit_estimate,
+                credit_source=credit_source,
+                credit_batch_ids=credit_batch_ids,
             )
 
     try:
@@ -27,7 +38,11 @@ def generate_summary_task(file_id: str, user_id: str = "", credit_estimate: floa
 
 @celery_app.task(name="generate_study_flashcards")
 def generate_flashcards_task(
-    file_id: str, user_id: str = "", credit_estimate: float = 0
+    file_id: str,
+    user_id: str = "",
+    credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list | None = None,
 ):
     async def _run():
         from app.database import async_session
@@ -35,7 +50,12 @@ def generate_flashcards_task(
 
         async with async_session() as db:
             await generate_flashcards(
-                file_id, db, user_id=user_id, credit_estimate=credit_estimate
+                file_id,
+                db,
+                user_id=user_id,
+                credit_estimate=credit_estimate,
+                credit_source=credit_source,
+                credit_batch_ids=credit_batch_ids,
             )
 
     try:
@@ -48,14 +68,25 @@ def generate_flashcards_task(
 
 
 @celery_app.task(name="generate_study_mindmap")
-def generate_mindmap_task(file_id: str, user_id: str = "", credit_estimate: float = 0):
+def generate_mindmap_task(
+    file_id: str,
+    user_id: str = "",
+    credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list | None = None,
+):
     async def _run():
         from app.database import async_session
         from app.services.study_service import generate_mindmap
 
         async with async_session() as db:
             await generate_mindmap(
-                file_id, db, user_id=user_id, credit_estimate=credit_estimate
+                file_id,
+                db,
+                user_id=user_id,
+                credit_estimate=credit_estimate,
+                credit_source=credit_source,
+                credit_batch_ids=credit_batch_ids,
             )
 
     try:
@@ -77,6 +108,8 @@ def generate_study_items_task(
     count: int = 5,
     language: str = "auto",
     force_regenerate: bool = False,
+    credit_source: str = "tier",
+    credit_batch_ids: list | None = None,
 ):
     async def _run():
         from app.database import async_session
@@ -93,6 +126,8 @@ def generate_study_items_task(
                 force_regenerate=force_regenerate,
                 user_id=user_id,
                 credit_estimate=credit_estimate,
+                credit_source=credit_source,
+                credit_batch_ids=credit_batch_ids,
             )
 
     try:

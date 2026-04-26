@@ -133,13 +133,18 @@ async def _reconcile_credit(
     user_id: str,
     credit_estimate: float,
     total_tokens: int,
+    source: str = "tier",
+    batch_ids: list[str] | None = None,
 ) -> None:
     if not user_id:
         return
     actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
     delta = actual_cost - credit_estimate
     if abs(delta) > 0.001:
-        await UsageService().adjust_credit(db, user_id, "quiz", delta)
+        if source == "ai_credit" and batch_ids:
+            await UsageService().adjust_credit_ai(db, batch_ids, -delta)
+        else:
+            await UsageService().adjust_credit(db, user_id, "quiz", delta)
 
 
 def _compute_tree_layout(nodes: list[dict], edges: list[dict]) -> list[dict]:
@@ -223,6 +228,8 @@ async def generate_summary(
     *,
     user_id: str = "",
     credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list[str] | None = None,
 ) -> None:
     summary = await _get_or_create_summary(db, file_id)
 
@@ -270,7 +277,7 @@ async def generate_summary(
         summary.status = ContentStatus.completed
         summary.generated_at = datetime.now(timezone.utc)
         summary.model_used = STUDY_MODEL
-        await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+        await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
         await db.commit()
 
         logger.info(
@@ -296,6 +303,8 @@ async def generate_flashcards(
     *,
     user_id: str = "",
     credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list[str] | None = None,
 ) -> None:
     result = await db.execute(
         select(StudyFlashcardSet).where(
@@ -374,7 +383,7 @@ async def generate_flashcards(
                     file_id,
                 )
                 flashcard_set.status = ContentStatus.failed
-                await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+                await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
                 await db.commit()
                 return
 
@@ -416,7 +425,7 @@ async def generate_flashcards(
         flashcard_set.status = ContentStatus.completed
         flashcard_set.generated_at = datetime.now(timezone.utc)
         flashcard_set.model_used = STUDY_MODEL
-        await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+        await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
         await db.commit()
 
         logger.info(
@@ -441,6 +450,8 @@ async def generate_mindmap(
     *,
     user_id: str = "",
     credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list[str] | None = None,
 ) -> None:
     result = await db.execute(
         select(StudyMindmap).where(
@@ -518,7 +529,7 @@ async def generate_mindmap(
                     exc,
                 )
                 mindmap.status = ContentStatus.failed
-                await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+                await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
                 await db.commit()
                 return
 
@@ -561,7 +572,7 @@ async def generate_mindmap(
         mindmap.status = ContentStatus.completed
         mindmap.generated_at = datetime.now(timezone.utc)
         mindmap.model_used = STUDY_MODEL
-        await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+        await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
         await db.commit()
 
         logger.info(
@@ -664,6 +675,8 @@ async def generate_node_explanation(
     *,
     user_id: str = "",
     credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list[str] | None = None,
 ) -> tuple[str, str, bool]:
     mindmap_result = await db.execute(
         select(StudyMindmap).where(
@@ -690,7 +703,7 @@ async def generate_node_explanation(
             if cached is not None:
                 text = cached.decode("utf-8") if isinstance(cached, bytes) else cached
                 if text:
-                    await _reconcile_credit(db, user_id, credit_estimate, 0)
+                    await _reconcile_credit(db, user_id, credit_estimate, 0, credit_source, credit_batch_ids)
                     await db.commit()
                     return label, text, True
         except Exception as exc:
@@ -723,7 +736,7 @@ async def generate_node_explanation(
     if not explanation:
         raise ValueError("Empty explanation from model")
 
-    await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+    await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
     await db.commit()
 
     if redis_client is not None:
@@ -842,6 +855,8 @@ async def generate_study_items(
     force_regenerate: bool = False,
     user_id: str = "",
     credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list[str] | None = None,
 ) -> None:
     if item_type not in _VALID_ITEM_TYPES:
         raise ValueError(f"invalid item_type: {item_type}")
@@ -946,7 +961,7 @@ async def generate_study_items(
                     file_id,
                 )
                 item_set.status = ContentStatus.failed
-                await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+                await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
                 await db.commit()
                 return
 
@@ -960,7 +975,7 @@ async def generate_study_items(
             item_set.status = ContentStatus.failed
             item_set.error_code = str(error_code) if error_code else None
             item_set.error_message = str(error_message) if error_message else None
-            await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+            await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
             await db.commit()
             return
 
@@ -981,7 +996,7 @@ async def generate_study_items(
             item_set.error_message = (
                 str(error_message) if error_message else None
             )
-            await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+            await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
             await db.commit()
             return
 
@@ -994,7 +1009,7 @@ async def generate_study_items(
             item_set.status = ContentStatus.failed
             item_set.error_code = str(error_code) if error_code else None
             item_set.error_message = str(error_message) if error_message else None
-            await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+            await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
             await db.commit()
             return
 
@@ -1007,7 +1022,7 @@ async def generate_study_items(
         item_set.model_used = STUDY_MODEL
         item_set.error_code = str(error_code) if error_code else None
         item_set.error_message = str(error_message) if error_message else None
-        await _reconcile_credit(db, user_id, credit_estimate, total_tokens)
+        await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
         await db.commit()
 
         logger.info(

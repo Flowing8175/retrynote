@@ -255,7 +255,7 @@ async def create_quiz_session(
     usage_svc = UsageService()
     tier = UserTier(user.tier)
 
-    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", generation_cost)
+    allowed, _, _gen_source, _gen_batch_ids = await usage_svc.check_and_consume(db, user, "quiz", generation_cost)
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -315,6 +315,8 @@ async def create_quiz_session(
             "topic": req.topic,
             "source_url": req.source_url,
             "credit_estimate": generation_cost,
+            "credit_source": _gen_source,
+            "credit_batch_ids": _gen_batch_ids,
             "user_instruction": req.user_instruction,
         },
     )
@@ -553,10 +555,12 @@ async def submit_answer(
         raise HTTPException(status_code=404, detail="Item not found")
 
     # Only AI-graded (essay) questions consume credits
+    _essay_source = "tier"
+    _essay_batch_ids: list = []
     if item.question_type == QuestionType.essay:
         usage_svc = UsageService()
         tier = UserTier(user.tier)
-        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 0.1)
+        allowed, _, _essay_source, _essay_batch_ids = await usage_svc.check_and_consume(db, user, "quiz", 0.1)
         if not allowed:
             raise HTTPException(
                 status_code=402,
@@ -590,7 +594,10 @@ async def submit_answer(
         _essay_actual = calculate_credit_cost(grading.tokens_used, _essay_model)
         _essay_delta = _essay_actual - 0.1
         if abs(_essay_delta) > 0.001:
-            await UsageService().adjust_credit(db, user.id, "quiz", _essay_delta)
+            if _essay_source == "ai_credit" and _essay_batch_ids:
+                await UsageService().adjust_credit_ai(db, _essay_batch_ids, -_essay_delta)
+            else:
+                await UsageService().adjust_credit(db, user.id, "quiz", _essay_delta)
 
     raw_correct = item.correct_answer_json
     if isinstance(raw_correct, dict):
@@ -775,10 +782,12 @@ async def submit_batch_answers(
         if i.question_type == QuestionType.essay
         and (answer_map.get(i.id) or "").strip()
     )
+    _batch_source = "tier"
+    _batch_batch_ids: list = []
     if essay_count > 0:
         usage_svc = UsageService()
         tier = UserTier(user.tier)
-        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 0.1)
+        allowed, _, _batch_source, _batch_batch_ids = await usage_svc.check_and_consume(db, user, "quiz", 0.1)
         if not allowed:
             raise HTTPException(
                 status_code=402,
@@ -901,7 +910,10 @@ async def submit_batch_answers(
         _batch_actual = calculate_credit_cost(_batch_total_tokens, _batch_model)
         _batch_delta = _batch_actual - 0.1
         if abs(_batch_delta) > 0.001:
-            await UsageService().adjust_credit(db, user.id, "quiz", _batch_delta)
+            if _batch_source == "ai_credit" and _batch_batch_ids:
+                await UsageService().adjust_credit_ai(db, _batch_batch_ids, -_batch_delta)
+            else:
+                await UsageService().adjust_credit(db, user.id, "quiz", _batch_delta)
 
     await db.commit()
 
@@ -1064,10 +1076,12 @@ async def submit_exam(
         )
     )
     essay_count = essay_count_result.scalar() or 0
+    _exam_source = "tier"
+    _exam_batch_ids: list = []
     if essay_count > 0:
         usage_svc = UsageService()
         tier = UserTier(user.tier)
-        allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", 0.1)
+        allowed, _, _exam_source, _exam_batch_ids = await usage_svc.check_and_consume(db, user, "quiz", 0.1)
         if not allowed:
             raise HTTPException(
                 status_code=402,
@@ -1094,7 +1108,11 @@ async def submit_exam(
         status="pending",
         target_type="quiz_session",
         target_id=session_id,
-        payload_json={"credit_estimate": 0.1 if essay_count > 0 else 0.0},
+        payload_json={
+            "credit_estimate": 0.1 if essay_count > 0 else 0.0,
+            "credit_source": _exam_source if essay_count > 0 else "tier",
+            "credit_batch_ids": _exam_batch_ids if essay_count > 0 else [],
+        },
     )
     db.add(job)
 
@@ -1211,7 +1229,7 @@ async def create_objection(
     _objection_estimate = TIER_ESTIMATES[MODEL_BALANCED]
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(
+    allowed, _, _obj_source, _obj_batch_ids = await usage_svc.check_and_consume(
         db, user, "quiz", _objection_estimate
     )
     if not allowed:
@@ -1246,7 +1264,11 @@ async def create_objection(
         status="pending",
         target_type="objection",
         target_id=objection.id,
-        payload_json={"credit_estimate": _objection_estimate},
+        payload_json={
+            "credit_estimate": _objection_estimate,
+            "credit_source": _obj_source,
+            "credit_batch_ids": _obj_batch_ids,
+        },
     )
     db.add(job)
 

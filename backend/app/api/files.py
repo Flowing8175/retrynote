@@ -207,7 +207,7 @@ async def _check_storage_quota(
     _credit_storage = _credits.storage_credits_bytes if _credits else 0
     _total_quota = _limits.storage_bytes + _credit_storage
 
-    _allowed, _, _ = await UsageService().check_and_consume(
+    _allowed, _, _, _ = await UsageService().check_and_consume(
         db, user, "storage", file_size
     )
     if not _allowed:

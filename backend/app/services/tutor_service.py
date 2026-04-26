@@ -65,6 +65,8 @@ async def stream_tutor_response(
     db: AsyncSession,
     user_id: str = "",
     credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list[str] | None = None,
 ) -> AsyncGenerator[str, None]:
     try:
         parsed_result = await db.execute(
@@ -153,7 +155,10 @@ async def stream_tutor_response(
             actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
             delta = actual_cost - credit_estimate
             if abs(delta) > 0.001:
-                await UsageService().adjust_credit(db, user_id, "quiz", delta)
+                if credit_source == "ai_credit" and credit_batch_ids:
+                    await UsageService().adjust_credit_ai(db, credit_batch_ids, -delta)
+                else:
+                    await UsageService().adjust_credit(db, user_id, "quiz", delta)
 
         await db.commit()
 
@@ -164,9 +169,10 @@ async def stream_tutor_response(
         try:
             await db.rollback()
             if user_id and credit_estimate:
-                await UsageService().adjust_credit(
-                    db, user_id, "quiz", -credit_estimate
-                )
+                if credit_source == "ai_credit" and credit_batch_ids:
+                    await UsageService().adjust_credit_ai(db, credit_batch_ids, credit_estimate)
+                else:
+                    await UsageService().adjust_credit(db, user_id, "quiz", -credit_estimate)
                 await db.commit()
         except Exception:
             pass

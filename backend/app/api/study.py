@@ -178,7 +178,7 @@ async def chat_stream(
 
     usage_svc = UsageService()
     tier = UserTier(current_user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(
+    allowed, _, _tutor_source, _tutor_batch_ids = await usage_svc.check_and_consume(
         db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
     )
     if not allowed:
@@ -201,6 +201,8 @@ async def chat_stream(
             db=db,
             user_id=current_user.id,
             credit_estimate=STUDY_CREDIT_ESTIMATE,
+            credit_source=_tutor_source,
+            credit_batch_ids=_tutor_batch_ids,
         )
     )
 
@@ -331,7 +333,7 @@ async def generate_summary_endpoint(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(
+    allowed, _, _summary_source, _summary_batch_ids = await usage_svc.check_and_consume(
         db, user, "quiz", STUDY_CREDIT_ESTIMATE
     )
     if not allowed:
@@ -353,7 +355,7 @@ async def generate_summary_endpoint(
     db.add(new_summary)
     await db.commit()
 
-    dispatch_task("generate_study_summary", [file_id, user.id, STUDY_CREDIT_ESTIMATE])
+    dispatch_task("generate_study_summary", [file_id, user.id, STUDY_CREDIT_ESTIMATE, _summary_source, _summary_batch_ids or []])
     return {"status": "dispatched"}
 
 
@@ -440,7 +442,7 @@ async def generate_flashcards_endpoint(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(
+    allowed, _, _flash_source, _flash_batch_ids = await usage_svc.check_and_consume(
         db, user, "quiz", STUDY_CREDIT_ESTIMATE
     )
     if not allowed:
@@ -465,7 +467,7 @@ async def generate_flashcards_endpoint(
     await db.commit()
 
     dispatch_task(
-        "generate_study_flashcards", [file_id, user.id, STUDY_CREDIT_ESTIMATE]
+        "generate_study_flashcards", [file_id, user.id, STUDY_CREDIT_ESTIMATE, _flash_source, _flash_batch_ids or []]
     )
     return {"status": "dispatched"}
 
@@ -540,7 +542,7 @@ async def generate_mindmap_endpoint(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(
+    allowed, _, _mindmap_source, _mindmap_batch_ids = await usage_svc.check_and_consume(
         db, user, "quiz", STUDY_CREDIT_ESTIMATE
     )
     if not allowed:
@@ -562,7 +564,7 @@ async def generate_mindmap_endpoint(
     db.add(new_mindmap)
     await db.commit()
 
-    dispatch_task("generate_study_mindmap", [file_id, user.id, STUDY_CREDIT_ESTIMATE])
+    dispatch_task("generate_study_mindmap", [file_id, user.id, STUDY_CREDIT_ESTIMATE, _mindmap_source, _mindmap_batch_ids or []])
     return {"status": "dispatched"}
 
 
@@ -583,7 +585,7 @@ async def get_mindmap_node_explanation(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(
+    allowed, _, _node_source, _node_batch_ids = await usage_svc.check_and_consume(
         db, user, "quiz", STUDY_CREDIT_ESTIMATE
     )
     if not allowed:
@@ -606,6 +608,8 @@ async def get_mindmap_node_explanation(
             redis_client=redis_client,
             user_id=user.id,
             credit_estimate=STUDY_CREDIT_ESTIMATE,
+            credit_source=_node_source,
+            credit_batch_ids=_node_batch_ids,
         )
     except MindmapNotReadyError as exc:
         raise HTTPException(
@@ -767,7 +771,7 @@ async def generate_study_items_endpoint(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(
+    allowed, _, _items_source, _items_batch_ids = await usage_svc.check_and_consume(
         db, user, "quiz", STUDY_CREDIT_ESTIMATE
     )
     if not allowed:
@@ -815,6 +819,8 @@ async def generate_study_items_endpoint(
             req.count,
             req.language,
             req.force_regenerate,
+            _items_source,
+            _items_batch_ids or [],
         ],
     )
     return {"status": "dispatched"}

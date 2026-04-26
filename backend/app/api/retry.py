@@ -153,7 +153,7 @@ async def create_retry_set(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _ = await usage_svc.check_and_consume(db, user, "quiz", estimate)
+    allowed, _, _retry_source, _retry_batch_ids = await usage_svc.check_and_consume(db, user, "quiz", estimate)
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -195,6 +195,8 @@ async def create_retry_set(
             "difficulty": req.difficulty,
             "question_types": req.question_types,
             "credit_estimate": estimate,
+            "credit_source": _retry_source,
+            "credit_batch_ids": _retry_batch_ids,
             "user_instruction": req.user_instruction,
         },
     )

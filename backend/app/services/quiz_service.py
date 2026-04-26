@@ -1173,8 +1173,9 @@ async def _adjust_generation_credits(
     session: QuizSession,
     tokens_used: int,
     credit_estimate: float,
+    source: str = "tier",
+    batch_ids: list[str] | None = None,
 ) -> None:
-    """Adjust credits based on actual token usage vs estimate."""
     from app.tier_config import calculate_credit_cost
     from app.services.usage_service import UsageService
 
@@ -1184,7 +1185,10 @@ async def _adjust_generation_credits(
     )
     delta = actual_cost - credit_estimate
     if abs(delta) > 0.001 and session.user_id:
-        await UsageService().adjust_credit(db, str(session.user_id), "quiz", delta)
+        if source == "ai_credit" and batch_ids:
+            await UsageService().adjust_credit_ai(db, batch_ids, -delta)
+        else:
+            await UsageService().adjust_credit(db, str(session.user_id), "quiz", delta)
 
 
 async def _refund_quiz_credits_on_invalid_input(
@@ -1217,7 +1221,12 @@ async def _refund_quiz_credits_on_invalid_input(
 
         from app.services.usage_service import UsageService
 
-        await UsageService().adjust_credit(db, str(session.user_id), "quiz", -estimate)
+        credit_source = payload.get("credit_source", "tier")
+        credit_batch_ids = payload.get("credit_batch_ids") or []
+        if credit_source == "ai_credit" and credit_batch_ids:
+            await UsageService().adjust_credit_ai(db, credit_batch_ids, estimate)
+        else:
+            await UsageService().adjust_credit(db, str(session.user_id), "quiz", -estimate)
         payload["credits_refunded"] = True
         job.payload_json = payload
         flag_modified(job, "payload_json")
@@ -1369,7 +1378,9 @@ async def stream_quiz_generation(
         items = _persist_quiz_items(db, session, questions, ctx.difficulty)
 
         credit_estimate = payload.get("credit_estimate", 0.0)
-        await _adjust_generation_credits(db, session, tokens_used, credit_estimate)
+        credit_source = payload.get("credit_source", "tier")
+        credit_batch_ids = payload.get("credit_batch_ids") or []
+        await _adjust_generation_credits(db, session, tokens_used, credit_estimate, credit_source, credit_batch_ids)
 
         session.status = QuizSessionStatus.ready
         await db.commit()
@@ -1615,13 +1626,17 @@ async def generate_quiz(job_id: str):
                         tokens_used,
                         session.generation_model_name or cfg.balanced_generation_model,
                     )
-                    estimate = (job.payload_json or {}).get("credit_estimate", 0.0)
+                    _retry_payload = job.payload_json or {}
+                    estimate = _retry_payload.get("credit_estimate", 0.0)
                     delta = actual_cost - estimate
                     _retry_uid = session.user_id
+                    _retry_source = _retry_payload.get("credit_source", "tier")
+                    _retry_batch_ids = _retry_payload.get("credit_batch_ids") or []
                     if abs(delta) > 0.001 and _retry_uid is not None:
-                        await UsageService().adjust_credit(
-                            db, _retry_uid, "quiz", delta
-                        )
+                        if _retry_source == "ai_credit" and _retry_batch_ids:
+                            await UsageService().adjust_credit_ai(db, _retry_batch_ids, -delta)
+                        else:
+                            await UsageService().adjust_credit(db, _retry_uid, "quiz", delta)
 
                     await db.commit()
                     session.status = QuizSessionStatus.ready
@@ -1635,8 +1650,10 @@ async def generate_quiz(job_id: str):
                 _persist_quiz_items(db, session, questions, resolved_difficulty)
 
                 credit_estimate = payload.get("credit_estimate", 0.0)
+                credit_source = payload.get("credit_source", "tier")
+                credit_batch_ids = payload.get("credit_batch_ids") or []
                 await _adjust_generation_credits(
-                    db, session, tokens_used, credit_estimate
+                    db, session, tokens_used, credit_estimate, credit_source, credit_batch_ids
                 )
 
                 session.status = QuizSessionStatus.ready
@@ -1750,18 +1767,22 @@ async def grade_exam(job_id: str):
                 from app.tier_config import calculate_credit_cost
                 from app.services.usage_service import UsageService
 
+                _exam_payload = job.payload_json or {}
                 _exam_total_tokens = sum(g.tokens_used for g in all_gradings)
                 _exam_actual_cost = calculate_credit_cost(
                     _exam_total_tokens,
                     session.generation_model_name or cfg.balanced_generation_model,
                 )
-                _exam_estimate = (job.payload_json or {}).get("credit_estimate", 0.0)
+                _exam_estimate = _exam_payload.get("credit_estimate", 0.0)
                 _exam_delta = _exam_actual_cost - _exam_estimate
                 _exam_uid = session.user_id
+                _exam_source = _exam_payload.get("credit_source", "tier")
+                _exam_batch_ids = _exam_payload.get("credit_batch_ids") or []
                 if abs(_exam_delta) > 0.001 and _exam_uid is not None:
-                    await UsageService().adjust_credit(
-                        db, _exam_uid, "quiz", _exam_delta
-                    )
+                    if _exam_source == "ai_credit" and _exam_batch_ids:
+                        await UsageService().adjust_credit_ai(db, _exam_batch_ids, -_exam_delta)
+                    else:
+                        await UsageService().adjust_credit(db, _exam_uid, "quiz", _exam_delta)
 
             except JobFailure:
                 raise
@@ -1920,14 +1941,20 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
             from app.tier_config import calculate_credit_cost
             from app.services.usage_service import UsageService
 
+            _obj_payload = job.payload_json or {}
             _obj_actual_cost = calculate_credit_cost(
                 tokens_used, cfg.balanced_generation_model
             )
-            _obj_estimate = (job.payload_json or {}).get("credit_estimate", 0.0)
+            _obj_estimate = _obj_payload.get("credit_estimate", 0.0)
             _obj_delta = _obj_actual_cost - _obj_estimate
             _obj_uid = answer_log.user_id
+            _obj_source = _obj_payload.get("credit_source", "tier")
+            _obj_batch_ids = _obj_payload.get("credit_batch_ids") or []
             if abs(_obj_delta) > 0.001 and _obj_uid is not None:
-                await UsageService().adjust_credit(db, _obj_uid, "quiz", _obj_delta)
+                if _obj_source == "ai_credit" and _obj_batch_ids:
+                    await UsageService().adjust_credit_ai(db, _obj_batch_ids, -_obj_delta)
+                else:
+                    await UsageService().adjust_credit(db, _obj_uid, "quiz", _obj_delta)
 
 
 async def _update_weak_point(

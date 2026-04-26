@@ -13,6 +13,8 @@ export interface UsageWindow {
 
 export interface CreditBalance {
   storageCreditsBytes: number;
+  aiCreditsBalance: number;
+  aiCreditsExpiresAt: string | null;
 }
 
 export interface UsageStatus {

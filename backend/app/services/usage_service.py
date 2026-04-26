@@ -1,9 +1,12 @@
+import logging
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+logger = logging.getLogger(__name__)
+
 from app.models.user import User
-from app.models.billing import UsageRecord, CreditBalance
+from app.models.billing import UsageRecord, CreditBalance, AICreditBatch
 from app.schemas.billing import (
     UsageStatusResponse,
     UsageWindowSchema,
@@ -61,22 +64,62 @@ class UsageService:
 
         return record
 
+    async def _get_active_ai_batches(
+        self, db: AsyncSession, user_id: str
+    ) -> list[AICreditBatch]:
+        now = datetime.now(timezone.utc)
+        result = await db.execute(
+            select(AICreditBatch)
+            .where(
+                AICreditBatch.user_id == user_id,
+                AICreditBatch.deleted_at == None,  # noqa: E711
+                AICreditBatch.expires_at > now,
+                AICreditBatch.amount_remaining > 0,
+            )
+            .order_by(AICreditBatch.expires_at.asc())
+            .with_for_update()
+        )
+        return list(result.scalars().all())
+
+    def _consume_from_batches(
+        self, batches: list[AICreditBatch], amount: float
+    ) -> tuple[float, list[str]]:
+        amount_left = amount
+        consumed_total = 0.0
+        batch_ids: list[str] = []
+
+        for batch in batches:
+            if amount_left <= 0:
+                break
+            deducted = min(batch.amount_remaining, amount_left)
+            if deducted > 0:
+                batch.amount_remaining = round(
+                    max(0.0, batch.amount_remaining - deducted), 2
+                )
+                amount_left -= deducted
+                consumed_total += deducted
+                batch_ids.append(batch.id)
+
+        return (consumed_total, batch_ids)
+
     async def check_and_consume(
         self,
         db: AsyncSession,
         user: User,
         resource_type: str,
         amount: float = 1.0,
-    ) -> tuple[bool, float, str]:
+    ) -> tuple[bool, float, str, list[str]]:
         """
-        Returns (allowed, remaining, source).
-        source = "tier" | "credit"
-        Consumes tier allowance first, then credits.
+        Returns (allowed, remaining, source, batch_ids).
+        source = "tier" | "credit" | "ai_credit"
+        For quiz: AI credit batches consumed first (FIFO by expires_at),
+        remainder falls through to tier rolling-window.
+        batch_ids contains IDs of AICreditBatch rows consumed; empty for
+        non-quiz paths and quiz paths that hit only the tier window.
         """
         tier = UserTier(user.tier)
         limits = TIER_LIMITS[tier]
 
-        # Storage is cumulative, not rolling-window
         if resource_type == "storage":
             # Lock the User row to prevent concurrent quota check race condition
             result = await db.execute(
@@ -90,7 +133,7 @@ class UsageService:
             projected = locked_user.storage_used_bytes + amount
 
             if projected > total_quota:
-                return (False, 0, "tier")
+                return (False, 0, "tier", [])
 
             # Only charge credits for bytes that cross into the over-tier zone.
             # e.g. tier=5GB, used=4.8GB, upload=400MB → 200MB from tier, 200MB from credits.
@@ -104,7 +147,20 @@ class UsageService:
             locked_user.storage_used_bytes = projected
             remaining = total_quota - projected
             source = "credit" if new_overage > 0 else "tier"
-            return (True, remaining, source)
+            return (True, remaining, source, [])
+
+        batch_ids: list[str] = []
+
+        if resource_type == "quiz":
+            batches = await self._get_active_ai_batches(db, user.id)
+            if batches:
+                consumed_from_credits, batch_ids = self._consume_from_batches(
+                    batches, amount
+                )
+                if consumed_from_credits >= amount:
+                    remaining_credits = sum(b.amount_remaining for b in batches)
+                    return (True, remaining_credits, "ai_credit", batch_ids)
+                amount = amount - consumed_from_credits
 
         limit = (
             limits.quiz_per_window
@@ -113,15 +169,37 @@ class UsageService:
         )
 
         if limit == -1:
-            return (True, -1, "tier")
+            return (True, -1, "tier", [])
 
         record = await self._get_or_create_window(db, user.id, resource_type)
 
         if record.consumed + amount <= limit:
             record.consumed += amount
-            return (True, limit - record.consumed, "tier")
+            source = "ai_credit" if batch_ids else "tier"
+            return (True, limit - record.consumed, source, batch_ids)
 
-        return (False, 0, "tier")
+        return (False, 0, "tier", [])
+
+    async def get_ai_credit_balance(
+        self, db: AsyncSession, user_id: str
+    ) -> tuple[float, datetime | None]:
+        now = datetime.now(timezone.utc)
+        result = await db.execute(
+            select(AICreditBatch)
+            .where(
+                AICreditBatch.user_id == user_id,
+                AICreditBatch.deleted_at == None,  # noqa: E711
+                AICreditBatch.expires_at > now,
+                AICreditBatch.amount_remaining > 0,
+            )
+            .order_by(AICreditBatch.expires_at.asc())
+        )
+        batches = list(result.scalars().all())
+        if not batches:
+            return (0.0, None)
+        total_remaining = sum(b.amount_remaining for b in batches)
+        soonest_expiry = _ensure_aware(batches[0].expires_at)
+        return (total_remaining, soonest_expiry)
 
     async def adjust_credit(
         self,
@@ -135,6 +213,46 @@ class UsageService:
         """
         record = await self._get_or_create_window(db, user_id, resource_type)
         record.consumed = round(record.consumed + delta, 2)
+
+    async def adjust_credit_ai(
+        self,
+        db: AsyncSession,
+        batch_ids: list[str],
+        delta: float,
+    ) -> None:
+        """Adjust AI credit batches by delta.
+
+        delta > 0  → refund (restore amount_remaining, capped at amount_total)
+        delta < 0  → additional charge (deduct further)
+
+        LIFO order: batch_ids[-1] is touched first.
+        Skips expired batches (expires_at < now) — no refund possible.
+        Rounds to 2 decimal places.
+        Does NOT call db.commit() — caller owns the transaction.
+        """
+        now = datetime.now(timezone.utc)
+        for batch_id in reversed(batch_ids):
+            if delta == 0:
+                break
+            batch = await db.get(AICreditBatch, batch_id, with_for_update=True)
+            if batch is None:
+                continue
+            if _ensure_aware(batch.expires_at) < now:
+                continue
+            if delta > 0:
+                restore = min(delta, batch.amount_total - batch.amount_remaining)
+                batch.amount_remaining = round(batch.amount_remaining + restore, 2)
+                delta -= restore
+            else:
+                take = min(-delta, batch.amount_remaining)
+                batch.amount_remaining = round(batch.amount_remaining - take, 2)
+                delta += take
+        if delta != 0:
+            logger.warning(
+                "adjust_credit_ai: residual delta=%s remaining batch_ids=%s",
+                delta,
+                batch_ids,
+            )
 
     async def get_usage_status(
         self, db: AsyncSession, user: User

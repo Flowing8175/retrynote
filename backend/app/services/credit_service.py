@@ -1,8 +1,11 @@
 import logging
+from datetime import datetime
+
+from dateutil.relativedelta import relativedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.billing import CreditBalance, CreditPurchase
+from app.models.billing import AICreditBatch, CreditBalance, CreditPurchase
 from app.config import settings
 from app.services.paddle_client import paddle
 from app.utils.db_helpers import get_or_create_credit_balance
@@ -22,7 +25,12 @@ CREDIT_PACKS = {
         "price_id_setting": "paddle_storage_50gb_price_id",
         "storage_bytes": 50 * 1024 * 1024 * 1024,
     },
+    ("ai", "50"): {"price_id_setting": "paddle_ai_50_price_id", "ai_count": 50},
+    ("ai", "200"): {"price_id_setting": "paddle_ai_200_price_id", "ai_count": 200},
+    ("ai", "500"): {"price_id_setting": "paddle_ai_500_price_id", "ai_count": 500},
 }
+
+VALID_AI_PACK_SIZES = {"50", "200", "500"}
 
 
 class CreditService:
@@ -51,9 +59,24 @@ class CreditService:
             )
 
         if ai_count > 0:
-            logger.warning(
-                "add_credits: ai_count=%d received but AI credits not yet supported",
-                ai_count,
+            now = datetime.utcnow()
+            expires_at = now + relativedelta(months=3)
+            batch = AICreditBatch(
+                user_id=user_id,
+                amount_total=float(ai_count),
+                amount_remaining=float(ai_count),
+                purchased_at=now,
+                expires_at=expires_at,
+                paddle_transaction_id=paddle_transaction_id,
+            )
+            db.add(batch)
+            db.add(
+                CreditPurchase(
+                    user_id=user_id,
+                    credit_type="ai",
+                    amount=ai_count,
+                    paddle_transaction_id=paddle_transaction_id,
+                )
             )
 
         await db.commit()
@@ -99,17 +122,28 @@ class CreditService:
         user_id: str,
     ) -> str:
         price_id = self.get_credit_pack_price_id(credit_type, pack_size)
-        storage_bytes = self.get_pack_amounts(credit_type, pack_size)
+        key = (credit_type, pack_size)
+        pack = CREDIT_PACKS.get(key)
+        if pack is None:
+            raise ValueError(f"Unknown credit pack: {credit_type}/{pack_size}")
+
+        custom_data = {
+            "user_id": user_id,
+            "credit_type": credit_type,
+            "pack_size": pack_size,
+        }
+
+        if credit_type == "storage":
+            custom_data["storage_bytes"] = str(pack["storage_bytes"])
+        elif credit_type == "ai":
+            custom_data["ai_count"] = str(pack["ai_count"])
+        else:
+            raise ValueError(f"Unknown credit_type: {credit_type}")
 
         transaction = await paddle.create_transaction(
             customer_id=customer_id,
             price_id=price_id,
-            custom_data={
-                "user_id": user_id,
-                "credit_type": credit_type,
-                "pack_size": pack_size,
-                "storage_bytes": str(storage_bytes),
-            },
+            custom_data=custom_data,
             success_url=success_url,
         )
         txn_id = transaction.get("id", "")

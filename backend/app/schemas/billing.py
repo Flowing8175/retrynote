@@ -23,6 +23,8 @@ class UsageWindowSchema(_CamelModel):
 
 class CreditBalanceSchema(_CamelModel):
     storage_credits_bytes: int
+    ai_credits_balance: float = 0.0
+    ai_credits_expires_at: datetime | None = None
 
 
 class UsageStatusResponse(_CamelModel):
