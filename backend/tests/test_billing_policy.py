@@ -446,3 +446,519 @@ class TestQuizCreationPolicy:
         )
         assert resp.status_code == 402
         assert resp.json()["detail"]["limit_type"] == "quiz"
+
+
+# ---------------------------------------------------------------------------
+# AI Credit Pack Tests — T11
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestAICreditBatchPurchase:
+    async def test_add_credits_creates_batch_with_correct_expiry(self, db_session):
+        from dateutil.relativedelta import relativedelta
+        from app.services.credit_service import CreditService
+        from app.models.billing import AICreditBatch
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        svc = CreditService()
+        await svc.add_credits(db_session, user.id, ai_count=200, paddle_transaction_id="txn-1")
+
+        result = await db_session.execute(
+            select(AICreditBatch).where(AICreditBatch.user_id == user.id)
+        )
+        batches = list(result.scalars().all())
+        assert len(batches) == 1
+        batch = batches[0]
+
+        assert batch.amount_total == 200.0
+        assert batch.amount_remaining == 200.0
+
+        # add_credits uses datetime.utcnow() (naive); SQLite strips tz info.
+        # Normalize both to UTC-naive for day-level comparison.
+        def _strip_tz(dt: datetime) -> datetime:
+            return dt.replace(tzinfo=None) if dt.tzinfo is not None else dt
+
+        purchased = _strip_tz(batch.purchased_at)
+        expected_expiry = purchased + relativedelta(months=3)
+        actual_expiry = _strip_tz(batch.expires_at)
+
+        assert actual_expiry.year == expected_expiry.year
+        assert actual_expiry.month == expected_expiry.month
+        assert actual_expiry.day == expected_expiry.day
+
+    async def test_add_credits_does_not_modify_storage_credits(self, db_session):
+        from app.services.credit_service import CreditService
+        from app.utils.db_helpers import get_or_create_credit_balance
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        balance = await get_or_create_credit_balance(db_session, user.id)
+        balance.storage_credits_bytes = 5 * 1024 ** 3
+        await db_session.commit()
+        await db_session.refresh(balance)
+
+        svc = CreditService()
+        balance_after = await svc.add_credits(db_session, user.id, ai_count=100)
+
+        assert balance_after.storage_credits_bytes == 5 * 1024 ** 3
+
+
+@pytest.mark.asyncio
+class TestAICreditFIFOConsumption:
+    async def test_consumes_from_soonest_expiring_batch_first(self, db_session):
+        from app.models.billing import AICreditBatch
+        from app.services.usage_service import UsageService
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        now = datetime.now(timezone.utc)
+        batch_a = AICreditBatch(
+            user_id=user.id,
+            amount_total=50.0,
+            amount_remaining=50.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=30),
+        )
+        batch_b = AICreditBatch(
+            user_id=user.id,
+            amount_total=50.0,
+            amount_remaining=50.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=90),
+        )
+        db_session.add(batch_a)
+        db_session.add(batch_b)
+        await db_session.commit()
+        await db_session.refresh(batch_a)
+        await db_session.refresh(batch_b)
+        batch_a_id = batch_a.id
+
+        svc = UsageService()
+        allowed, remaining, source, batch_ids = await svc.check_and_consume(
+            db_session, user, "quiz", 30
+        )
+
+        await db_session.flush()
+        await db_session.refresh(batch_a)
+        await db_session.refresh(batch_b)
+
+        assert allowed is True
+        assert source == "ai_credit"
+        assert batch_ids == [batch_a_id]
+        assert round(batch_a.amount_remaining, 2) == 20.0
+        assert round(batch_b.amount_remaining, 2) == 50.0
+
+    async def test_falls_through_to_tier_when_batches_empty(self, db_session):
+        from app.services.usage_service import UsageService
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        svc = UsageService()
+        allowed, remaining, source, batch_ids = await svc.check_and_consume(
+            db_session, user, "quiz", 5
+        )
+
+        assert allowed is True
+        assert source == "tier"
+        assert batch_ids == []
+
+        result = await db_session.execute(
+            select(UsageRecord).where(
+                UsageRecord.user_id == user.id,
+                UsageRecord.resource_type == "quiz",
+            )
+        )
+        record = result.scalar_one_or_none()
+        assert record is not None
+        assert record.consumed == 5
+
+    async def test_falls_through_to_tier_when_all_batches_expired(self, db_session):
+        from app.models.billing import AICreditBatch
+        from app.services.usage_service import UsageService
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        now = datetime.now(timezone.utc)
+        expired_batch = AICreditBatch(
+            user_id=user.id,
+            amount_total=100.0,
+            amount_remaining=100.0,
+            purchased_at=now - timedelta(days=95),
+            expires_at=now - timedelta(days=1),
+        )
+        db_session.add(expired_batch)
+        await db_session.commit()
+        await db_session.refresh(expired_batch)
+
+        svc = UsageService()
+        allowed, remaining, source, batch_ids = await svc.check_and_consume(
+            db_session, user, "quiz", 3
+        )
+
+        await db_session.refresh(expired_batch)
+
+        assert allowed is True
+        assert source == "tier"
+        assert batch_ids == []
+        assert round(expired_batch.amount_remaining, 2) == 100.0
+
+    async def test_spans_multiple_batches(self, db_session):
+        from app.models.billing import AICreditBatch
+        from app.services.usage_service import UsageService
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        now = datetime.now(timezone.utc)
+        batch_a = AICreditBatch(
+            user_id=user.id,
+            amount_total=50.0,
+            amount_remaining=50.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=30),
+        )
+        batch_b = AICreditBatch(
+            user_id=user.id,
+            amount_total=100.0,
+            amount_remaining=100.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=60),
+        )
+        db_session.add(batch_a)
+        db_session.add(batch_b)
+        await db_session.commit()
+        await db_session.refresh(batch_a)
+        await db_session.refresh(batch_b)
+        batch_a_id = batch_a.id
+        batch_b_id = batch_b.id
+
+        svc = UsageService()
+        allowed, remaining, source, batch_ids = await svc.check_and_consume(
+            db_session, user, "quiz", 60
+        )
+
+        await db_session.flush()
+        await db_session.refresh(batch_a)
+        await db_session.refresh(batch_b)
+
+        assert allowed is True
+        assert source == "ai_credit"
+        assert batch_ids == [batch_a_id, batch_b_id]
+        assert round(batch_a.amount_remaining, 2) == 0.0
+        assert round(batch_b.amount_remaining, 2) == 90.0
+
+    async def test_concurrent_consumption_no_oversell(self, db_session):
+        """Serial simulation of concurrent consumption — verifies no oversell.
+
+        True async concurrency is not tested here because SQLite's StaticPool
+        does not support row-level locking, making concurrent-session tests fragile.
+        Serial calls on the same session verify FIFO depletion with no oversell:
+        total consumed from batch == amount_total (10), nothing left over.
+
+        Call #3 partially drains the batch (2 credits) then falls through to the
+        tier rolling window for the remaining 2 credits. The free tier allows
+        5 quiz credits per window; since calls #1 and #2 used batch credits only,
+        the tier window is empty → 0 + 2 ≤ 5 → allowed=True, source='ai_credit'.
+        """
+        from app.models.billing import AICreditBatch
+        from app.services.usage_service import UsageService
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        now = datetime.now(timezone.utc)
+        batch_a = AICreditBatch(
+            user_id=user.id,
+            amount_total=10.0,
+            amount_remaining=10.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=30),
+        )
+        db_session.add(batch_a)
+        await db_session.commit()
+        await db_session.refresh(batch_a)
+
+        svc = UsageService()
+
+        # Call #1: consumes 4 from batch → batch remaining 6
+        allowed1, _, source1, _ = await svc.check_and_consume(
+            db_session, user, "quiz", 4
+        )
+        assert allowed1 is True
+        assert source1 == "ai_credit"
+
+        # Call #2: consumes 4 from batch → batch remaining 2
+        allowed2, _, source2, _ = await svc.check_and_consume(
+            db_session, user, "quiz", 4
+        )
+        assert allowed2 is True
+        assert source2 == "ai_credit"
+
+        # Call #3: batch has 2 remaining → 2 from batch + 2 from tier window
+        # (free tier 5-credit window at 0; 0+2=2 ≤ 5 → allowed, source='ai_credit')
+        allowed3, _, source3, _ = await svc.check_and_consume(
+            db_session, user, "quiz", 4
+        )
+        assert allowed3 is True
+        assert source3 == "ai_credit"
+
+        await db_session.refresh(batch_a)
+
+        # No oversell: 4+4+2 = 10 consumed from batch == amount_total; nothing left
+        assert round(batch_a.amount_remaining, 2) == 0.0
+        assert round(batch_a.amount_total - batch_a.amount_remaining, 2) == 10.0
+
+    async def test_ocr_consumption_does_not_affect_ai_batches(self, db_session):
+        from app.models.billing import AICreditBatch
+        from app.services.usage_service import UsageService
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        now = datetime.now(timezone.utc)
+        batch = AICreditBatch(
+            user_id=user.id,
+            amount_total=200.0,
+            amount_remaining=200.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=30),
+        )
+        db_session.add(batch)
+        await db_session.commit()
+        await db_session.refresh(batch)
+
+        svc = UsageService()
+        for _ in range(5):
+            await svc.check_and_consume(db_session, user, "ocr", 1)
+
+        await db_session.refresh(batch)
+        assert round(batch.amount_remaining, 2) == 200.0
+
+        result = await db_session.execute(
+            select(UsageRecord).where(
+                UsageRecord.user_id == user.id,
+                UsageRecord.resource_type == "ocr",
+            )
+        )
+        record = result.scalar_one_or_none()
+        assert record is not None
+        assert record.consumed == 5
+
+    async def test_storage_consumption_does_not_affect_ai_batches(self, db_session):
+        from app.models.billing import AICreditBatch
+        from app.services.usage_service import UsageService
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        now = datetime.now(timezone.utc)
+        batch = AICreditBatch(
+            user_id=user.id,
+            amount_total=200.0,
+            amount_remaining=200.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=30),
+        )
+        db_session.add(batch)
+        await db_session.commit()
+        await db_session.refresh(batch)
+
+        svc = UsageService()
+        # Free tier storage limit is 150 MB; requesting 1 GB will be denied.
+        # Either allowed or denied, AI credit batches must remain untouched.
+        await svc.check_and_consume(db_session, user, "storage", 1024 ** 3)
+
+        await db_session.refresh(batch)
+        assert round(batch.amount_remaining, 2) == 200.0
+
+
+@pytest.mark.asyncio
+class TestAICreditReconciliation:
+    async def test_overshoot_refunds_to_originating_batch(self, db_session):
+        from app.models.billing import AICreditBatch
+        from app.services.usage_service import UsageService
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        now = datetime.now(timezone.utc)
+        batch_a = AICreditBatch(
+            user_id=user.id,
+            amount_total=50.0,
+            amount_remaining=50.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=30),
+        )
+        db_session.add(batch_a)
+        await db_session.commit()
+        await db_session.refresh(batch_a)
+
+        batch_a.amount_remaining = 45.0
+        await db_session.commit()
+        await db_session.refresh(batch_a)
+
+        svc = UsageService()
+
+        # Refund 2 credits → 45 + 2 = 47
+        await svc.adjust_credit_ai(db_session, [batch_a.id], delta=2.0)
+        await db_session.commit()
+        await db_session.refresh(batch_a)
+        assert round(batch_a.amount_remaining, 2) == 47.0
+
+        # Attempt to refund 100 — capped at amount_total (50):
+        # restore = min(100, 50 - 47) = 3 → 47 + 3 = 50
+        await svc.adjust_credit_ai(db_session, [batch_a.id], delta=100.0)
+        await db_session.commit()
+        await db_session.refresh(batch_a)
+        assert round(batch_a.amount_remaining, 2) == 50.0
+
+    async def test_celery_retry_idempotency(self, db_session):
+        from unittest.mock import MagicMock
+        from app.models.billing import AICreditBatch
+        from app.services.quiz_service import _refund_quiz_credits_on_invalid_input
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        now = datetime.now(timezone.utc)
+        batch_a = AICreditBatch(
+            user_id=user.id,
+            amount_total=50.0,
+            amount_remaining=45.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=30),
+        )
+        db_session.add(batch_a)
+        await db_session.commit()
+        await db_session.refresh(batch_a)
+
+        job = MagicMock()
+        job.id = "mock-job-id"
+        job.payload_json = {
+            "credit_estimate": 5,
+            "credit_source": "ai_credit",
+            "credit_batch_ids": [batch_a.id],
+            "credits_refunded": True,
+        }
+        session_mock = MagicMock()
+        session_mock.user_id = user.id
+
+        error = Exception("INVALID_INPUT: some generation error")
+        await _refund_quiz_credits_on_invalid_input(db_session, job, session_mock, error)
+
+        await db_session.refresh(batch_a)
+        assert round(batch_a.amount_remaining, 2) == 45.0
+
+
+@pytest.mark.asyncio
+class TestAICreditExpiration:
+    async def test_expired_batch_skipped_during_consumption(self, db_session):
+        from app.models.billing import AICreditBatch
+        from app.services.usage_service import UsageService
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        now = datetime.now(timezone.utc)
+        expired = AICreditBatch(
+            user_id=user.id,
+            amount_total=100.0,
+            amount_remaining=100.0,
+            purchased_at=now - timedelta(days=95),
+            expires_at=now - timedelta(days=1),
+        )
+        valid = AICreditBatch(
+            user_id=user.id,
+            amount_total=50.0,
+            amount_remaining=50.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=30),
+        )
+        db_session.add(expired)
+        db_session.add(valid)
+        await db_session.commit()
+        await db_session.refresh(expired)
+        await db_session.refresh(valid)
+
+        svc = UsageService()
+        allowed, remaining, source, batch_ids = await svc.check_and_consume(
+            db_session, user, "quiz", 5
+        )
+
+        await db_session.refresh(expired)
+        await db_session.refresh(valid)
+
+        assert allowed is True
+        assert source == "ai_credit"
+        assert round(expired.amount_remaining, 2) == 100.0
+        assert round(valid.amount_remaining, 2) == 45.0
+
+    async def test_usage_balance_excludes_expired_batches(self, db_session):
+        from app.models.billing import AICreditBatch
+        from app.services.usage_service import UsageService, _ensure_aware
+
+        user = _make_user("free")
+        db_session.add(user)
+        await db_session.commit()
+        await db_session.refresh(user)
+
+        now = datetime.now(timezone.utc)
+        expired = AICreditBatch(
+            user_id=user.id,
+            amount_total=100.0,
+            amount_remaining=100.0,
+            purchased_at=now - timedelta(days=95),
+            expires_at=now - timedelta(days=1),
+        )
+        valid = AICreditBatch(
+            user_id=user.id,
+            amount_total=50.0,
+            amount_remaining=50.0,
+            purchased_at=now,
+            expires_at=now + timedelta(days=30),
+        )
+        db_session.add(expired)
+        db_session.add(valid)
+        await db_session.commit()
+        await db_session.refresh(valid)
+
+        svc = UsageService()
+        balance, soonest_expiry = await svc.get_ai_credit_balance(db_session, user.id)
+
+        assert round(balance, 2) == 50.0
+        assert soonest_expiry is not None
+        valid_expiry_aware = _ensure_aware(valid.expires_at)
+        soonest_aware = _ensure_aware(soonest_expiry)
+        diff = abs(soonest_aware - valid_expiry_aware)
+        assert diff < timedelta(seconds=1)
