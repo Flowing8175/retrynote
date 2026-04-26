@@ -105,18 +105,17 @@ const CREDIT_PACKS: CreditPack[] = [
   },
 ];
 
-// TODO(billing): set price after Paddle dashboard configuration
 const AI_CREDIT_PACKS: CreditPack[] = [
   {
     label: 'AI 50 크레딧',
-    description: '₩—',
+    description: '₩3,900 · 크레딧당 ₩78 · 3개월',
     creditType: 'ai',
     packSize: '50',
     icon: <Zap size={16} />,
   },
   {
     label: 'AI 200 크레딧',
-    description: '₩—',
+    description: '₩12,900 · 크레딧당 ₩64.5 · 3개월',
     creditType: 'ai',
     packSize: '200',
     icon: <Zap size={16} />,
@@ -124,7 +123,7 @@ const AI_CREDIT_PACKS: CreditPack[] = [
   },
   {
     label: 'AI 500 크레딧',
-    description: '₩—',
+    description: '₩27,900 · 크레딧당 ₩55.8 · 3개월',
     creditType: 'ai',
     packSize: '500',
     icon: <Zap size={16} />,

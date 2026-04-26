@@ -78,7 +78,6 @@ const CREDIT_PACKS: CreditPack[] = [
 
 interface AICreditPack {
   label: string;
-  // TODO(billing): set price after Paddle dashboard configuration
   price: string;
   unitPrice: string;
   size: string;
@@ -86,9 +85,9 @@ interface AICreditPack {
 }
 
 const AI_CREDIT_PACKS: AICreditPack[] = [
-  { label: '+50 AI 크레딧', price: '₩—', unitPrice: '크레딧당 ₩—', size: '50' },
-  { label: '+200 AI 크레딧', price: '₩—', unitPrice: '크레딧당 ₩—', size: '200', popular: true },
-  { label: '+500 AI 크레딧', price: '₩—', unitPrice: '크레딧당 ₩—', size: '500' },
+  { label: '+50 AI 크레딧', price: '₩3,900', unitPrice: '크레딧당 ₩78', size: '50' },
+  { label: '+200 AI 크레딧', price: '₩12,900', unitPrice: '크레딧당 ₩64.5', size: '200', popular: true },
+  { label: '+500 AI 크레딧', price: '₩27,900', unitPrice: '크레딧당 ₩55.8', size: '500' },
 ];
 
 const TIERS: UserTier[] = ['free', 'lite', 'standard', 'pro'];
