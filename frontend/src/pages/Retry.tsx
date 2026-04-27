@@ -36,7 +36,7 @@ const MODEL_TIER_LABELS: Record<string, string> = {
 const MODEL_TIER_COSTS: Record<string, number> = {
   ECO: 0.2,
   BALANCED: 0.7,
-  PERFORMANCE: 0.3,
+  PERFORMANCE: 1.3,
   MAX: 1.6,
 };
 

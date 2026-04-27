@@ -11,29 +11,42 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quiz"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     restart: always
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
       context: ./backend
     restart: always
+    security_opt:
+      - no-new-privileges:true
     environment:
       - APP_ENV=development
       - DATABASE_URL=postgresql+asyncpg://quiz:quiz@db:5432/quizmanager
       - DATABASE_URL_SYNC=postgresql://quiz:quiz@db:5432/quizmanager
       - REDIS_URL=redis://redis:6379/0
-      # Add other required env vars here or via .env file
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend/storage:/app/storage
 
@@ -41,6 +54,8 @@ services:
     build:
       context: ./backend
     restart: always
+    security_opt:
+      - no-new-privileges:true
     command: celery -A app.workers.celery_app worker --loglevel=info
     environment:
       - APP_ENV=development
@@ -48,9 +63,12 @@ services:
       - DATABASE_URL_SYNC=postgresql://quiz:quiz@db:5432/quizmanager
       - REDIS_URL=redis://redis:6379/0
     depends_on:
-      - db
-      - redis
-      - backend
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
     volumes:
       - ./backend/storage:/app/storage
 
