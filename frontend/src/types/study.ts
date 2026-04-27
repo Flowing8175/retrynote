@@ -9,6 +9,7 @@ export interface StudyStatus {
   summary_status: ContentStatus;
   flashcards_status: ContentStatus;
   mindmap_status: ContentStatus;
+  concept_notes_status: ContentStatus;
 }
 
 export interface StudySummary {
@@ -55,6 +56,22 @@ export interface StudyMindmap {
   status: ContentStatus;
 }
 
+export interface ConceptNoteItem {
+  id: string;
+  name: string;
+  explanation: string;
+  key_points: string[];
+  keywords: string[];
+  difficulty: 'easy' | 'medium' | 'hard';
+}
+
+export interface StudyConceptNote {
+  file_id: string;
+  concepts: ConceptNoteItem[];
+  generated_at: string | null;
+  status: ContentStatus;
+}
+
 export interface MindmapNodeExplanation {
   node_id: string;
   node_label: string;
@@ -74,7 +91,7 @@ export interface StudyChatHistory {
   messages: StudyChatMessage[];
 }
 
-export type StudyContentType = 'summary' | 'flashcards' | 'mindmap';
+export type StudyContentType = 'summary' | 'flashcards' | 'mindmap' | 'concept-notes';
 
 export interface StudyHistoryItem {
   file_id: string;

@@ -102,6 +102,26 @@ class StudyMindmap(CommonMixin, Base):
     file = relationship("File")
 
 
+class StudyConceptNote(CommonMixin, Base):
+    __tablename__ = "study_concept_notes"
+
+    file_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("files.id", ondelete="CASCADE"), nullable=False
+    )
+    data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    status: Mapped[ContentStatus] = mapped_column(
+        Enum(ContentStatus, native_enum=False),
+        default=ContentStatus.not_generated,
+        nullable=False,
+    )
+    generated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    model_used: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    file = relationship("File")
+
+
 class StudyChat(CommonMixin, Base):
     __tablename__ = "study_chats"
 

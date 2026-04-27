@@ -91,6 +91,32 @@ class MindmapNodeExplanationResponse(BaseModel):
 
 
 # ============================================================================
+# CONCEPT NOTES SCHEMAS
+# ============================================================================
+
+
+class ConceptNoteItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str
+    explanation: str
+    key_points: list[str]
+    keywords: list[str]
+    difficulty: str
+
+
+class StudyConceptNoteResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    file_id: str
+    status: str
+    concepts: list[ConceptNoteItem] = []
+    generated_at: datetime | None = None
+
+
+# ============================================================================
 # CHAT SCHEMAS
 # ============================================================================
 
@@ -143,6 +169,7 @@ class StudyStatusResponse(BaseModel):
     summary_status: str
     flashcards_status: str
     mindmap_status: str
+    concept_notes_status: str
 
 
 # ============================================================================
