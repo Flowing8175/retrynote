@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, RotateCw, Layers, AlertCircle, Clock } from 'lucide-react';
 import { useStudyStatus, useStudyFlashcards, useGenerateContent, useContentVersions, useFlashcardsVersion } from '@/api/study';
@@ -24,6 +24,9 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
   const versions = versionsData?.versions ?? [];
   const [versionIndex, setVersionIndex] = useState<number | null>(null);
 
+  const pendingRegenRef = useRef(false);
+  const prevVersionsLengthRef = useRef(0);
+
   const isViewingOldVersion = versionIndex !== null && versions.length > 0 && versionIndex < versions.length - 1;
   const selectedVersionId = isViewingOldVersion ? versions[versionIndex]?.id ?? null : null;
 
@@ -31,6 +34,7 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
 
   useEffect(() => {
     setVersionIndex(null);
+    pendingRegenRef.current = false;
   }, [fileId]);
 
   useEffect(() => {
@@ -38,6 +42,14 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
       setVersionIndex(versions.length - 1);
     }
   }, [versions.length, versionIndex]);
+
+  useEffect(() => {
+    if (pendingRegenRef.current && versions.length > prevVersionsLengthRef.current) {
+      setVersionIndex(versions.length - 1);
+      pendingRegenRef.current = false;
+    }
+    prevVersionsLengthRef.current = versions.length;
+  }, [versions.length]);
 
   useEffect(() => {
     if (flashcardsStatus === 'completed') {
@@ -103,6 +115,7 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
   }, [goToPrev, goToNext, flipCard]);
 
   const handleGenerate = useCallback(() => {
+    pendingRegenRef.current = true;
     generateMutation.mutate('flashcards');
     setVersionIndex(null);
     setCurrentIndex(0);

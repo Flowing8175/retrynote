@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useState, useCallback } from 'react';
+import { useMemo, useEffect, useState, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
@@ -56,6 +56,9 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
   const versions = versionsData?.versions ?? [];
   const [versionIndex, setVersionIndex] = useState<number | null>(null);
 
+  const pendingRegenRef = useRef(false);
+  const prevVersionsLengthRef = useRef(0);
+
   const isViewingOldVersion = versionIndex !== null && versions.length > 0 && versionIndex < versions.length - 1;
   const selectedVersionId = isViewingOldVersion ? versions[versionIndex]?.id ?? null : null;
 
@@ -63,6 +66,7 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
 
   useEffect(() => {
     setVersionIndex(null);
+    pendingRegenRef.current = false;
   }, [fileId]);
 
   useEffect(() => {
@@ -71,7 +75,16 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
     }
   }, [versions.length, versionIndex]);
 
+  useEffect(() => {
+    if (pendingRegenRef.current && versions.length > prevVersionsLengthRef.current) {
+      setVersionIndex(versions.length - 1);
+      pendingRegenRef.current = false;
+    }
+    prevVersionsLengthRef.current = versions.length;
+  }, [versions.length]);
+
   const handleRegenerate = useCallback(() => {
+    pendingRegenRef.current = true;
     generateContent('summary');
     setVersionIndex(null);
   }, [generateContent]);

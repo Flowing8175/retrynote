@@ -194,6 +194,8 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
   });
   const versions = versionsData?.versions ?? [];
   const [versionIndex, setVersionIndex] = useState<number | null>(null);
+  const pendingRegenRef = useRef(false);
+  const prevVersionsLengthRef = useRef(0);
 
   const isViewingOldVersion = versionIndex !== null && versions.length > 0 && versionIndex < versions.length - 1;
   const selectedVersionId = isViewingOldVersion ? versions[versionIndex]?.id ?? null : null;
@@ -230,6 +232,7 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
 
   useEffect(() => {
     setVersionIndex(null);
+    pendingRegenRef.current = false;
   }, [fileId]);
 
   useEffect(() => {
@@ -237,6 +240,14 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
       setVersionIndex(versions.length - 1);
     }
   }, [versions.length, versionIndex]);
+
+  useEffect(() => {
+    if (pendingRegenRef.current && versions.length > prevVersionsLengthRef.current) {
+      setVersionIndex(versions.length - 1);
+      pendingRegenRef.current = false;
+    }
+    prevVersionsLengthRef.current = versions.length;
+  }, [versions.length]);
 
   useEffect(() => {
     setSelected(null);
@@ -381,6 +392,7 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
         />
         <button
           onClick={() => {
+            pendingRegenRef.current = true;
             generate('mindmap');
             setVersionIndex(null);
           }}
