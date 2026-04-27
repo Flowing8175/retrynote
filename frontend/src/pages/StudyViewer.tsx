@@ -1,7 +1,6 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ChevronLeft, FileText, FileX2, X, Circle, Loader2, Check, AlertTriangle, Pencil } from 'lucide-react';
-import { PdfViewer } from '@/components/study/PdfViewer';
 import { useStudyStatus, useTrackStudyVisit } from '@/api/study';
 import { API_BASE_URL } from '@/api/createApiClient';
 import type { ContentStatus } from '@/types/study';
@@ -20,6 +19,9 @@ const TutorTab = lazy(() =>
 );
 const MemoryNotesTab = lazy(() =>
   import('@/components/study/MemoryNotesTab').then((m) => ({ default: m.MemoryNotesTab }))
+);
+const FilePreview = lazy(() =>
+  import('@/components/study/FilePreview').then((m) => ({ default: m.FilePreview }))
 );
 
 type Tab = '요약' | '플래시카드' | '마인드맵' | 'AI 튜터' | '암기노트';
@@ -83,9 +85,11 @@ export default function StudyViewer() {
 
   const is404 = isError && (error as { response?: { status?: number } })?.response?.status === 404;
   const isPdf = status?.file_type?.toLowerCase() === 'pdf';
+  const PREVIEWABLE_TYPES = ['png', 'jpg', 'jpeg', 'txt', 'md', 'docx', 'pptx'];
+  const hasPreview = isPdf || PREVIEWABLE_TYPES.includes(status?.file_type?.toLowerCase() ?? '');
   const isShortDocument = status?.is_short_document === true;
   const filename = status?.filename ?? '문서';
-  const pdfUrl = `${API_BASE_URL}/files/${fileId}/view`;
+  const fileUrl = `${API_BASE_URL}/files/${fileId}/view`;
 
   function handleDividerMouseDown(e: React.MouseEvent) {
     e.preventDefault();
@@ -162,13 +166,15 @@ export default function StudyViewer() {
         className="flex flex-1 min-h-0"
         style={{ cursor: isDragging ? 'col-resize' : 'default', userSelect: isDragging ? 'none' : 'auto' }}
       >
-        {isPdf && (
+        {hasPreview && (
           <>
             <div
               className="hidden lg:block min-h-0 overflow-hidden shrink-0"
               style={{ width: `${leftWidth}%` }}
             >
-              <PdfViewer url={pdfUrl} />
+              <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-2 border-surface-raised border-t-brand-500 rounded-full animate-spin" /></div>}>
+                <FilePreview url={fileUrl} fileType={status?.file_type} />
+              </Suspense>
             </div>
 
             <div
@@ -233,7 +239,7 @@ export default function StudyViewer() {
         </div>
       </div>
 
-      {showPdfOverlay && isPdf && (
+      {showPdfOverlay && hasPreview && (
         <div className="fixed inset-0 z-50 bg-background flex flex-col lg:hidden">
           <div className="flex items-center gap-3 px-4 py-3 bg-surface/80 backdrop-blur-sm border-b border-white/[0.05] shrink-0">
             <button
@@ -244,15 +250,17 @@ export default function StudyViewer() {
               <span>닫기</span>
             </button>
             <div className="w-px h-4 bg-white/[0.05]" />
-            <span className="text-sm font-medium text-content-primary truncate flex-1">PDF 뷰어</span>
+            <span className="text-sm font-medium text-content-primary truncate flex-1">원본 보기</span>
           </div>
           <div className="flex-1 min-h-0">
-            <PdfViewer url={pdfUrl} />
+            <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-2 border-surface-raised border-t-brand-500 rounded-full animate-spin" /></div>}>
+              <FilePreview url={fileUrl} fileType={status?.file_type} />
+            </Suspense>
           </div>
         </div>
       )}
 
-      {isPdf && (
+      {hasPreview && (
         <button
           onClick={() => setShowPdfOverlay((v) => !v)}
           className={`fixed bottom-6 right-4 lg:hidden flex items-center gap-2 rounded-full shadow-lg transition-colors text-sm font-medium ${
@@ -266,7 +274,7 @@ export default function StudyViewer() {
           ) : (
             <>
               <FileText size={16} />
-              PDF 보기
+              원본 보기
             </>
           )}
         </button>
