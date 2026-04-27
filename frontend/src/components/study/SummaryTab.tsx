@@ -4,8 +4,10 @@ import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { RefreshCw, FileText, AlertCircle, Sparkles } from 'lucide-react';
-import { useStudyStatus, useStudySummary, useGenerateContent, useContentVersions, useSummaryVersion } from '@/api/study';
+import { useStudyStatus, useStudySummary, useContentVersions, useSummaryVersion } from '@/api/study';
+import { useStudyStreaming } from '@/hooks/useStudyStreaming';
 import { VersionNavigator } from './VersionNavigator';
+import { StudyThinkingView } from './StudyThinkingView';
 
 interface SummaryTabProps {
   fileId: string;
@@ -48,7 +50,6 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
   const { data: summary, isLoading } = useStudySummary(fileId, {
     enabled: summaryStatus === 'completed',
   });
-  const { mutate: generateContent, isPending: isGenerating } = useGenerateContent(fileId);
 
   const { data: versionsData } = useContentVersions(fileId, 'summary', {
     enabled: summaryStatus === 'completed',
@@ -58,6 +59,8 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
 
   const pendingRegenRef = useRef(false);
   const prevVersionsLengthRef = useRef(0);
+
+  const streaming = useStudyStreaming(fileId, 'summary');
 
   const isViewingOldVersion = versionIndex !== null && versions.length > 0 && versionIndex < versions.length - 1;
   const selectedVersionId = isViewingOldVersion ? versions[versionIndex]?.id ?? null : null;
@@ -85,9 +88,9 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
 
   const handleRegenerate = useCallback(() => {
     pendingRegenRef.current = true;
-    generateContent('summary');
+    streaming.startStreaming();
     setVersionIndex(null);
-  }, [generateContent]);
+  }, [streaming]);
 
   useEffect(() => {
     if (summaryStatus === 'completed') {
@@ -234,7 +237,7 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
   const isShowingLoader = summaryStatus === 'generating' || (summaryStatus === 'completed' && isLoading);
   const effectiveStatus = summaryStatus;
 
-  const canRegenerate = effectiveStatus === 'completed' || effectiveStatus === 'failed';
+  const canRegenerate = !streaming.state.isStreaming && (effectiveStatus === 'completed' || effectiveStatus === 'failed');
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -246,86 +249,92 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
             <span className="text-xs text-content-muted">생성 중...</span>
           )}
         </div>
-        {canRegenerate && (
-          <div className="flex items-center gap-2">
-            <VersionNavigator
-              current={(versionIndex ?? versions.length - 1) + 1}
-              total={versions.length}
-              onPrev={() => setVersionIndex((i) => Math.max(0, (i ?? versions.length - 1) - 1))}
-              onNext={() => setVersionIndex((i) => Math.min(versions.length - 1, (i ?? versions.length - 1) + 1))}
-            />
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              disabled={isGenerating}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:text-content-primary bg-surface-raised hover:bg-surface-hover border border-surface-border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw className={`w-3 h-3 ${isGenerating ? 'animate-spin' : ''}`} />
-              다시 생성
-            </button>
-          </div>
-        )}
+         {canRegenerate && (
+           <div className="flex items-center gap-2">
+             <VersionNavigator
+               current={(versionIndex ?? versions.length - 1) + 1}
+               total={versions.length}
+               onPrev={() => setVersionIndex((i) => Math.max(0, (i ?? versions.length - 1) - 1))}
+               onNext={() => setVersionIndex((i) => Math.min(versions.length - 1, (i ?? versions.length - 1) + 1))}
+             />
+             <button
+               type="button"
+               onClick={handleRegenerate}
+               disabled={streaming.state.isStreaming}
+               className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:text-content-primary bg-surface-raised hover:bg-surface-hover border border-surface-border rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+               <RefreshCw className={`w-3 h-3 ${streaming.state.isStreaming ? 'animate-spin' : ''}`} />
+               다시 생성
+             </button>
+           </div>
+         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        {isShowingLoader && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 text-sm text-content-secondary">
-              <Sparkles className="w-4 h-4 text-brand-400 animate-pulse flex-shrink-0" />
-              <span>요약을 생성하고 있습니다...</span>
+      {streaming.state.isStreaming ? (
+        <div className="flex-1 overflow-hidden">
+          <StudyThinkingView state={streaming.state} onCancel={streaming.cancelStreaming} />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {isShowingLoader && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm text-content-secondary">
+                <Sparkles className="w-4 h-4 text-brand-400 animate-pulse flex-shrink-0" />
+                <span>요약을 생성하고 있습니다...</span>
+              </div>
+              <SummarySkeleton />
             </div>
-            <SummarySkeleton />
-          </div>
-        )}
+          )}
 
-        {!isShowingLoader && effectiveStatus === 'completed' && displayContent && (
-          <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
-            {processedContent}
-          </Markdown>
-        )}
+          {!isShowingLoader && effectiveStatus === 'completed' && displayContent && (
+            <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+              {processedContent}
+            </Markdown>
+          )}
 
-        {!isShowingLoader && effectiveStatus === 'failed' && (
-          <div className="flex flex-col items-center justify-center min-h-[200px] text-center space-y-4 py-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-semantic-error-bg">
-              <AlertCircle className="w-5 h-5 text-semantic-error" />
+          {!isShowingLoader && effectiveStatus === 'failed' && (
+            <div className="flex flex-col items-center justify-center min-h-[200px] text-center space-y-4 py-8">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-semantic-error-bg">
+                <AlertCircle className="w-5 h-5 text-semantic-error" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-content-primary">요약 생성에 실패했습니다</p>
+                <p className="text-xs text-content-muted">잠시 후 다시 시도해주세요</p>
+              </div>
+              <button
+                type="button"
+                onClick={handleRegenerate}
+                disabled={streaming.state.isStreaming}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-content-inverse bg-brand-500 hover:bg-brand-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`w-4 h-4 ${streaming.state.isStreaming ? 'animate-spin' : ''}`} />
+                다시 생성
+              </button>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-content-primary">요약 생성에 실패했습니다</p>
-              <p className="text-xs text-content-muted">잠시 후 다시 시도해주세요</p>
-            </div>
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              disabled={isGenerating}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-content-inverse bg-brand-500 hover:bg-brand-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RefreshCw className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-              다시 생성
-            </button>
-          </div>
-        )}
+          )}
 
-        {!isShowingLoader && effectiveStatus === 'not_generated' && (
-          <div className="flex flex-col items-center justify-center min-h-[200px] text-center space-y-4 py-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-500/10">
-              <FileText className="w-5 h-5 text-brand-400" />
+          {!isShowingLoader && effectiveStatus === 'not_generated' && (
+            <div className="flex flex-col items-center justify-center min-h-[200px] text-center space-y-4 py-8">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-500/10">
+                <FileText className="w-5 h-5 text-brand-400" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-content-primary">요약이 생성되지 않았습니다</p>
+                <p className="text-xs text-content-muted">아래 버튼을 눌러 AI 요약을 생성하세요</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => streaming.startStreaming()}
+                disabled={streaming.state.isStreaming}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-content-inverse bg-brand-500 hover:bg-brand-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Sparkles className={`w-4 h-4 ${streaming.state.isStreaming ? 'animate-spin' : ''}`} />
+                요약 생성
+              </button>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-content-primary">요약이 생성되지 않았습니다</p>
-              <p className="text-xs text-content-muted">아래 버튼을 눌러 AI 요약을 생성하세요</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => generateContent('summary')}
-              disabled={isGenerating}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-content-inverse bg-brand-500 hover:bg-brand-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Sparkles className={`w-4 h-4 ${isGenerating ? 'animate-spin' : ''}`} />
-              요약 생성
-            </button>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

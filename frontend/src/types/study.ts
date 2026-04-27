@@ -127,3 +127,42 @@ export interface ContentVersionsResponse {
   versions: ContentVersion[];
   total: number;
 }
+
+// --- SSE Streaming Types ---
+
+export type StudyStreamStage = 'analyzing' | 'generating';
+
+export interface StudyStreamEventStage {
+  type: 'stage';
+  stage: StudyStreamStage;
+}
+export interface StudyStreamEventThinkingStart {
+  type: 'thinking_start';
+}
+export interface StudyStreamEventThinkingChunk {
+  type: 'thinking_chunk';
+  text: string;
+}
+export interface StudyStreamEventThinkingEnd {
+  type: 'thinking_end';
+}
+export interface StudyStreamEventResult {
+  type: 'result';
+  data: Record<string, unknown>;
+}
+
+export type StudyStreamEvent =
+  | StudyStreamEventStage
+  | StudyStreamEventThinkingStart
+  | StudyStreamEventThinkingChunk
+  | StudyStreamEventThinkingEnd
+  | StudyStreamEventResult;
+
+export interface StudyStreamingState {
+  isStreaming: boolean;
+  stage: StudyStreamStage | null;
+  thinkingText: string;
+  thinkingActive: boolean;
+  result: Record<string, unknown> | null;
+  error: string | null;
+}

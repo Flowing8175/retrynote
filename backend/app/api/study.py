@@ -51,6 +51,25 @@ from app.services.study_service import (
     MindmapNotReadyError,
     NodeNotFoundError,
     generate_node_explanation,
+    persist_stream_concept_notes,
+    persist_stream_flashcards,
+    persist_stream_mindmap,
+    persist_stream_summary,
+    stream_study_content,
+)
+from app.prompts.study import (
+    CONCEPT_NOTES_PROMPT,
+    CONCEPT_NOTES_SCHEMA,
+    CONCEPT_NOTES_SYSTEM_MESSAGE,
+    FLASHCARD_PROMPT,
+    FLASHCARD_SCHEMA,
+    FLASHCARD_SYSTEM_MESSAGE,
+    MINDMAP_PROMPT,
+    MINDMAP_SCHEMA,
+    MINDMAP_SYSTEM_MESSAGE,
+    SUMMARY_PROMPT,
+    SUMMARY_SCHEMA,
+    SUMMARY_SYSTEM_MESSAGE,
 )
 from app.services.tutor_service import (
     create_new_chat,
@@ -755,6 +774,250 @@ async def generate_concept_notes_endpoint(
 
     dispatch_task("generate_concept_notes", [file_id, user.id, STUDY_CREDIT_ESTIMATE, _cn_source, _cn_batch_ids or []])
     return {"status": "dispatched"}
+
+
+@router.get("/{file_id}/summary/generate/stream")
+async def stream_summary_generation(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_query_token),
+):
+    file = await _get_owned_file(file_id, db, current_user)
+    if file.status != FileStatus.ready:
+        raise HTTPException(status_code=400, detail="File is not ready for study material generation")
+
+    result = await db.execute(
+        select(StudySummary).where(StudySummary.file_id == file_id, StudySummary.deleted_at.is_(None))
+    )
+    existing = result.scalar_one_or_none()
+    if existing and existing.status == ContentStatus.generating:
+        raise HTTPException(status_code=409, detail="Summary generation already in progress")
+
+    usage_svc = UsageService()
+    tier = UserTier(current_user.tier)
+    allowed, _, credit_source, credit_batch_ids = await usage_svc.check_and_consume(
+        db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+
+    if existing is not None:
+        existing.deleted_at = datetime.now(timezone.utc)
+        await db.flush()
+
+    new_record = StudySummary(file_id=file_id, status=ContentStatus.generating)
+    db.add(new_record)
+    await db.commit()
+
+    return sse_stream(
+        stream_study_content(
+            db=db,
+            file_id=file_id,
+            user_id=current_user.id,
+            content_type="summary",
+            content_record=new_record,
+            prompt=SUMMARY_PROMPT,
+            schema=SUMMARY_SCHEMA,
+            system_message=SUMMARY_SYSTEM_MESSAGE,
+            credit_estimate=STUDY_CREDIT_ESTIMATE,
+            credit_source=credit_source,
+            credit_batch_ids=credit_batch_ids or [],
+            persist_fn=persist_stream_summary,
+            celery_task_name="generate_study_summary",
+            celery_args=[file_id, current_user.id, STUDY_CREDIT_ESTIMATE, credit_source, credit_batch_ids or []],
+        )
+    )
+
+
+@router.get("/{file_id}/flashcards/generate/stream")
+async def stream_flashcards_generation(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_query_token),
+):
+    file = await _get_owned_file(file_id, db, current_user)
+    if file.status != FileStatus.ready:
+        raise HTTPException(status_code=400, detail="File is not ready for study material generation")
+
+    result = await db.execute(
+        select(StudyFlashcardSet).where(StudyFlashcardSet.file_id == file_id, StudyFlashcardSet.deleted_at.is_(None))
+    )
+    existing = result.scalar_one_or_none()
+    if existing and existing.status == ContentStatus.generating:
+        raise HTTPException(status_code=409, detail="Flashcard generation already in progress")
+
+    usage_svc = UsageService()
+    tier = UserTier(current_user.tier)
+    allowed, _, credit_source, credit_batch_ids = await usage_svc.check_and_consume(
+        db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+
+    if existing is not None:
+        existing.deleted_at = datetime.now(timezone.utc)
+        await db.flush()
+
+    new_record = StudyFlashcardSet(file_id=file_id, status=ContentStatus.generating)
+    db.add(new_record)
+    await db.commit()
+
+    return sse_stream(
+        stream_study_content(
+            db=db,
+            file_id=file_id,
+            user_id=current_user.id,
+            content_type="flashcards",
+            content_record=new_record,
+            prompt=FLASHCARD_PROMPT,
+            schema=FLASHCARD_SCHEMA,
+            system_message=FLASHCARD_SYSTEM_MESSAGE,
+            credit_estimate=STUDY_CREDIT_ESTIMATE,
+            credit_source=credit_source,
+            credit_batch_ids=credit_batch_ids or [],
+            persist_fn=persist_stream_flashcards,
+            celery_task_name="generate_study_flashcards",
+            celery_args=[file_id, current_user.id, STUDY_CREDIT_ESTIMATE, credit_source, credit_batch_ids or []],
+        )
+    )
+
+
+@router.get("/{file_id}/mindmap/generate/stream")
+async def stream_mindmap_generation(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_query_token),
+):
+    file = await _get_owned_file(file_id, db, current_user)
+    if file.status != FileStatus.ready:
+        raise HTTPException(status_code=400, detail="File is not ready for study material generation")
+
+    result = await db.execute(
+        select(StudyMindmap).where(StudyMindmap.file_id == file_id, StudyMindmap.deleted_at.is_(None))
+    )
+    existing = result.scalar_one_or_none()
+    if existing and existing.status == ContentStatus.generating:
+        raise HTTPException(status_code=409, detail="Mindmap generation already in progress")
+
+    usage_svc = UsageService()
+    tier = UserTier(current_user.tier)
+    allowed, _, credit_source, credit_batch_ids = await usage_svc.check_and_consume(
+        db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+
+    if existing is not None:
+        existing.deleted_at = datetime.now(timezone.utc)
+        await db.flush()
+
+    new_record = StudyMindmap(file_id=file_id, status=ContentStatus.generating)
+    db.add(new_record)
+    await db.commit()
+
+    return sse_stream(
+        stream_study_content(
+            db=db,
+            file_id=file_id,
+            user_id=current_user.id,
+            content_type="mindmap",
+            content_record=new_record,
+            prompt=MINDMAP_PROMPT,
+            schema=MINDMAP_SCHEMA,
+            system_message=MINDMAP_SYSTEM_MESSAGE,
+            credit_estimate=STUDY_CREDIT_ESTIMATE,
+            credit_source=credit_source,
+            credit_batch_ids=credit_batch_ids or [],
+            persist_fn=persist_stream_mindmap,
+            celery_task_name="generate_study_mindmap",
+            celery_args=[file_id, current_user.id, STUDY_CREDIT_ESTIMATE, credit_source, credit_batch_ids or []],
+        )
+    )
+
+
+@router.get("/{file_id}/concept-notes/generate/stream")
+async def stream_concept_notes_generation(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user_from_query_token),
+):
+    file = await _get_owned_file(file_id, db, current_user)
+    if file.status != FileStatus.ready:
+        raise HTTPException(status_code=400, detail="File is not ready for study material generation")
+
+    result = await db.execute(
+        select(StudyConceptNote).where(StudyConceptNote.file_id == file_id, StudyConceptNote.deleted_at.is_(None))
+    )
+    existing = result.scalar_one_or_none()
+    if existing and existing.status == ContentStatus.generating:
+        raise HTTPException(status_code=409, detail="Concept note generation already in progress")
+
+    usage_svc = UsageService()
+    tier = UserTier(current_user.tier)
+    allowed, _, credit_source, credit_batch_ids = await usage_svc.check_and_consume(
+        db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+
+    if existing is not None:
+        existing.deleted_at = datetime.now(timezone.utc)
+        await db.flush()
+
+    new_record = StudyConceptNote(file_id=file_id, status=ContentStatus.generating)
+    db.add(new_record)
+    await db.commit()
+
+    return sse_stream(
+        stream_study_content(
+            db=db,
+            file_id=file_id,
+            user_id=current_user.id,
+            content_type="concept-notes",
+            content_record=new_record,
+            prompt=CONCEPT_NOTES_PROMPT,
+            schema=CONCEPT_NOTES_SCHEMA,
+            system_message=CONCEPT_NOTES_SYSTEM_MESSAGE,
+            credit_estimate=STUDY_CREDIT_ESTIMATE,
+            credit_source=credit_source,
+            credit_batch_ids=credit_batch_ids or [],
+            persist_fn=persist_stream_concept_notes,
+            celery_task_name="generate_concept_notes",
+            celery_args=[file_id, current_user.id, STUDY_CREDIT_ESTIMATE, credit_source, credit_batch_ids or []],
+        )
+    )
 
 
 @router.get(

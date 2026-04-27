@@ -40,6 +40,9 @@ interface StudyStoreState extends ChatState {
   _timerId: ReturnType<typeof setInterval> | null;
   _currentFileId: string | null;
 
+  streamingTypes: Set<StudyContentType>;
+  setStreamingActive: (type: StudyContentType, active: boolean) => void;
+
   initStatus: (status: {
     summary_status: ContentStatus;
     flashcards_status: ContentStatus;
@@ -57,6 +60,16 @@ export const useStudyStore = create<StudyStoreState>((set, get) => ({
   isStreaming: false,
   streamingContent: '',
   selectedPageForCapture: null,
+
+  streamingTypes: new Set(),
+  setStreamingActive: (type, active) =>
+    set((state) => {
+      const next = new Set(state.streamingTypes);
+      if (active) next.add(type);
+      else next.delete(type);
+      return { streamingTypes: next };
+    }),
+
 
   setChatMessages: (messages) =>
     set({

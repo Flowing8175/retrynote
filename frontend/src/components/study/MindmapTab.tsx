@@ -7,6 +7,8 @@ import type { StudyMindmapNode, StudyMindmapEdge } from '@/types/study';
 import type { MindmapFlowNode, MindmapFlowEdge, MindmapFlowInstance } from './MindmapFlow';
 import KeywordPopup, { type KeywordPopupNode, type KeywordPopupAnchor } from './KeywordPopup';
 import { VersionNavigator } from './VersionNavigator';
+import { useStudyStreaming } from '@/hooks/useStudyStreaming';
+import { StudyThinkingView } from './StudyThinkingView';
 
 const MindmapFlow = lazy(() => import('./MindmapFlow'));
 
@@ -59,13 +61,13 @@ function enrichWithDepth(
     return total;
   }
 
-  const NODE_WIDTHS = [220, 180, 160];
-  const H_GAP = 40;
-  const V_SPACING = 160;
+  const NODE_HEIGHTS = [50, 40, 36];
+  const V_GAP = 30;
+  const H_SPACING = 260;
 
-  function nodeWidth(nodeId: string): number {
+  function nodeHeight(nodeId: string): number {
     const d = depthMap.get(nodeId) ?? 0;
-    return NODE_WIDTHS[Math.min(d, NODE_WIDTHS.length - 1)];
+    return NODE_HEIGHTS[Math.min(d, NODE_HEIGHTS.length - 1)];
   }
 
   const visibleChildrenMap = new Map<string, string[]>();
@@ -77,53 +79,53 @@ function enrichWithDepth(
     visibleChildrenMap.set(edge.source, list);
   }
 
-  const subtreeW = new Map<string, number>();
-  function calcWidth(nodeId: string): number {
-    if (subtreeW.has(nodeId)) return subtreeW.get(nodeId)!;
+  const subtreeH = new Map<string, number>();
+  function calcHeight(nodeId: string): number {
+    if (subtreeH.has(nodeId)) return subtreeH.get(nodeId)!;
     const children = visibleChildrenMap.get(nodeId) ?? [];
     if (children.length === 0) {
-      const w = nodeWidth(nodeId);
-      subtreeW.set(nodeId, w);
-      return w;
+      const h = nodeHeight(nodeId);
+      subtreeH.set(nodeId, h);
+      return h;
     }
     let total = 0;
-    for (const c of children) total += calcWidth(c);
-    total += (children.length - 1) * H_GAP;
-    const w = Math.max(nodeWidth(nodeId), total);
-    subtreeW.set(nodeId, w);
-    return w;
+    for (const c of children) total += calcHeight(c);
+    total += (children.length - 1) * V_GAP;
+    const h = Math.max(nodeHeight(nodeId), total);
+    subtreeH.set(nodeId, h);
+    return h;
   }
 
   const positions = new Map<string, { x: number; y: number }>();
-  function place(nodeId: string, centerX: number) {
+  function place(nodeId: string, centerY: number) {
     if (positions.has(nodeId)) return;
     const d = depthMap.get(nodeId) ?? 0;
-    positions.set(nodeId, { x: centerX, y: d * V_SPACING });
+    positions.set(nodeId, { x: d * H_SPACING, y: centerY });
     const children = visibleChildrenMap.get(nodeId) ?? [];
     if (children.length === 0) return;
-    let totalW = 0;
-    for (const c of children) totalW += subtreeW.get(c) ?? 0;
-    totalW += (children.length - 1) * H_GAP;
-    let x = centerX - totalW / 2;
+    let totalH = 0;
+    for (const c of children) totalH += subtreeH.get(c) ?? 0;
+    totalH += (children.length - 1) * V_GAP;
+    let y = centerY - totalH / 2;
     for (const c of children) {
-      const cw = subtreeW.get(c) ?? 0;
-      place(c, x + cw / 2);
-      x += cw + H_GAP;
+      const ch = subtreeH.get(c) ?? 0;
+      place(c, y + ch / 2);
+      y += ch + V_GAP;
     }
   }
 
   const visibleRoots = startingRoots.filter((r) => visible.has(r.id));
-  for (const r of visibleRoots) calcWidth(r.id);
+  for (const r of visibleRoots) calcHeight(r.id);
 
   let totalRoots = 0;
-  for (const r of visibleRoots) totalRoots += subtreeW.get(r.id) ?? 0;
-  totalRoots += Math.max(0, visibleRoots.length - 1) * H_GAP;
+  for (const r of visibleRoots) totalRoots += subtreeH.get(r.id) ?? 0;
+  totalRoots += Math.max(0, visibleRoots.length - 1) * V_GAP;
 
-  let rx = -totalRoots / 2;
+  let ry = -totalRoots / 2;
   for (const r of visibleRoots) {
-    const rw = subtreeW.get(r.id) ?? 0;
-    place(r.id, rx + rw / 2);
-    rx += rw + H_GAP;
+    const rh = subtreeH.get(r.id) ?? 0;
+    place(r.id, ry + rh / 2);
+    ry += rh + V_GAP;
   }
 
   const visibleRawNodes = rawNodes.filter((n) => visible.has(n.id));
@@ -187,7 +189,8 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
   const { data: mindmap, isLoading } = useStudyMindmap(fileId, {
     enabled: mindmapStatus === 'completed',
   });
-  const { mutate: generate, isPending: isGenerating } = useGenerateContent(fileId);
+  const { isPending: isGenerating } = useGenerateContent(fileId);
+  const streaming = useStudyStreaming(fileId, 'mindmap');
 
   const { data: versionsData } = useContentVersions(fileId, 'mindmap', {
     enabled: mindmapStatus === 'completed',
@@ -296,6 +299,14 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
 
   const status = mindmapStatus;
 
+  if (streaming.state.isStreaming) {
+    return (
+      <div className="h-full">
+        <StudyThinkingView state={streaming.state} onCancel={streaming.cancelStreaming} />
+      </div>
+    );
+  }
+
   if (status === 'generating' || (status === 'completed' && isLoading)) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-3 text-content-muted">
@@ -313,8 +324,8 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
         <Network size={40} className="text-content-muted" />
         <p className="text-sm text-center">아직 마인드맵이 생성되지 않았습니다</p>
         <button
-          onClick={() => generate('mindmap')}
-          disabled={isGenerating}
+          onClick={() => streaming.startStreaming()}
+          disabled={isGenerating || streaming.state.isStreaming}
           className="flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-400 disabled:opacity-50 text-content-inverse text-sm font-medium rounded-xl transition-colors"
         >
           {isGenerating && <Loader2 size={14} className="animate-spin" />}
@@ -330,8 +341,8 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
         <AlertCircle size={28} />
         <span className="text-sm">마인드맵 생성에 실패했습니다</span>
         <button
-          onClick={() => generate('mindmap')}
-          disabled={isGenerating}
+          onClick={() => streaming.startStreaming()}
+          disabled={isGenerating || streaming.state.isStreaming}
           className="flex items-center gap-2 mt-2 px-4 py-2 text-sm bg-brand-500 hover:bg-brand-400 disabled:opacity-50 text-content-inverse rounded-xl transition-colors"
         >
           {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -347,8 +358,8 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
         <Network size={32} className="text-content-muted" />
         <span className="text-sm">마인드맵 데이터가 없습니다</span>
         <button
-          onClick={() => generate('mindmap')}
-          disabled={isGenerating}
+          onClick={() => streaming.startStreaming()}
+          disabled={isGenerating || streaming.state.isStreaming}
           className="flex items-center gap-2 mt-2 px-4 py-2 text-sm bg-brand-500 hover:bg-brand-400 disabled:opacity-50 text-content-inverse rounded-xl transition-colors"
         >
           {isGenerating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -390,19 +401,19 @@ export function MindmapTab({ fileId }: MindmapTabProps) {
             setCollapsed(new Set());
           }}
         />
-        <button
-          onClick={() => {
-            pendingRegenRef.current = true;
-            generate('mindmap');
-            setVersionIndex(null);
-          }}
-          disabled={isGenerating}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface-raised disabled:opacity-50 text-content-secondary text-xs rounded-xl border border-white/[0.05] transition-colors"
-          title="마인드맵 재생성"
-        >
-          {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-          재생성
-        </button>
+         <button
+           onClick={() => {
+             pendingRegenRef.current = true;
+             streaming.startStreaming();
+             setVersionIndex(null);
+           }}
+           disabled={isGenerating || streaming.state.isStreaming}
+           className="flex items-center gap-1.5 px-3 py-1.5 bg-surface hover:bg-surface-raised disabled:opacity-50 text-content-secondary text-xs rounded-xl border border-white/[0.05] transition-colors"
+           title="마인드맵 재생성"
+         >
+           {isGenerating ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+           재생성
+         </button>
       </div>
       <KeywordPopup
         fileId={fileId}

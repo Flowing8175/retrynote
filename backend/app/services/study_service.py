@@ -1,8 +1,10 @@
+import asyncio
 import hashlib
 import json
 import logging
 import re
 from datetime import datetime, timezone
+from typing import AsyncGenerator
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -21,15 +23,26 @@ from app.models.study import (
 )
 from app.prompts.study import (
     CONCEPT_NOTES_PROMPT,
+    CONCEPT_NOTES_SCHEMA,
+    CONCEPT_NOTES_SYSTEM_MESSAGE,
+    FLASHCARD_PROMPT,
+    FLASHCARD_SCHEMA,
+    FLASHCARD_SYSTEM_MESSAGE,
     MINDMAP_PROMPT,
+    MINDMAP_SCHEMA,
+    MINDMAP_SYSTEM_MESSAGE,
     NODE_EXPLANATION_PROMPT,
     STUDY_MODEL,
     SUMMARY_PROMPT,
+    SUMMARY_SCHEMA,
+    SUMMARY_SYSTEM_MESSAGE,
 )
 from app.prompts.study_items import build_study_prompt
 from app.services.usage_service import UsageService
 from app.tier_config import calculate_credit_cost
-from app.utils.ai_client import get_gemini_client
+from app.utils.ai_client import get_gemini_client, stream_ai_structured_with_thinking
+from app.utils.sse import sse_data, sse_done, sse_error
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -1207,3 +1220,133 @@ async def generate_concept_notes(
             await db.commit()
         except Exception:
             pass
+
+
+
+async def _get_parsed_text(db: AsyncSession, file_id: str) -> str | None:
+    result = await db.execute(
+        select(ParsedDocument.normalized_text).where(ParsedDocument.file_id == file_id)
+    )
+    row = result.scalar_one_or_none()
+    return row if row else None
+
+
+async def stream_study_content(
+    db: AsyncSession,
+    file_id: str,
+    user_id: str,
+    content_type: str,
+    content_record,
+    prompt: str,
+    schema: dict,
+    system_message: str,
+    credit_estimate: float,
+    credit_source: str,
+    credit_batch_ids: list[str],
+    persist_fn,
+    celery_task_name: str,
+    celery_args: list,
+) -> AsyncGenerator[str, None]:
+    generation_completed = False
+    try:
+        yield sse_data({"type": "stage", "stage": "analyzing"})
+
+        parsed = await _get_parsed_text(db, file_id)
+        if not parsed:
+            raise ValueError("Document text not available")
+
+        full_prompt = prompt.format(document_text=parsed[:_MAX_TEXT_CHARS])
+
+        yield sse_data({"type": "stage", "stage": "generating"})
+        yield sse_data({"type": "thinking_start"})
+
+        primary_model = STUDY_MODEL
+        fallback_model = settings.eco_generation_model
+
+        ai_result = None
+        tokens_used = 0
+
+        stream_iter = stream_ai_structured_with_thinking(
+            prompt=full_prompt,
+            schema=schema,
+            system_message=system_message,
+            primary_model=primary_model,
+            fallback_model=fallback_model,
+            max_tokens=8192,
+            reasoning_effort="low",
+            thinking_level="MEDIUM",
+        )
+
+        async with asyncio.timeout(settings.generation_timeout):
+            async for event in stream_iter:
+                etype = event.get("type")
+                if etype == "thinking":
+                    text = event.get("text") or ""
+                    if isinstance(text, str) and text:
+                        yield sse_data({"type": "thinking_chunk", "text": text})
+                elif etype == "result":
+                    data = event.get("data")
+                    if isinstance(data, dict):
+                        ai_result = data
+                    tokens_raw = event.get("tokens_used") or 0
+                    tokens_used = int(tokens_raw) if isinstance(tokens_raw, (int, float)) else 0
+
+        yield sse_data({"type": "thinking_end"})
+
+        if ai_result is None:
+            raise ValueError("AI stream ended without a result")
+
+        await persist_fn(db, content_record, ai_result)
+
+        await _reconcile_credit(db, user_id, credit_estimate, tokens_used, credit_source, credit_batch_ids)
+
+        content_record.status = ContentStatus.completed
+        content_record.generated_at = datetime.now(timezone.utc)
+        content_record.model_used = primary_model
+        await db.commit()
+        generation_completed = True
+
+        yield sse_data({"type": "result", "data": ai_result})
+        yield sse_done()
+
+    except GeneratorExit:
+        raise
+    except Exception as e:
+        logger.exception("stream_study_content error for %s file=%s: %s", content_type, file_id, e)
+        if not generation_completed:
+            try:
+                from app.workers.celery_app import dispatch_task
+                dispatch_task(celery_task_name, celery_args)
+                logger.info("Dispatched Celery fallback %s for file=%s", celery_task_name, file_id)
+            except Exception as fallback_err:
+                logger.error("Celery fallback failed: %s", fallback_err)
+                content_record.status = ContentStatus.failed
+                try:
+                    await db.commit()
+                except Exception:
+                    pass
+        yield sse_error(str(e))
+
+
+async def persist_stream_summary(db: AsyncSession, record: StudySummary, data: dict) -> None:
+    record.content = data.get("content", "")
+
+
+async def persist_stream_flashcards(db: AsyncSession, record: StudyFlashcardSet, data: dict) -> None:
+    items = data.get("items", [])
+    for i, item in enumerate(items):
+        card = StudyFlashcard(
+            flashcard_set_id=record.id,
+            front=item.get("front", ""),
+            back=item.get("back", ""),
+            order=i,
+        )
+        db.add(card)
+
+
+async def persist_stream_mindmap(db: AsyncSession, record: StudyMindmap, data: dict) -> None:
+    record.data = data
+
+
+async def persist_stream_concept_notes(db: AsyncSession, record: StudyConceptNote, data: dict) -> None:
+    record.data = data

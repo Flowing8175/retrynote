@@ -2,7 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, RotateCw, Layers, AlertCircle, Clock } from 'lucide-react';
 import { useStudyStatus, useStudyFlashcards, useGenerateContent, useContentVersions, useFlashcardsVersion } from '@/api/study';
+import { useStudyStreaming } from '@/hooks/useStudyStreaming';
 import { VersionNavigator } from './VersionNavigator';
+import { StudyThinkingView } from './StudyThinkingView';
 
 interface FlashcardTabProps {
   fileId: string;
@@ -23,6 +25,8 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
   });
   const versions = versionsData?.versions ?? [];
   const [versionIndex, setVersionIndex] = useState<number | null>(null);
+
+  const streaming = useStudyStreaming(fileId, 'flashcards');
 
   const pendingRegenRef = useRef(false);
   const prevVersionsLengthRef = useRef(0);
@@ -116,11 +120,19 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
 
   const handleGenerate = useCallback(() => {
     pendingRegenRef.current = true;
-    generateMutation.mutate('flashcards');
+    streaming.startStreaming();
     setVersionIndex(null);
     setCurrentIndex(0);
     setIsFlipped(false);
-  }, [generateMutation]);
+  }, [streaming]);
+
+  if (streaming.state.isStreaming) {
+    return (
+      <div className="h-full">
+        <StudyThinkingView state={streaming.state} onCancel={streaming.cancelStreaming} />
+      </div>
+    );
+  }
 
   if (status === 'generating' || (status === 'completed' && isLoading)) {
     return (
@@ -150,22 +162,22 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
           <p className="text-sm text-content-muted mt-1">AI가 이 자료로 플래시카드를 생성합니다.</p>
         </div>
         <button
-          onClick={handleGenerate}
-          disabled={generateMutation.isPending}
-          className="flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-400 disabled:opacity-50 disabled:cursor-not-allowed text-content-inverse text-sm font-medium rounded-xl transition-colors"
-        >
-          {generateMutation.isPending ? (
-            <>
-              <div className="w-4 h-4 border-2 border-content-inverse border-t-transparent rounded-full animate-spin" />
-              생성 중…
-            </>
-          ) : (
-            <>
-              <Layers className="w-4 h-4" />
-              플래시카드 생성
-            </>
-          )}
-        </button>
+           onClick={handleGenerate}
+           disabled={generateMutation.isPending || streaming.state.isStreaming}
+           className="flex items-center gap-2 px-5 py-2.5 bg-brand-500 hover:bg-brand-400 disabled:opacity-50 disabled:cursor-not-allowed text-content-inverse text-sm font-medium rounded-xl transition-colors"
+         >
+           {generateMutation.isPending || streaming.state.isStreaming ? (
+             <>
+               <div className="w-4 h-4 border-2 border-content-inverse border-t-transparent rounded-full animate-spin" />
+               생성 중…
+             </>
+           ) : (
+             <>
+               <Layers className="w-4 h-4" />
+               플래시카드 생성
+             </>
+           )}
+         </button>
       </div>
     );
   }
@@ -181,22 +193,22 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
           <p className="text-sm text-content-muted mt-1">플래시카드 생성 중 오류가 발생했습니다.</p>
         </div>
         <button
-          onClick={handleGenerate}
-          disabled={generateMutation.isPending}
-          className="flex items-center gap-2 px-5 py-2.5 bg-surface-raised hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed text-content-secondary text-sm font-medium rounded-xl transition-colors border border-white/[0.05]"
-        >
-          {generateMutation.isPending ? (
-            <>
-              <div className="w-4 h-4 border-2 border-content-secondary border-t-transparent rounded-full animate-spin" />
-              생성 중…
-            </>
-          ) : (
-            <>
-              <RotateCw className="w-4 h-4" />
-              다시 생성
-            </>
-          )}
-        </button>
+           onClick={handleGenerate}
+           disabled={generateMutation.isPending || streaming.state.isStreaming}
+           className="flex items-center gap-2 px-5 py-2.5 bg-surface-raised hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed text-content-secondary text-sm font-medium rounded-xl transition-colors border border-white/[0.05]"
+         >
+           {generateMutation.isPending || streaming.state.isStreaming ? (
+             <>
+               <div className="w-4 h-4 border-2 border-content-secondary border-t-transparent rounded-full animate-spin" />
+               생성 중…
+             </>
+           ) : (
+             <>
+               <RotateCw className="w-4 h-4" />
+               다시 생성
+             </>
+           )}
+         </button>
       </div>
     );
   }
@@ -207,13 +219,13 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
         <Clock className="w-10 h-10 text-content-muted" />
         <p className="text-sm">생성된 카드가 없습니다.</p>
         <button
-          onClick={handleGenerate}
-          disabled={generateMutation.isPending}
-          className="flex items-center gap-2 px-4 py-2 bg-surface-raised hover:bg-surface-hover text-content-secondary text-sm rounded-xl transition-colors border border-white/[0.05]"
-        >
-          <RotateCw className="w-4 h-4" />
-          다시 생성
-        </button>
+           onClick={handleGenerate}
+           disabled={generateMutation.isPending || streaming.state.isStreaming}
+           className="flex items-center gap-2 px-4 py-2 bg-surface-raised hover:bg-surface-hover text-content-secondary text-sm rounded-xl transition-colors border border-white/[0.05]"
+         >
+           <RotateCw className="w-4 h-4" />
+           다시 생성
+         </button>
       </div>
     );
   }
@@ -299,15 +311,15 @@ export function FlashcardTab({ fileId }: FlashcardTabProps) {
             <ChevronLeft className="w-5 h-5" />
           </button>
 
-          <button
-            onClick={handleGenerate}
-            disabled={generateMutation.isPending}
-            aria-label="다시 생성"
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-raised hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed text-content-muted hover:text-content-primary text-xs transition-colors border border-white/[0.05]"
-          >
-            <RotateCw className={`w-3.5 h-3.5 ${generateMutation.isPending ? 'animate-spin' : ''}`} />
-            재생성
-          </button>
+           <button
+             onClick={handleGenerate}
+             disabled={generateMutation.isPending || streaming.state.isStreaming}
+             aria-label="다시 생성"
+             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-raised hover:bg-surface-hover disabled:opacity-50 disabled:cursor-not-allowed text-content-muted hover:text-content-primary text-xs transition-colors border border-white/[0.05]"
+           >
+             <RotateCw className={`w-3.5 h-3.5 ${generateMutation.isPending || streaming.state.isStreaming ? 'animate-spin' : ''}`} />
+             재생성
+           </button>
 
           <button
             onClick={goToNext}
