@@ -225,6 +225,7 @@ export function TutorTab({ fileId, currentPage }: Props) {
     onDone: () => {
       finalizeStreamingMessage();
       setSseEnabled(false);
+      void queryClient.invalidateQueries({ queryKey: ['study', 'chat', 'history', fileId] });
     },
     onError: () => {
       setSseEnabled(false);
