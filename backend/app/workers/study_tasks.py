@@ -141,3 +141,34 @@ def generate_study_items_task(
             exc,
         )
         raise
+
+
+@celery_app.task(name="generate_concept_notes")
+def generate_concept_notes_task(
+    file_id: str,
+    user_id: str = "",
+    credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list | None = None,
+):
+    async def _run():
+        from app.database import async_session
+        from app.services.study_service import generate_concept_notes
+
+        async with async_session() as db:
+            await generate_concept_notes(
+                file_id,
+                db,
+                user_id=user_id,
+                credit_estimate=credit_estimate,
+                credit_source=credit_source,
+                credit_batch_ids=credit_batch_ids,
+            )
+
+    try:
+        _run_async_task(_run())
+    except Exception as exc:
+        logger.exception(
+            "generate_concept_notes task failed for file %s: %s", file_id, exc
+        )
+        raise

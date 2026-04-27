@@ -11,6 +11,7 @@ from app.middleware.auth import get_current_user
 from app.models.file import File, FileStatus
 from app.models.study import (
     ContentStatus,
+    StudyConceptNote,
     StudyFlashcard,
     StudyFlashcardSet,
     StudyItem,
@@ -29,6 +30,7 @@ from app.schemas.study import (
     MindmapNodeExplanationResponse,
     StudyChatHistoryResponse,
     StudyChatMessageResponse,
+    StudyConceptNoteResponse,
     StudyDifficulty,
     StudyFlashcardResponse,
     StudyFlashcardSetResponse,
@@ -239,6 +241,14 @@ async def get_study_status(
     )
     mindmap = mindmap_result.scalar_one_or_none()
 
+    concept_note_result = await db.execute(
+        select(StudyConceptNote).where(
+            StudyConceptNote.file_id == file_id,
+            StudyConceptNote.deleted_at.is_(None),
+        )
+    )
+    concept_note = concept_note_result.scalar_one_or_none()
+
     parsed_doc = file.parsed_document
     text = (parsed_doc.normalized_text or "") if parsed_doc else ""
     is_short = file.status == FileStatus.ready and len(text) < 100
@@ -259,6 +269,9 @@ async def get_study_status(
         ),
         mindmap_status=(
             mindmap.status.value if mindmap else ContentStatus.not_generated.value
+        ),
+        concept_notes_status=(
+            concept_note.status.value if concept_note else ContentStatus.not_generated.value
         ),
     )
 
@@ -641,13 +654,116 @@ async def get_mindmap_node_explanation(
     )
 
 
+@router.get("/{file_id}/concept-notes", response_model=StudyConceptNoteResponse)
+async def get_concept_notes(
+    file_id: str,
+    version_id: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _get_owned_file(file_id, db, user)
+
+    if version_id:
+        result = await db.execute(
+            select(StudyConceptNote).where(
+                StudyConceptNote.id == version_id,
+                StudyConceptNote.file_id == file_id,
+                StudyConceptNote.status == ContentStatus.completed,
+            )
+        )
+    else:
+        result = await db.execute(
+            select(StudyConceptNote).where(
+                StudyConceptNote.file_id == file_id,
+                StudyConceptNote.deleted_at.is_(None),
+            )
+        )
+    concept_note = result.scalar_one_or_none()
+
+    if (
+        concept_note is None
+        or concept_note.status != ContentStatus.completed
+        or concept_note.data is None
+    ):
+        status = concept_note.status.value if concept_note else ContentStatus.not_generated.value
+        raise HTTPException(
+            status_code=404,
+            detail=f"Concept notes not available. Status: {status}",
+        )
+
+    concepts = (concept_note.data or {}).get("concepts", []) if isinstance(concept_note.data, dict) else []
+    return StudyConceptNoteResponse(
+        id=concept_note.id,
+        file_id=concept_note.file_id,
+        status=concept_note.status.value,
+        concepts=concepts,
+        generated_at=concept_note.generated_at,
+    )
+
+
+@router.post("/{file_id}/concept-notes/generate")
+async def generate_concept_notes_endpoint(
+    file_id: str,
+    req: GenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    file = await _get_owned_file(file_id, db, user)
+
+    if file.status != FileStatus.ready:
+        raise HTTPException(
+            status_code=400,
+            detail="File is not ready for study material generation",
+        )
+
+    result = await db.execute(
+        select(StudyConceptNote).where(
+            StudyConceptNote.file_id == file_id,
+            StudyConceptNote.deleted_at.is_(None),
+        )
+    )
+    concept_note = result.scalar_one_or_none()
+
+    if concept_note and concept_note.status == ContentStatus.generating:
+        raise HTTPException(
+            status_code=409, detail="Concept note generation already in progress"
+        )
+
+    usage_svc = UsageService()
+    tier = UserTier(user.tier)
+    allowed, _, _cn_source, _cn_batch_ids = await usage_svc.check_and_consume(
+        db, user, "quiz", STUDY_CREDIT_ESTIMATE
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=402,
+            detail=LimitExceededError(
+                detail="학습 AI 사용 한도를 초과했습니다. 요금제를 업그레이드하거나 크레딧을 구매하세요.",
+                limit_type="quiz",
+                current_usage=TIER_LIMITS[tier].quiz_per_window,
+                limit=TIER_LIMITS[tier].quiz_per_window,
+            ).model_dump(),
+        )
+
+    if concept_note is not None:
+        concept_note.deleted_at = datetime.now(timezone.utc)
+        await db.flush()
+
+    new_concept_note = StudyConceptNote(file_id=file_id, status=ContentStatus.generating)
+    db.add(new_concept_note)
+    await db.commit()
+
+    dispatch_task("generate_concept_notes", [file_id, user.id, STUDY_CREDIT_ESTIMATE, _cn_source, _cn_batch_ids or []])
+    return {"status": "dispatched"}
+
+
 @router.get(
     "/{file_id}/{content_type}/versions",
     response_model=ContentVersionsResponse,
 )
 async def get_content_versions(
     file_id: str,
-    content_type: Literal["summary", "flashcards", "mindmap"],
+    content_type: Literal["summary", "flashcards", "mindmap", "concept-notes"],
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -657,6 +773,7 @@ async def get_content_versions(
         "summary": StudySummary,
         "flashcards": StudyFlashcardSet,
         "mindmap": StudyMindmap,
+        "concept-notes": StudyConceptNote,
     }
     model = model_map[content_type]
 

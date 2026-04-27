@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.file import File, ParsedDocument
 from app.models.study import (
     ContentStatus,
+    StudyConceptNote,
     StudyFlashcard,
     StudyFlashcardSet,
     StudyItem,
@@ -19,6 +20,7 @@ from app.models.study import (
     StudySummary,
 )
 from app.prompts.study import (
+    CONCEPT_NOTES_PROMPT,
     MINDMAP_PROMPT,
     NODE_EXPLANATION_PROMPT,
     STUDY_MODEL,
@@ -220,6 +222,33 @@ async def _get_or_create_summary(db: AsyncSession, file_id: str) -> StudySummary
         )
         summary = result.scalar_one()
     return summary
+
+
+async def _get_or_create_concept_note(db: AsyncSession, file_id: str) -> StudyConceptNote:
+    result = await db.execute(
+        select(StudyConceptNote).where(
+            StudyConceptNote.file_id == file_id,
+            StudyConceptNote.deleted_at.is_(None),
+        )
+    )
+    concept_note = result.scalar_one_or_none()
+    if concept_note is not None:
+        return concept_note
+
+    concept_note = StudyConceptNote(file_id=file_id, status=ContentStatus.not_generated)
+    db.add(concept_note)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        result = await db.execute(
+            select(StudyConceptNote).where(
+                StudyConceptNote.file_id == file_id,
+                StudyConceptNote.deleted_at.is_(None),
+            )
+        )
+        concept_note = result.scalar_one()
+    return concept_note
 
 
 async def generate_summary(
@@ -1043,6 +1072,138 @@ async def generate_study_items(
         )
         try:
             item_set.status = ContentStatus.failed
+            await db.commit()
+        except Exception:
+            pass
+
+
+async def generate_concept_notes(
+    file_id: str,
+    db: AsyncSession,
+    *,
+    user_id: str = "",
+    credit_estimate: float = 0,
+    credit_source: str = "tier",
+    credit_batch_ids: list[str] | None = None,
+) -> None:
+    concept_note = await _get_or_create_concept_note(db, file_id)
+
+    concept_note.status = ContentStatus.generating
+    await db.commit()
+
+    try:
+        file_result = await db.execute(select(File).where(File.id == file_id))
+        file = file_result.scalar_one_or_none()
+
+        if file is None:
+            logger.error("generate_concept_notes: file %s not found", file_id)
+            concept_note.status = ContentStatus.failed
+            await db.commit()
+            return
+
+        parsed_doc: ParsedDocument | None = file.parsed_document
+        text = (parsed_doc.normalized_text or "") if parsed_doc else ""
+
+        if len(text) < _MIN_TEXT_CHARS:
+            logger.warning(
+                "generate_concept_notes: file %s text too short (%d chars)",
+                file_id,
+                len(text),
+            )
+            concept_note.status = ContentStatus.failed
+            await db.commit()
+            return
+
+        if len(text) > _MAX_TEXT_CHARS:
+            text = text[:_MAX_TEXT_CHARS]
+
+        prompt = CONCEPT_NOTES_PROMPT.format(document_text=text)
+        raw_text, total_tokens = await _collect_ai_response(prompt)
+
+        try:
+            data = json.loads(_strip_json_fences(raw_text))
+        except json.JSONDecodeError:
+            logger.warning("generate_concept_notes: JSON parse failed on first attempt for file %s, retrying", file_id)
+            retry_prompt = (
+                prompt
+                + "\n\n[중요] 반드시 순수 JSON 객체만 출력하세요."
+                ' 코드 펜스, 마크다운, 설명 없이 {"concepts": [...]} 형식의 JSON만 반환하세요.'
+            )
+            raw_text2, retry_tokens = await _collect_ai_response(retry_prompt)
+            total_tokens += retry_tokens
+            try:
+                data = json.loads(_strip_json_fences(raw_text2))
+            except json.JSONDecodeError as exc:
+                logger.error("generate_concept_notes: JSON parse failed on retry for file %s: %s", file_id, exc)
+                concept_note.status = ContentStatus.failed
+                await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+                await db.commit()
+                return
+
+        raw_concepts = data.get("concepts", [])
+        if not isinstance(raw_concepts, list):
+            logger.error("generate_concept_notes: concepts field not a list for file %s", file_id)
+            concept_note.status = ContentStatus.failed
+            await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+            await db.commit()
+            return
+
+        concepts = []
+        for i, raw in enumerate(raw_concepts):
+            if not isinstance(raw, dict):
+                continue
+            name = str(raw.get("name", "")).strip()
+            explanation = str(raw.get("explanation", "")).strip()
+            if not name or not explanation:
+                continue
+            difficulty = str(raw.get("difficulty", "medium")).strip().lower()
+            if difficulty not in ("easy", "medium", "hard"):
+                difficulty = "medium"
+            raw_kp = raw.get("key_points", [])
+            key_points = (
+                [str(p).strip() for p in raw_kp if isinstance(p, (str, int, float)) and str(p).strip()]
+                if isinstance(raw_kp, list)
+                else []
+            )
+            raw_kw = raw.get("keywords", [])
+            keywords = (
+                [str(k).strip() for k in raw_kw if isinstance(k, (str, int, float)) and str(k).strip()]
+                if isinstance(raw_kw, list)
+                else []
+            )
+            concepts.append({
+                "id": f"concept-{i + 1}",
+                "name": name,
+                "explanation": explanation,
+                "key_points": key_points,
+                "keywords": keywords,
+                "difficulty": difficulty,
+            })
+
+        if not concepts:
+            logger.error("generate_concept_notes: no valid concepts parsed for file %s", file_id)
+            concept_note.status = ContentStatus.failed
+            await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+            await db.commit()
+            return
+
+        concept_note.data = {"concepts": concepts}
+        concept_note.status = ContentStatus.completed
+        concept_note.generated_at = datetime.now(timezone.utc)
+        concept_note.model_used = STUDY_MODEL
+        await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+        await db.commit()
+
+        logger.info(
+            "generate_concept_notes: completed for file %s (%d concepts)",
+            file_id,
+            len(concepts),
+        )
+
+    except Exception as exc:
+        logger.exception("generate_concept_notes: failed for file %s: %s", file_id, exc)
+        try:
+            concept_note.status = ContentStatus.failed
             await db.commit()
         except Exception:
             pass
