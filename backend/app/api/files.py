@@ -590,6 +590,11 @@ async def view_file(
         "pdf": "application/pdf",
         "txt": "text/plain",
         "md": "text/markdown",
+        "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
     }
     content_type = content_type_map.get(
         file.file_type or "", "application/octet-stream"
