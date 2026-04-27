@@ -18,10 +18,13 @@ const MindmapTab = lazy(() =>
 const TutorTab = lazy(() =>
   import('@/components/study/TutorTab').then((m) => ({ default: m.TutorTab }))
 );
+const MemoryNotesTab = lazy(() =>
+  import('@/components/study/MemoryNotesTab').then((m) => ({ default: m.MemoryNotesTab }))
+);
 
-type Tab = '요약' | '플래시카드' | '마인드맵' | 'AI 튜터';
+type Tab = '요약' | '플래시카드' | '마인드맵' | 'AI 튜터' | '암기노트';
 
-const TABS: Tab[] = ['요약', '플래시카드', '마인드맵', 'AI 튜터'];
+const TABS: Tab[] = ['요약', '플래시카드', '마인드맵', 'AI 튜터', '암기노트'];
 
 const STATUS_ICON: Record<ContentStatus, React.ReactNode> = {
   not_generated: <Circle size={12} />,
@@ -43,6 +46,7 @@ function tabStatus(tab: Tab, status: ReturnType<typeof useStudyStatus>['data']):
     case '요약': return status.summary_status;
     case '플래시카드': return status.flashcards_status;
     case '마인드맵': return status.mindmap_status;
+    case '암기노트': return status.concept_notes_status;
     default: return 'not_generated';
   }
 }
@@ -54,6 +58,7 @@ function TabContent({ tab, fileId }: { tab: Tab; fileId: string }) {
       {tab === '플래시카드' && <FlashcardTab fileId={fileId} />}
       {tab === '마인드맵' && <MindmapTab fileId={fileId} />}
       {tab === 'AI 튜터' && <TutorTab fileId={fileId} />}
+      {tab === '암기노트' && <MemoryNotesTab fileId={fileId} />}
     </Suspense>
   );
 }

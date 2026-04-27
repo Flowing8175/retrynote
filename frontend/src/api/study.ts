@@ -11,6 +11,7 @@ import type {
   StudyHistoryResponse,
   StudyVisitResponse,
   ContentVersionsResponse,
+  StudyConceptNote,
 } from '@/types/study';
 
 export const studyApi = {
@@ -88,6 +89,16 @@ export const studyApi = {
     const response = await apiClient.get<StudyMindmap>(`/study/${fileId}/mindmap`, { params: { version_id: versionId } });
     return response.data;
   },
+
+  getConceptNotes: async (fileId: string): Promise<StudyConceptNote> => {
+    const response = await apiClient.get<StudyConceptNote>(`/study/${fileId}/concept-notes`);
+    return response.data;
+  },
+
+  getConceptNotesVersion: async (fileId: string, versionId: string): Promise<StudyConceptNote> => {
+    const response = await apiClient.get<StudyConceptNote>(`/study/${fileId}/concept-notes`, { params: { version_id: versionId } });
+    return response.data;
+  },
 };
 
 export function useStudyStatus(fileId: string) {
@@ -101,7 +112,8 @@ export function useStudyStatus(fileId: string) {
         data &&
         (data.summary_status === 'generating' ||
           data.flashcards_status === 'generating' ||
-          data.mindmap_status === 'generating')
+          data.mindmap_status === 'generating' ||
+          data.concept_notes_status === 'generating')
       ) {
         return 3000;
       }
@@ -118,6 +130,14 @@ export function useStudySummary(fileId: string, options?: { enabled?: boolean })
   return useQuery({
     queryKey: ['study', 'summary', fileId],
     queryFn: () => studyApi.getSummary(fileId),
+    enabled: (options?.enabled !== false) && !!fileId,
+  });
+}
+
+export function useStudyConceptNotes(fileId: string, options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ['study', 'concept-notes', fileId],
+    queryFn: () => studyApi.getConceptNotes(fileId),
     enabled: (options?.enabled !== false) && !!fileId,
   });
 }
@@ -227,6 +247,14 @@ export function useMindmapVersion(fileId: string, versionId: string | null) {
   return useQuery({
     queryKey: ['study', 'mindmap', fileId, 'version', versionId],
     queryFn: () => studyApi.getMindmapVersion(fileId, versionId!),
+    enabled: !!fileId && !!versionId,
+  });
+}
+
+export function useConceptNotesVersion(fileId: string, versionId: string | null) {
+  return useQuery({
+    queryKey: ['study', 'concept-notes', fileId, 'version', versionId],
+    queryFn: () => studyApi.getConceptNotesVersion(fileId, versionId!),
     enabled: !!fileId && !!versionId,
   });
 }
