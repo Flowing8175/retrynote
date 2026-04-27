@@ -48,6 +48,73 @@ similarity_safety_note 규칙 (구조화 서술):
   3) question_type이 이전과 다른지(yes/no)
 - 예: "문장 겹침 낮음, 각도 변경 yes, 유형 변경 yes."
 
+완전한 변환 예시:
+
+**예시 1: concept_confusion + multiple_choice → short_answer 변환**
+
+이전 문제 정보:
+- 이전 유형: multiple_choice
+- 개념: 프로세스 스케줄링 알고리즘 (concept_key: process_scheduling_algorithms)
+- 오류 유형: concept_confusion
+- 사용자 답: "FCFS는 대기 시간이 짧은 프로세스를 먼저 처리한다"
+- 정답: "FCFS는 도착 순서대로 CPU를 할당한다"
+- 이전 문제: "FCFS 스케줄링 알고리즘의 특징으로 옳은 것은?" (보기: 도착 순서대로 할당 / 실행 시간이 짧은 프로세스 우선 / 우선순위 높은 프로세스 우선 / 남은 실행 시간이 짧은 프로세스 우선)
+
+재도전 문제 JSON 출력:
+{
+  "question_type": "short_answer",
+  "question_text": "FCFS와 SJF 스케줄링의 CPU 할당 기준을 각각 한 문장으로 비교하시오.",
+  "options": null,
+  "correct_answer": {"answer": "FCFS는 프로세스 도착 순서대로 CPU를 할당하고, SJF는 CPU 버스트 시간이 짧은 프로세스에게 먼저 CPU를 할당한다."},
+  "explanation": "FCFS(First Come First Served)는 도착 순서가 기준이므로 실행 시간에 무관하게 먼저 온 프로세스가 CPU를 점유한다. SJF(Shortest Job First)는 CPU 버스트 시간이 짧은 프로세스를 선택한다. 두 알고리즘의 선택 기준을 혼동하면 convoy effect(FCFS 단점)와 starvation(SJF 단점)을 잘못 귀속시키는 오개념으로 이어진다.",
+  "concept_key": "process_scheduling_algorithms",
+  "targeted_error_type": "concept_confusion",
+  "hint": null,
+  "similarity_safety_note": "문장 겹침 낮음, 각도 변경 yes (정의 식별→비교 서술), 유형 변경 yes (multiple_choice→short_answer)."
+}
+
+---
+
+**예시 2: missing_keyword + short_answer → fill_blank 변환 (retry_count=2, 카테고리 힌트 포함)**
+
+이전 문제 정보:
+- 이전 유형: short_answer
+- 개념: 컨텍스트 스위칭 (concept_key: context_switching)
+- 오류 유형: missing_keyword
+- 사용자 답: "CPU 상태를 저장하고 다음 프로세스 상태를 불러오는 것"
+- 정답: "현재 프로세스 상태를 PCB에 저장하고, 다음 프로세스 상태를 PCB에서 복원하는 과정"
+- 이전 문제: "컨텍스트 스위칭이란 무엇인지 설명하시오."
+- retry_count: 2
+
+재도전 문제 JSON 출력:
+{
+  "question_type": "fill_blank",
+  "question_text": "컨텍스트 스위칭 시 CPU는 현재 프로세스 상태를 [___]에 저장한 뒤, 다음 프로세스 상태를 [___]에서 복원한다.",
+  "options": null,
+  "correct_answer": {"answer": "PCB||PCB"},
+  "explanation": "컨텍스트 스위칭의 핵심 매체는 PCB(Process Control Block)다. 현재 프로세스의 레지스터·메모리 정보를 PCB에 저장하고, 다음 프로세스의 PCB에서 이전 실행 상태를 복원함으로써 CPU 전환이 완성된다. 이전 답안에서 'PCB'라는 핵심어를 빠뜨렸으므로 이번 문제는 해당 자료구조 이름을 명시적으로 떠올리도록 출제한다.",
+  "concept_key": "context_switching",
+  "targeted_error_type": "missing_keyword",
+  "hint": "이 답은 프로세스 상태 관리를 위한 운영체제 자료구조입니다.",
+  "similarity_safety_note": "문장 겹침 낮음, 각도 변경 yes (서술→빈칸 완성), 유형 변경 yes (short_answer→fill_blank)."
+}
+
+---
+
+최종 자기 점검:
+(1) 이전 문제와 question_type이 다른가
+(2) similarity_safety_note의 문장 겹침 비율이 "낮음"인가
+(3) targeted_error_type이 아래 error_type 매핑과 일치하는가
+    - concept_confusion → 비교형/구분형 문제
+    - missing_keyword → 빈칸형/단답형 문제
+    - reasoning_error → 사례 적용형 문제
+    - careless_mistake → 짧고 명확한 확인형 문제
+(4) hint가 retry_count 레벨링 규칙을 따르는가
+    - retry_count=1 → hint=null
+    - retry_count=2 → 개념 카테고리 힌트 1문장
+    - retry_count≥3 → 첫 글자 또는 글자 수 힌트 (정답 단어 노출 금지)
+(5) question_text에 "자료에서 설명한", "지문에서 언급한", "위 내용에 따르면" 등 금지 수식어가 없는가
+
 절대 금지:
 - 같은 문장 재사용
 - 같은 유형 반복 남발
