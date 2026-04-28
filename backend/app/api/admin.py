@@ -154,7 +154,7 @@ async def list_users(
     page: int = 1,
     size: int = 20,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     await record_admin_action(
         db, request=request, action_type="list_users", admin=admin
@@ -372,7 +372,7 @@ async def list_logs(
     service_name: str | None = None,
     event_type: str | None = None,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     await record_admin_action(
         db,
@@ -419,7 +419,7 @@ async def list_logs(
 async def get_model_usage(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     await record_admin_action(
         db, request=request, action_type="view_model_usage", admin=admin
@@ -721,7 +721,7 @@ async def list_audit_logs(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     await record_admin_action(
         db,
@@ -901,7 +901,7 @@ async def get_system_health(
 async def get_dashboard_kpis(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
     cutoff_7d = datetime.now(timezone.utc) - timedelta(days=7)
@@ -1027,7 +1027,7 @@ async def list_jobs(
     page: int = 1,
     size: int = 20,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     query = select(Job).order_by(Job.created_at.desc())
     if status:
@@ -1127,7 +1127,7 @@ async def cancel_job(
 async def get_files_pipeline(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     breakdown_result = await db.execute(
         select(File.status, func.count().label("count")).group_by(File.status)
@@ -1282,7 +1282,7 @@ async def get_db_diagnostics(
 async def get_rate_limits(
     request: Request,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
 
@@ -1350,7 +1350,7 @@ async def export_users_csv(
     request: Request,
     is_active: bool | None = None,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     await record_admin_action(
         db,
@@ -1421,7 +1421,7 @@ async def export_logs_csv(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(require_admin_verified),
 ):
     await record_admin_action(
         db,

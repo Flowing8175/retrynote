@@ -36,14 +36,17 @@ from app.schemas.auth import (
     ResendVerificationRequest,
     UserProfile,
     RefreshTokenRequest,
+    StreamTokenResponse,
     DeleteAccountRequest,
     ConvertGuestRequest,
 )
 from app.middleware.auth import (
+    STREAM_TOKEN_EXPIRE_SECONDS,
     hash_password,
     verify_password,
     create_access_token,
     create_refresh_token,
+    create_stream_token,
     get_current_user,
 )
 from app.utils.email import send_password_reset_email, send_verification_email
@@ -462,24 +465,39 @@ async def password_reset_confirm(
     if not verify_password(verifier, token_record.token_hash):
         raise HTTPException(status_code=400, detail="Invalid token")
 
+    # Atomic single-use guard: claim the token via UPDATE ... WHERE used_at IS NULL
+    # so concurrent reset attempts with the same valid token can't both pass the
+    # used_at check above (the prior code had a TOCTOU between the read and write).
+    now = datetime.now(timezone.utc)
+    claim_result = await db.execute(
+        update(PasswordResetToken)
+        .where(
+            PasswordResetToken.id == token_record.id,
+            PasswordResetToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+    if (claim_result.rowcount or 0) == 0:  # type: ignore[attr-defined]
+        await db.rollback()
+        raise HTTPException(status_code=400, detail="Token already used")
+
     user_result = await db.execute(
         select(User).where(User.id == token_record.user_id, User.deleted_at.is_(None))
     )
     user = user_result.scalar_one_or_none()
     if not user:
+        await db.rollback()
         raise HTTPException(status_code=400, detail="Invalid token")
 
     user.password_hash = hash_password(req.new_password)
-    token_record.used_at = datetime.now(timezone.utc)
 
-    # Revoke all existing refresh tokens so old sessions cannot persist after a reset
     await db.execute(
         update(RefreshToken)
         .where(
             RefreshToken.user_id == user.id,
             RefreshToken.revoked_at.is_(None),
         )
-        .values(revoked_at=datetime.now(timezone.utc))
+        .values(revoked_at=now)
     )
 
     await db.commit()
@@ -572,6 +590,16 @@ async def refresh_token(req: RefreshTokenRequest, db: AsyncSession = Depends(get
         }
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+
+@router.post("/stream-token", response_model=StreamTokenResponse)
+async def issue_stream_token(
+    user: User = Depends(get_current_user),
+):
+    return StreamTokenResponse(
+        stream_token=create_stream_token(user.id, user.role.value),
+        expires_in=STREAM_TOKEN_EXPIRE_SECONDS,
+    )
 
 
 @router.post("/logout")

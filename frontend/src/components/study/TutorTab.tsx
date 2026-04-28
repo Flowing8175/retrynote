@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
 import { useQueryClient } from '@tanstack/react-query';
 import { useChatHistory } from '@/api/study';
 import { useSSE } from '@/hooks/useSSE';
@@ -334,7 +335,7 @@ export function TutorTab({ fileId, currentPage }: Props) {
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     </div>
                   ) : (
-                    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{msg.content}</ReactMarkdown>
                   )}
                 </div>
               </div>
@@ -344,7 +345,7 @@ export function TutorTab({ fileId, currentPage }: Props) {
               <div className="flex justify-start">
                 <div className="max-w-[80%] bg-surface border border-white/[0.05] text-content-primary rounded-2xl rounded-tl-sm px-4 py-3 text-sm">
                   {streamingContent ? (
-                    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]}>{streamingContent}</ReactMarkdown>
+                    <ReactMarkdown components={markdownComponents} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{streamingContent}</ReactMarkdown>
                   ) : (
                     <div className="flex gap-1 items-center py-1">
                       <span className="w-2 h-2 bg-content-muted rounded-full animate-bounce [animation-delay:0ms]" />

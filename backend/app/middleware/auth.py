@@ -77,6 +77,38 @@ def create_admin_token(user_id: str) -> str:
     )
 
 
+# 60s is intentionally tight: the SSE handshake completes in milliseconds,
+# but the token is forced into the URL (EventSource has no header support)
+# and therefore leaks into nginx access logs, browser history, referrers, etc.
+# Keeping the validity window this small turns those leaks from
+# "session takeover for an hour" into "useless within a minute".
+STREAM_TOKEN_EXPIRE_SECONDS = 60
+
+
+def create_stream_token(user_id: str, role: str) -> str:
+    """Issue a short-lived, SSE-only token.
+
+    Used exclusively by ``get_current_user_from_query_token`` for opening
+    Server-Sent Events streams via the native ``EventSource`` API. Long-lived
+    access tokens MUST NEVER be used for this purpose because they would be
+    written to URL-aware logs (nginx, proxies, browser history).
+    """
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(seconds=STREAM_TOKEN_EXPIRE_SECONDS)
+    return _jwt.encode(
+        {
+            "sub": user_id,
+            "role": role,
+            "exp": expire,
+            "iat": now,
+            "jti": str(uuid.uuid4()),
+            "type": "stream",
+        },
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
@@ -113,6 +145,25 @@ async def get_current_user_id(
     user: User = Depends(get_current_user),
 ) -> str:
     return user.id
+
+
+async def require_verified_user(
+    user: User = Depends(get_current_user),
+) -> User:
+    # Resource-consuming endpoints (file upload, AI generation, etc.) require
+    # a verified email so an unverified `convert-guest` token cannot be used
+    # to burn paid AI credits / storage on a throwaway email. The /login flow
+    # already enforces verification before issuing tokens; this guard catches
+    # the convert-guest path which issues tokens before verification.
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "email_not_verified",
+                "message": "이메일 인증 후 사용할 수 있습니다.",
+            },
+        )
+    return user
 
 
 async def require_admin(

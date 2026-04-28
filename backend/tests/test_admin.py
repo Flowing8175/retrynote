@@ -383,9 +383,11 @@ class TestModelSettings:
         assert "settings" in data
         assert data["settings"]["active_generation_model"] == "gpt-4o"
 
-    async def test_admin_cannot_update_settings(self, admin_client: AsyncClient):
-        """Regular admin → 403"""
-        resp = await admin_client.post(
+    async def test_admin_cannot_update_settings(
+        self, unverified_admin_client: AsyncClient
+    ):
+        """Admin without master verification → 403"""
+        resp = await unverified_admin_client.post(
             "/admin/settings/models",
             json={
                 "active_generation_model": "gpt-4o",
@@ -439,9 +441,11 @@ class TestAnnouncements:
         assert data["body"] == "We have released a new feature for all users."
         assert data["is_active"] is True
 
-    async def test_admin_cannot_create_announcement(self, admin_client: AsyncClient):
-        """Regular admin → 403"""
-        resp = await admin_client.post(
+    async def test_admin_cannot_create_announcement(
+        self, unverified_admin_client: AsyncClient
+    ):
+        """Admin without master verification → 403"""
+        resp = await unverified_admin_client.post(
             "/admin/announcements",
             json={
                 "title": "Admin Announcement",
@@ -1170,9 +1174,9 @@ class TestUserManagement:
             assert await s.get(RefreshToken, rt_id) is None
 
     async def test_delete_user_requires_verified_admin(
-        self, admin_client: AsyncClient, test_user
+        self, unverified_admin_client: AsyncClient, test_user
     ):
-        resp = await admin_client.delete(f"/admin/users/{test_user.id}")
+        resp = await unverified_admin_client.delete(f"/admin/users/{test_user.id}")
         assert resp.status_code == 403
         assert "verification required" in resp.json()["detail"].lower()
 
@@ -1411,9 +1415,9 @@ class TestCSVExport:
         assert resp.status_code == 403
 
     async def test_audit_logs_csv_requires_verified_admin(
-        self, admin_client: AsyncClient
+        self, unverified_admin_client: AsyncClient
     ):
-        resp = await admin_client.get("/admin/export/audit-logs")
+        resp = await unverified_admin_client.get("/admin/export/audit-logs")
         assert resp.status_code == 403
 
     async def test_audit_logs_csv_has_bom(

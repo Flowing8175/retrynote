@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
 import { RefreshCw, FileText, AlertCircle, Sparkles } from 'lucide-react';
 import { useStudyStatus, useStudySummary, useContentVersions, useSummaryVersion } from '@/api/study';
 import { useStudyStreaming } from '@/hooks/useStudyStreaming';
@@ -287,7 +288,11 @@ export function SummaryTab({ fileId, onPageNavigate }: SummaryTabProps) {
           )}
 
           {!isShowingLoader && effectiveStatus === 'completed' && displayContent && (
-            <Markdown components={markdownComponents} remarkPlugins={[remarkGfm]}>
+            <Markdown
+              components={markdownComponents}
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeSanitize]}
+            >
               {processedContent}
             </Markdown>
           )}

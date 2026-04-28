@@ -10,7 +10,7 @@ from app.models.guest import GuestSession
 from app.models.quiz import QuizMode, QuizSession, QuizSessionStatus, SourceMode
 
 
-GUEST_TOKEN = "conversion-guest-token-xyz"
+GUEST_TOKEN = "11111111-2222-4333-8444-555555555555"
 
 
 @pytest.fixture(autouse=True)
@@ -142,7 +142,7 @@ class TestConvertGuest:
                 "username": "ghostuser",
                 "email": "ghost@example.com",
                 "password": "StrongPass123!",
-                "guest_session_id": "nonexistent-session-token",
+                "guest_session_id": "99999999-aaaa-4bbb-8ccc-dddddddddddd",
                 "turnstile_token": "test-token",
             },
         )

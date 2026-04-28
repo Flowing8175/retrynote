@@ -84,7 +84,9 @@ class TestValidateGuestSession:
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
-            await GuestSessionService.validate_guest_session(db_session, "bogus-token")
+            await GuestSessionService.validate_guest_session(
+                db_session, "ffffffff-1111-4222-8333-444444444444"
+            )
         assert exc_info.value.status_code == 404
 
 

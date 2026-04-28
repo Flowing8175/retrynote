@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
 import { quizApi } from '@/api';
 import { useQuizStore } from '@/stores';
 import { gradeLocally } from '@/utils/gradeLocally';
@@ -246,6 +247,7 @@ function QuizStreamingView({ stage, items, total, thinkingText, thinkingActive, 
                   <Markdown
                     components={thinkingMarkdownComponents}
                     remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[rehypeSanitize]}
                   >
                     {thinkingText}
                   </Markdown>

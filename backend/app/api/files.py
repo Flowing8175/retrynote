@@ -35,7 +35,11 @@ from app.schemas.file import (
     FileRetryResponse,
     FolderDetail,
 )
-from app.middleware.auth import get_current_user, get_impersonation_context
+from app.middleware.auth import (
+    get_current_user,
+    get_impersonation_context,
+    require_verified_user,
+)
 from app.middleware.rate_limit_upload import upload_rate_limit
 from app.workers.celery_app import dispatch_task
 from app.utils.db_helpers import paginate
@@ -300,7 +304,7 @@ async def upload_file(
     topic_depth: str | None = Form(default=None),
     folder_id: str | None = Form(default=None),
     db: AsyncSession = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_verified_user),
     _rate_limit: None = Depends(upload_rate_limit),
 ):
     effective_user, _ = await get_impersonation_context(request, user, db)

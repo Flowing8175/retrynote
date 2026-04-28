@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.billing import AICreditBatch, CreditBalance, CreditPurchase
@@ -95,14 +95,29 @@ class CreditService:
         user_id: str,
         amount: int,
     ) -> bool:
-        balance = await self.get_balance(db, user_id)
+        # Atomic check-and-decrement: a single UPDATE...WHERE clause guarantees
+        # at most one concurrent request can consume credits a user has,
+        # eliminating the read-modify-write race that lets parallel requests
+        # double-spend a single credit balance. rowcount == 0 means another
+        # transaction already consumed those credits OR the balance was
+        # insufficient — both should fail-closed.
+        if amount <= 0:
+            return True
 
-        if balance.storage_credits_bytes < amount:
-            return False
-        balance.storage_credits_bytes -= amount
+        await self.get_balance(db, user_id)
 
+        result = await db.execute(
+            update(CreditBalance)
+            .where(
+                CreditBalance.user_id == user_id,
+                CreditBalance.storage_credits_bytes >= amount,
+            )
+            .values(
+                storage_credits_bytes=CreditBalance.storage_credits_bytes - amount,
+            )
+        )
         await db.commit()
-        return True
+        return (result.rowcount or 0) > 0  # type: ignore[attr-defined]
 
     async def _fetch_price(self, price_id: str) -> dict[str, Any]:
         now = time.time()

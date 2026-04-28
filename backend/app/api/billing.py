@@ -3,6 +3,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -310,11 +311,18 @@ async def paddle_webhook(
     event_type = event.get("event_type", "")
     data = event.get("data") or {}
 
+    # Atomic idempotency: claim the notification_id BEFORE running the handler
+    # by inserting the WebhookEvent row first. event_id is the PK, so a
+    # concurrent duplicate delivery (Paddle retries on timeout/5xx) loses the
+    # race with IntegrityError and we early-return. The previous SELECT-then-
+    # INSERT pattern allowed both deliveries to pass the existence check before
+    # either committed, leading to double tier upgrades / double credit grants.
     if notification_id:
-        existing = await db.execute(
-            select(WebhookEvent).where(WebhookEvent.event_id == notification_id)
-        )
-        if existing.scalar_one_or_none():
+        db.add(WebhookEvent(event_id=notification_id, event_type=event_type))
+        try:
+            await db.flush()
+        except IntegrityError:
+            await db.rollback()
             return {"status": "already_processed"}
 
     _WEBHOOK_HANDLERS = {
@@ -329,10 +337,7 @@ async def paddle_webhook(
         handler = _WEBHOOK_HANDLERS.get(event_type)
         if handler:
             await handler(db, data)
-
-        if notification_id:
-            db.add(WebhookEvent(event_id=notification_id, event_type=event_type))
-            await db.commit()
+        await db.commit()
 
     except Exception as e:
         logger.error("Webhook processing error for %s: %s", notification_id, e)

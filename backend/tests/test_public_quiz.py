@@ -20,7 +20,7 @@ from app.middleware.turnstile import verify_turnstile
 from app.main import app
 
 
-GUEST_TOKEN = "test-guest-token-abc123"
+GUEST_TOKEN = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"
 
 
 @pytest.fixture(autouse=True)
@@ -173,7 +173,7 @@ class TestGetQuizSession:
         qs = await _make_quiz_session(db_session, gs)
         await db_session.commit()
 
-        other_token = "completely-different-token"
+        other_token = "ffffffff-1111-4222-8333-444444444444"
         resp = await client.get(
             f"/public/quiz-sessions/{qs.id}",
             headers={"X-Guest-Session": other_token},
@@ -270,7 +270,7 @@ class TestAnswerSubmission:
         resp = await client.post(
             f"/public/quiz-sessions/{qs.id}/items/{item.id}/answer",
             json={"user_answer": "A"},
-            headers={"X-Guest-Session": "wrong-token"},
+            headers={"X-Guest-Session": "ffffffff-1111-4222-8333-444444444444"},
         )
         assert resp.status_code == 404
 
@@ -299,6 +299,6 @@ class TestGetResults:
 
         resp = await client.get(
             f"/public/quiz-sessions/{qs.id}/results",
-            headers={"X-Guest-Session": "intruder-token"},
+            headers={"X-Guest-Session": "ffffffff-1111-4222-8333-444444444444"},
         )
         assert resp.status_code == 404

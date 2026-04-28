@@ -169,8 +169,14 @@ async def admin_token(admin_user):
 
 
 @pytest_asyncio.fixture
-async def admin_client(client, admin_token):
+async def admin_client(client, admin_user, admin_token):
+    # Includes X-Admin-Token so tests cover the production reality where every
+    # admin request comes from a session that has already verified the master
+    # password. Tests that specifically need an unverified admin should clear
+    # the X-Admin-Token header explicitly.
+    admin_jwt = create_admin_token(admin_user.id)
     client.headers["Authorization"] = f"Bearer {admin_token}"
+    client.headers["X-Admin-Token"] = admin_jwt
     return client
 
 
@@ -179,6 +185,13 @@ async def verified_admin_client(client, admin_user, admin_token):
     admin_jwt = create_admin_token(admin_user.id)
     client.headers["Authorization"] = f"Bearer {admin_token}"
     client.headers["X-Admin-Token"] = admin_jwt
+    return client
+
+
+@pytest_asyncio.fixture
+async def unverified_admin_client(client, admin_token):
+    client.headers["Authorization"] = f"Bearer {admin_token}"
+    client.headers.pop("X-Admin-Token", None)
     return client
 
 
@@ -213,8 +226,10 @@ async def super_admin_token(super_admin_user):
 
 
 @pytest_asyncio.fixture
-async def super_admin_client(client, super_admin_token):
+async def super_admin_client(client, super_admin_user, super_admin_token):
+    admin_jwt = create_admin_token(super_admin_user.id)
     client.headers["Authorization"] = f"Bearer {super_admin_token}"
+    client.headers["X-Admin-Token"] = admin_jwt
     return client
 
 

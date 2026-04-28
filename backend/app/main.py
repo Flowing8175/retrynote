@@ -80,19 +80,42 @@ async def lifespan(app: FastAPI):
     await app.state.redis.aclose()
 
 
+# Disable interactive API docs in production to avoid leaking endpoint shapes
+# and Pydantic schemas (admin endpoints, billing internals, etc.). Keep them
+# enabled in development for local exploration.
+_is_prod = settings.app_env == "production"
+
 app = FastAPI(
-    title=app_metadata["title"], version=app_metadata["version"], lifespan=lifespan
+    title=app_metadata["title"],
+    version=app_metadata["version"],
+    lifespan=lifespan,
+    docs_url=None if _is_prod else "/docs",
+    redoc_url=None if _is_prod else "/redoc",
+    openapi_url=None if _is_prod else "/openapi.json",
 )
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# CORS: explicit method/header allowlist (NOT "*") combined with allow_credentials=True.
+# Wildcards here would let any allowlisted origin issue arbitrary methods/headers
+# with credentials — defense-in-depth against future origin-list mistakes (preview
+# environments, staging, etc.) and method-confusion attacks.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in settings.cors_origins.split(",")],
+    allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=[
+        "Content-Type",
+        "Authorization",
+        "X-Request-ID",
+        "X-Admin-Token",
+        "X-Guest-Session",
+        "X-Impersonation-Session-Id",
+        "X-Turnstile-Token",
+    ],
+    expose_headers=["X-Request-ID"],
 )
 
 

@@ -9,7 +9,7 @@ User=retrynote
 Group=retrynote
 WorkingDirectory=/home/retrynote/app/backend
 Environment=PYTHONPATH=/home/retrynote/app/backend
-ExecStart=/usr/local/bin/doppler run -- /home/retrynote/app/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 2
+ExecStart=/usr/local/bin/doppler run -- /home/retrynote/app/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 1
 Restart=always
 RestartSec=5
 

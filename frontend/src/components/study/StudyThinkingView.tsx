@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import rehypeSanitize from 'rehype-sanitize';
 import { PillShimmer } from '@/components';
 import type { StudyStreamingState } from '@/types/study';
 
@@ -202,7 +203,11 @@ export function StudyThinkingView({ state, onCancel }: StudyThinkingViewProps) {
               <div className="overflow-hidden min-h-0">
                 <div className="pl-6 border-l-2 border-brand-500/30">
                   <div className="text-sm text-content-secondary italic leading-relaxed">
-                    <Markdown components={thinkingMarkdownComponents} remarkPlugins={[remarkGfm]}>
+                    <Markdown
+                      components={thinkingMarkdownComponents}
+                      remarkPlugins={[remarkGfm]}
+                      rehypePlugins={[rehypeSanitize]}
+                    >
                       {state.thinkingText}
                     </Markdown>
                     {thinkingActive && (
