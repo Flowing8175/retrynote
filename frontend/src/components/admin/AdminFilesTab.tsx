@@ -32,7 +32,8 @@ function getStatusColorCls(status: string): { card: string; badge: string; dot: 
   };
 }
 
-function truncate(str: string, max: number): string {
+function truncate(str: string | null | undefined, max: number): string {
+  if (!str) return '(이름 없음)';
   return str.length > max ? `${str.slice(0, max)}…` : str;
 }
 
@@ -129,7 +130,7 @@ export default function AdminFilesTab({ isVerified, activeTab }: AdminTabProps) 
                   <tr key={file.id} className="transition-colors hover:bg-surface-deep/50">
                     <td
                       className="px-6 py-4 text-sm text-content-primary"
-                      title={file.original_filename}
+                      title={file.original_filename ?? undefined}
                     >
                       {truncate(file.original_filename, 40)}
                     </td>
@@ -197,7 +198,7 @@ export default function AdminFilesTab({ isVerified, activeTab }: AdminTabProps) 
                 <tr key={file.id} className="transition-colors hover:bg-surface-deep/50">
                   <td
                     className="px-6 py-4 text-sm text-content-primary"
-                    title={file.original_filename}
+                    title={file.original_filename ?? undefined}
                   >
                     {truncate(file.original_filename, 40)}
                   </td>

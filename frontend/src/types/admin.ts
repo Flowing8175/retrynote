@@ -209,7 +209,7 @@ export interface AdminFileStatusBreakdown {
 
 export interface AdminFileInProgress {
   id: string;
-  original_filename: string;
+  original_filename: string | null;
   status: string;
   user_id: string;
   username: string;
@@ -219,7 +219,7 @@ export interface AdminFileInProgress {
 
 export interface AdminFileFailure {
   id: string;
-  original_filename: string;
+  original_filename: string | null;
   status: string;
   user_id: string;
   username: string;
