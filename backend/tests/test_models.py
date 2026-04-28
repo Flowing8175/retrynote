@@ -15,7 +15,7 @@ from app.models.quiz import (
     ErrorType,
 )
 from app.models.objection import Objection, ObjectionStatus, WeakPoint
-from app.models.admin import DashboardSnapshot, SystemLog, AdminAuditLog, Announcement
+from app.models.admin import SystemLog, AdminAuditLog, Announcement
 from app.models.search import Job, DraftAnswer, ImpersonationSession, PasswordResetToken
 from app.schemas.quiz import QuizItemResponse
 from app.schemas.wrong_note import WrongNoteItem
@@ -125,6 +125,7 @@ class TestFileModel:
             FileSourceType.upload,
             FileSourceType.url,
             FileSourceType.manual_text,
+            FileSourceType.topic,
         ]
         for i, source_type in enumerate(source_types):
             file = File(
@@ -467,25 +468,6 @@ class TestAdminModels:
         assert log.action_type == "impersonation_start"
         assert log.admin_user_id == admin_user.id
         assert log.reason == "Support case #12345"
-
-    async def test_create_dashboard_snapshot(self, db_session, test_user):
-        """All fields"""
-        snapshot = DashboardSnapshot(
-            id=str(uuid.uuid4()),
-            user_id=test_user.id,
-            snapshot_date=datetime.now(timezone.utc),
-            range_type="7d",
-            payload_json={
-                "total_sessions": 10,
-                "average_score": 0.85,
-            },
-        )
-        db_session.add(snapshot)
-        await db_session.commit()
-        await db_session.refresh(snapshot)
-
-        assert snapshot.range_type == "7d"
-        assert snapshot.payload_json["total_sessions"] == 10
 
 
 class TestSearchModels:
