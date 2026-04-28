@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { adminApi } from '@/api';
 import { LoadingSpinner } from '@/components';
 import { useAuthStore } from '@/stores/authStore';
-import type { AnnouncementCreate, ModelSettingsUpdate } from '@/types';
+import type { AnnouncementCreate, ModelSettingsUpdate, AdminAuditLogFilters } from '@/types';
 import {
   AdminLoginGate,
   AdminDashboardHeader,
@@ -14,7 +14,6 @@ import {
   AdminAuditTab,
   AdminAnnouncementsTab,
   AdminImpersonationTab,
-  AdminModelSettingsTab,
   AdminKPIsPanel,
   AdminJobsTab,
   AdminDbTab,
@@ -34,6 +33,13 @@ export default function Admin() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
 
   const [auditPage, setAuditPage] = useState(1);
+  const [auditFilters, setAuditFilters] = useState<AdminAuditLogFilters>({
+    action_type: null,
+    admin_user_id: null,
+    target_user_id: null,
+    date_from: null,
+    date_to: null,
+  });
 
   const [announcementForm, setAnnouncementForm] = useState<AnnouncementCreate>({
     title: '',
@@ -73,6 +79,10 @@ export default function Admin() {
     }
     prevHealthStatus.current = s;
   }, [healthData?.status]);
+
+  useEffect(() => {
+    setAuditPage(1);
+  }, [auditFilters]);
 
   // Keyboard shortcuts for tab navigation (Ctrl+1 through Ctrl+9)
   useEffect(() => {
@@ -118,8 +128,8 @@ export default function Admin() {
   });
 
   const { data: auditData, isLoading: auditLoading } = useQuery({
-    queryKey: ['admin-audit', auditPage],
-    queryFn: () => adminApi.getAuditLogs(auditPage, 20),
+    queryKey: ['admin-audit', auditPage, auditFilters],
+    queryFn: () => adminApi.getAuditLogs(auditPage, 20, auditFilters),
     enabled: isVerified && activeTab === 'audit',
   });
 
@@ -320,7 +330,14 @@ export default function Admin() {
       )}
 
       {activeTab === 'models' && !modelLoading && (
-        <AdminModelsTab modelData={modelData} />
+        <AdminModelsTab
+          modelData={modelData}
+          isSuperAdmin={user?.role === 'super_admin'}
+          modelForm={modelForm}
+          setModelForm={setModelForm}
+          modelSaveMsg={modelSaveMsg}
+          updateModelSettingsMutation={updateModelSettingsMutation}
+        />
       )}
 
       {activeTab === 'audit' && !auditLoading && (
@@ -329,6 +346,8 @@ export default function Admin() {
           auditPage={auditPage}
           setAuditPage={setAuditPage}
           auditTotalPages={auditTotalPages}
+          auditFilters={auditFilters}
+          setAuditFilters={setAuditFilters}
         />
       )}
 
@@ -350,15 +369,6 @@ export default function Admin() {
           impersonatingTarget={impersonatingTarget}
           startImpersonationMutation={startImpersonationMutation}
           endImpersonationMutation={endImpersonationMutation}
-        />
-      )}
-
-      {activeTab === 'model_settings' && (
-        <AdminModelSettingsTab
-          modelForm={modelForm}
-          setModelForm={setModelForm}
-          modelSaveMsg={modelSaveMsg}
-          updateModelSettingsMutation={updateModelSettingsMutation}
         />
       )}
 
