@@ -313,9 +313,32 @@ async def generate_summary(
             text = text[:_MAX_TEXT_CHARS]
 
         prompt = SUMMARY_PROMPT.format(document_text=text)
-        markdown_content, total_tokens = await _collect_ai_response(prompt)
 
-        summary.content = markdown_content
+        ai_result: dict | None = None
+        total_tokens = 0
+
+        async with asyncio.timeout(settings.generation_timeout):
+            async for event in stream_ai_structured_with_thinking(
+                prompt=prompt,
+                schema=SUMMARY_SCHEMA,
+                system_message=SUMMARY_SYSTEM_MESSAGE,
+                primary_model=STUDY_MODEL,
+                fallback_model=settings.eco_generation_model,
+                max_tokens=8192,
+                reasoning_effort="low",
+                thinking_level="MEDIUM",
+            ):
+                if event.get("type") == "result":
+                    data = event.get("data")
+                    if isinstance(data, dict):
+                        ai_result = data
+                    tokens_raw = event.get("tokens_used") or 0
+                    total_tokens = int(tokens_raw) if isinstance(tokens_raw, (int, float)) else 0
+
+        if ai_result is None:
+            raise ValueError("AI stream ended without a result")
+
+        summary.content = ai_result.get("content", "")
         summary.status = ContentStatus.completed
         summary.generated_at = datetime.now(timezone.utc)
         summary.model_used = STUDY_MODEL
@@ -325,7 +348,7 @@ async def generate_summary(
         logger.info(
             "generate_summary: completed for file %s (%d chars output)",
             file_id,
-            len(markdown_content),
+            len(summary.content or ""),
         )
 
     except Exception as exc:
