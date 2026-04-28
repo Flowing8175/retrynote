@@ -301,11 +301,75 @@ async def upload_file(
         )
         duplicate = duplicate_result.scalar_one_or_none()
         if duplicate:
-            name = duplicate.original_filename or "알 수 없는 파일"
-            raise HTTPException(
-                status_code=409,
-                detail=f"동일한 파일이 이미 존재합니다: '{name}'",
+            # A duplicate genuinely blocks the new upload only if the existing
+            # record is being processed or already finished. Rows stuck in
+            # `uploaded` past a short grace window are almost always orphans
+            # from cancelled mid-flight uploads (or lost Celery dispatches)
+            # that would otherwise be unrecoverable for the user. `failed_*`
+            # rows are likewise treated as orphans so re-upload doubles as
+            # implicit retry.
+            ACTIVE_STATUSES = {
+                FileStatus.parsing,
+                FileStatus.parsed,
+                FileStatus.ocr_pending,
+                FileStatus.ocr_processing,
+                FileStatus.embedding_pending,
+                FileStatus.embedding_processing,
+                FileStatus.ready,
+            }
+            ORPHAN_GRACE_SECONDS = 30
+            is_active_duplicate = duplicate.status in ACTIVE_STATUSES
+            if duplicate.status == FileStatus.uploaded:
+                age_seconds = (
+                    datetime.now(timezone.utc) - duplicate.created_at
+                ).total_seconds()
+                if age_seconds < ORPHAN_GRACE_SECONDS:
+                    is_active_duplicate = True
+
+            if is_active_duplicate:
+                name = duplicate.original_filename or "알 수 없는 파일"
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"동일한 파일이 이미 존재합니다: '{name}'",
+                )
+
+            logger.info(
+                "Reclaiming orphaned file %s (status=%s) for user %s before retry",
+                duplicate.id,
+                duplicate.status.value,
+                effective_user.id,
             )
+            duplicate.status = FileStatus.deleted
+            duplicate.deleted_at = datetime.now(timezone.utc)
+            duplicate.is_searchable = False
+            duplicate.is_quiz_eligible = False
+            effective_user.storage_used_bytes = max(
+                0,
+                effective_user.storage_used_bytes
+                - (duplicate.file_size_bytes or 0),
+            )
+            await db.execute(
+                update(Job)
+                .where(
+                    Job.target_type == "file",
+                    Job.target_id == duplicate.id,
+                    Job.status.in_(("pending", "processing")),
+                )
+                .values(status="canceled")
+            )
+            if duplicate.stored_path:
+                cleanup_job = Job(
+                    id=str(uuid.uuid4()),
+                    job_type="file_cleanup",
+                    status="pending",
+                    target_type="file",
+                    target_id=duplicate.id,
+                )
+                db.add(cleanup_job)
+                background_tasks.add_task(
+                    dispatch_task, "file_cleanup", [cleanup_job.id]
+                )
+            await db.flush()
 
     await _check_storage_quota(db, effective_user, file_size)
 
