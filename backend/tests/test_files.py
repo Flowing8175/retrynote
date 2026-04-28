@@ -50,6 +50,39 @@ def _make_docx_bytes() -> bytes:
     return buf.getvalue()
 
 
+_PPTX_CONTENT_TYPES_XML = (
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+    '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+    '<Default Extension="xml" ContentType="application/xml"/>'
+    '<Override PartName="/ppt/presentation.xml" ContentType='
+    '"application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>'
+    "</Types>"
+)
+
+
+def _make_pptx_bytes(layout: str = "standard") -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        if layout == "standard":
+            zf.writestr("ppt/presentation.xml", "<presentation/>")
+            zf.writestr("[Content_Types].xml", _PPTX_CONTENT_TYPES_XML)
+        elif layout == "thumbnail_first":
+            zf.writestr("docProps/thumbnail.jpeg", b"\xff\xd8\xff" + b"X" * 4000)
+            zf.writestr("ppt/presentation.xml", "<presentation/>")
+            zf.writestr("[Content_Types].xml", _PPTX_CONTENT_TYPES_XML)
+        elif layout == "media_first":
+            zf.writestr("media/image1.bin", b"X" * 5000)
+            zf.writestr("ppt/presentation.xml", "<presentation/>")
+            zf.writestr("[Content_Types].xml", _PPTX_CONTENT_TYPES_XML)
+        elif layout == "custom_first":
+            zf.writestr("customXml/item1.xml", b"X" * 4000)
+            zf.writestr("ppt/presentation.xml", "<presentation/>")
+            zf.writestr("[Content_Types].xml", _PPTX_CONTENT_TYPES_XML)
+        else:
+            raise ValueError(f"unknown layout: {layout}")
+    return buf.getvalue()
+
+
 def _make_png_bytes() -> bytes:
     sig = b"\x89PNG\r\n\x1a\n"
     ihdr_data = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
@@ -128,6 +161,66 @@ class TestFileUpload:
             },
         )
         assert resp.status_code == 400
+
+    async def test_upload_pptx_file(self, auth_client: AsyncClient):
+        resp = await auth_client.post(
+            "/files",
+            files={
+                "file": (
+                    "deck.pptx",
+                    _make_pptx_bytes("standard"),
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ),
+            },
+        )
+        assert resp.status_code == 200, resp.text
+
+    @pytest.mark.parametrize("layout", ["thumbnail_first", "media_first", "custom_first"])
+    async def test_upload_pptx_with_non_ooxml_first_entry(
+        self, auth_client: AsyncClient, layout: str
+    ):
+        resp = await auth_client.post(
+            "/files",
+            files={
+                "file": (
+                    f"deck-{layout}.pptx",
+                    _make_pptx_bytes(layout),
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ),
+            },
+        )
+        assert resp.status_code == 200, resp.text
+
+    async def test_upload_pptx_rejects_renamed_binary(self, auth_client: AsyncClient):
+        resp = await auth_client.post(
+            "/files",
+            files={
+                "file": (
+                    "fake.pptx",
+                    b"MZ" + b"\x00" * 512,
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ),
+            },
+        )
+        assert resp.status_code == 400
+        assert "does not match extension" in resp.json()["detail"]
+
+    async def test_upload_pptx_rejects_non_ooxml_zip(self, auth_client: AsyncClient):
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("hello.txt", b"hello")
+        resp = await auth_client.post(
+            "/files",
+            files={
+                "file": (
+                    "fake.pptx",
+                    buf.getvalue(),
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ),
+            },
+        )
+        assert resp.status_code == 400
+        assert "does not match extension" in resp.json()["detail"]
 
     async def test_upload_manual_text(self, auth_client: AsyncClient):
         resp = await auth_client.post(

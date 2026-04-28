@@ -1,7 +1,9 @@
 import hashlib
+import io
 import logging
 import os
 import uuid
+import zipfile
 from datetime import datetime, timezone
 
 import magic
@@ -101,6 +103,39 @@ def _resolve_max_upload_mb(user: User) -> int:
 _VALID_TOPIC_DEPTHS = ("brief", "standard", "deep")
 _MAX_TOPIC_CHARS = 500
 
+_OOXML_CONTENT_MARKER = {
+    "pptx": b"presentationml",
+    "docx": b"wordprocessingml",
+}
+
+
+def _is_valid_ooxml(content: bytes, ext: str) -> bool:
+    """Authoritative content check for OOXML uploads.
+
+    libmagic only inspects the first ~2 KB and identifies OOXML by recognizing
+    well-known path prefixes (`ppt/`, `word/`, `docProps/`, ...) in the first
+    local-file-header. Real .pptx files exported by some tools (e.g. Korean
+    publishing pipelines, Keynote) place media or custom XML first, so libmagic
+    falls back to `application/zip` — or, if the leading entry is unusual,
+    omits the OOXML hint entirely and the upload is rejected as a content/extension
+    mismatch even though the file is a perfectly valid presentation.
+
+    Verifying the ZIP structure with the stdlib `zipfile` module is both more
+    reliable (works regardless of internal layout) and still safe: a renamed
+    binary won't parse as a ZIP, and the OOXML namespace marker check rejects
+    other archive types.
+    """
+    marker = _OOXML_CONTENT_MARKER.get(ext)
+    if marker is None:
+        return False
+    try:
+        with zipfile.ZipFile(io.BytesIO(content)) as zf:
+            if "[Content_Types].xml" not in zf.namelist():
+                return False
+            return marker in zf.read("[Content_Types].xml")
+    except (zipfile.BadZipFile, KeyError, OSError):
+        return False
+
 
 async def _read_and_validate_upload(
     file: UploadFile | None,
@@ -139,28 +174,28 @@ async def _read_and_validate_upload(
             chunks.append(chunk)
         content = b"".join(chunks)
 
-        detected_mime = magic.from_buffer(content[:2048], mime=True)
-        allowed_mimes = {
-            "pdf": ["application/pdf"],
-            "docx": [
-                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "application/zip",
-            ],
-            "pptx": [
-                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                "application/zip",
-            ],
-            "txt": ["text/plain"],
-            "md": ["text/plain", "text/markdown"],
-            "png": ["image/png"],
-            "jpg": ["image/jpeg"],
-            "jpeg": ["image/jpeg"],
-        }
-        expected_mimes = allowed_mimes.get(ext, [])
-        if expected_mimes and detected_mime not in expected_mimes:
-            raise HTTPException(
-                status_code=400, detail=f"File content does not match extension .{ext}"
-            )
+        if ext in _OOXML_CONTENT_MARKER:
+            if not _is_valid_ooxml(content, ext):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File content does not match extension .{ext}",
+                )
+        else:
+            detected_mime = magic.from_buffer(content[:2048], mime=True)
+            allowed_mimes = {
+                "pdf": ["application/pdf"],
+                "txt": ["text/plain"],
+                "md": ["text/plain", "text/markdown"],
+                "png": ["image/png"],
+                "jpg": ["image/jpeg"],
+                "jpeg": ["image/jpeg"],
+            }
+            expected_mimes = allowed_mimes.get(ext, [])
+            if expected_mimes and detected_mime not in expected_mimes:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"File content does not match extension .{ext}",
+                )
 
         content_hash = hashlib.sha256(content).hexdigest()
         return (
