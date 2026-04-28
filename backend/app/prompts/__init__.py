@@ -32,6 +32,12 @@ from .study import (
     MINDMAP_PROMPT,
     TUTOR_SYSTEM_PROMPT,
 )
+from .topic_expansion import (
+    TOPIC_EXPANSION_SYSTEM_MESSAGE,
+    build_topic_expansion_prompt,
+    get_max_tokens as get_topic_expansion_max_tokens,
+    normalize_depth as normalize_topic_depth,
+)
 
 __all__ = [
     "SYSTEM_PROMPT_QUIZ_GENERATION",
@@ -51,4 +57,8 @@ __all__ = [
     "FLASHCARD_PROMPT",
     "MINDMAP_PROMPT",
     "TUTOR_SYSTEM_PROMPT",
+    "TOPIC_EXPANSION_SYSTEM_MESSAGE",
+    "build_topic_expansion_prompt",
+    "get_topic_expansion_max_tokens",
+    "normalize_topic_depth",
 ]
