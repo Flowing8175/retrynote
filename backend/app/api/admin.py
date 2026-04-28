@@ -1,6 +1,7 @@
 import asyncio
 import csv
 import io
+import logging
 import time
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -61,39 +62,15 @@ from app.middleware.auth import (
     hash_password,
     verify_password,
     create_admin_token,
-    get_client_ip,
 )
+from app.utils.admin_audit import record_admin_action
 from app.utils.db_helpers import paginate
 from app.workers.celery_app import celery_app, dispatch_task
 from app.models.search import RefreshToken
 
+_admin_logger = logging.getLogger(__name__)
+
 router = APIRouter()
-
-
-async def log_audit(
-    db: AsyncSession,
-    admin_user_id: str,
-    action_type: str,
-    request: Request,
-    target_user_id: str | None = None,
-    target_type: str | None = None,
-    target_id: str | None = None,
-    reason: str | None = None,
-    payload: dict | None = None,
-):
-    log = AdminAuditLog(
-        id=str(uuid.uuid4()),
-        admin_user_id=admin_user_id,
-        target_user_id=target_user_id,
-        action_type=action_type,
-        target_type=target_type,
-        target_id=target_id,
-        reason=reason,
-        payload_json=payload,
-        ip_address=get_client_ip(request),
-    )
-    db.add(log)
-    await db.flush()
 
 
 @router.post("/login/verify-master")
@@ -118,20 +95,56 @@ async def verify_master_password(
             )
             await db.commit()
         elif user.role.value != "super_admin":
+            await record_admin_action(
+                db,
+                request=request,
+                action_type="admin_login_denied",
+                admin=user,
+                target_type="admin_settings",
+                payload={
+                    "reason": "initial_master_password_not_super_admin",
+                },
+                success=False,
+            )
+            await db.commit()
             raise HTTPException(
                 status_code=403,
                 detail="Only super_admin can set the initial master password",
             )
         else:
             admin_settings.master_password_hash = hash_password(req.master_password)
+            await record_admin_action(
+                db,
+                request=request,
+                action_type="admin_master_password_initialized",
+                admin=user,
+                target_type="admin_settings",
+                target_id=admin_settings.id,
+            )
             await db.commit()
             token = create_admin_token(user.id)
             return {"verified": True, "admin_token": token}
 
     if verify_password(req.master_password, admin_settings.master_password_hash):
+        await record_admin_action(
+            db,
+            request=request,
+            action_type="admin_login_success",
+            admin=user,
+        )
+        await db.commit()
         token = create_admin_token(user.id)
         return {"verified": True, "admin_token": token}
 
+    await record_admin_action(
+        db,
+        request=request,
+        action_type="admin_login_failed",
+        admin=user,
+        payload={"reason": "invalid_master_password"},
+        success=False,
+    )
+    await db.commit()
     raise HTTPException(status_code=403, detail="Invalid master password")
 
 
@@ -143,7 +156,10 @@ async def list_users(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    await log_audit(db, admin.id, "list_users", request)
+    await record_admin_action(
+        db, request=request, action_type="list_users", admin=admin
+    )
+    await db.commit()
 
     query = (
         select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc())
@@ -200,14 +216,22 @@ async def update_user_status(
                 detail="Cannot deactivate the last super_admin",
             )
 
+    old_is_active = user.is_active
     user.is_active = req.is_active
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "update_user_status",
-        request,
+        request=request,
+        action_type="update_user_status",
+        admin=admin,
         target_user_id=user_id,
-        payload={"is_active": req.is_active},
+        target_type="user",
+        target_id=user_id,
+        payload={
+            "old_is_active": old_is_active,
+            "new_is_active": req.is_active,
+            "username": user.username,
+            "email": user.email,
+        },
     )
     await db.commit()
     await db.refresh(user)
@@ -250,13 +274,20 @@ async def update_user_role(
 
     old_role = user.role.value
     user.role = UserRole(req.new_role)
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "update_user_role",
-        request,
+        request=request,
+        action_type="update_user_role",
+        admin=admin,
         target_user_id=user_id,
-        payload={"old_role": old_role, "new_role": req.new_role},
+        target_type="user",
+        target_id=user_id,
+        payload={
+            "old_role": old_role,
+            "new_role": req.new_role,
+            "username": user.username,
+            "email": user.email,
+        },
     )
     await db.commit()
     await db.refresh(user)
@@ -309,13 +340,22 @@ async def delete_user(
 
     from app.services.user_service import hard_delete_user
 
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "delete_user",
-        request,
+        request=request,
+        action_type="delete_user",
+        admin=admin,
         target_user_id=user_id,
-        payload={"status": "deleted", "username": user.username, "email": user.email},
+        target_type="user",
+        target_id=user_id,
+        payload={
+            "status": "deleted",
+            "username": user.username,
+            "email": user.email,
+            "role": user.role.value,
+            "is_active": user.is_active,
+            "storage_used_bytes": user.storage_used_bytes,
+        },
     )
     await hard_delete_user(db, user)
     await db.commit()
@@ -334,7 +374,18 @@ async def list_logs(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    await log_audit(db, admin.id, "list_logs", request)
+    await record_admin_action(
+        db,
+        request=request,
+        action_type="list_logs",
+        admin=admin,
+        payload={
+            "level": level,
+            "service_name": service_name,
+            "event_type": event_type,
+        },
+    )
+    await db.commit()
 
     query = select(SystemLog).order_by(SystemLog.created_at.desc())
     if level:
@@ -370,7 +421,10 @@ async def get_model_usage(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    await log_audit(db, admin.id, "view_model_usage", request)
+    await record_admin_action(
+        db, request=request, action_type="view_model_usage", admin=admin
+    )
+    await db.commit()
 
     model_col = SystemLog.meta_json["model"].as_string()
     result = await db.execute(
@@ -402,8 +456,6 @@ async def get_model_usage(
                 request_count=row.request_count,
                 input_tokens=row.input_tokens,
                 output_tokens=row.output_tokens,
-                failure_count=0,
-                fallback_count=0,
             )
             for row in rows
         ]
@@ -431,13 +483,16 @@ async def start_impersonation(
     )
     db.add(imp_session)
 
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "impersonation_start",
-        request,
+        request=request,
+        action_type="impersonation_start",
+        admin=admin,
         target_user_id=target.id,
+        target_type="impersonation_session",
+        target_id=imp_session.id,
         reason=req.reason,
+        payload={"target_username": target.username, "target_email": target.email},
     )
     await db.commit()
 
@@ -467,12 +522,14 @@ async def end_impersonation(
     imp_session.is_active = False
     imp_session.ended_at = datetime.now(timezone.utc)
 
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "impersonation_end",
-        request,
+        request=request,
+        action_type="impersonation_end",
+        admin=admin,
         target_user_id=imp_session.target_user_id,
+        target_type="impersonation_session",
+        target_id=imp_session.id,
     )
     await db.commit()
     return {"status": "success"}
@@ -501,14 +558,15 @@ async def regrade_item(
     )
     db.add(job)
 
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "regrade_request",
-        request,
+        request=request,
+        action_type="regrade_request",
+        admin=admin,
         target_type="quiz_item",
         target_id=item_id,
         reason=req.reason,
+        payload={"job_id": job.id},
     )
     await db.commit()
 
@@ -531,6 +589,9 @@ async def update_model_settings(
         db.add(admin_settings)
         await db.flush()
 
+    old_active = admin_settings.active_generation_model
+    old_fallback = admin_settings.fallback_generation_model
+
     if req.active_generation_model:
         admin_settings.active_generation_model = req.active_generation_model
     if req.fallback_generation_model:
@@ -539,12 +600,19 @@ async def update_model_settings(
     admin_settings.updated_at = datetime.now(timezone.utc)
     admin_settings.updated_by = admin.id
 
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "update_model_settings",
-        request,
-        payload=req.model_dump(),
+        request=request,
+        action_type="update_model_settings",
+        admin=admin,
+        target_type="admin_settings",
+        target_id=admin_settings.id,
+        payload={
+            "old_active_generation_model": old_active,
+            "new_active_generation_model": admin_settings.active_generation_model,
+            "old_fallback_generation_model": old_fallback,
+            "new_fallback_generation_model": admin_settings.fallback_generation_model,
+        },
     )
     await db.commit()
 
@@ -584,14 +652,27 @@ async def create_announcement(
         created_by=admin.id,
     )
     db.add(announcement)
+    await db.flush()
 
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "create_announcement",
-        request,
+        request=request,
+        action_type="create_announcement",
+        admin=admin,
         target_type="announcement",
         target_id=announcement.id,
+        payload={
+            "title": announcement.title,
+            "is_active": announcement.is_active,
+            "starts_at": (
+                announcement.starts_at.isoformat()
+                if announcement.starts_at
+                else None
+            ),
+            "ends_at": (
+                announcement.ends_at.isoformat() if announcement.ends_at else None
+            ),
+        },
     )
     await db.commit()
     await db.refresh(announcement)
@@ -613,13 +694,17 @@ async def delete_announcement(
     if not announcement:
         raise HTTPException(status_code=404, detail="Announcement not found")
 
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "delete_announcement",
-        request,
+        request=request,
+        action_type="delete_announcement",
+        admin=admin,
         target_type="announcement",
         target_id=announcement_id,
+        payload={
+            "title": announcement.title,
+            "is_active": announcement.is_active,
+        },
     )
     await db.delete(announcement)
     await db.commit()
@@ -630,10 +715,44 @@ async def list_audit_logs(
     request: Request,
     page: int = 1,
     size: int = 20,
+    action_type: str | None = None,
+    admin_user_id: str | None = None,
+    target_user_id: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
+    await record_admin_action(
+        db,
+        request=request,
+        action_type="view_audit_logs",
+        admin=admin,
+        payload={
+            "filters": {
+                "action_type": action_type,
+                "admin_user_id": admin_user_id,
+                "target_user_id": target_user_id,
+                "date_from": date_from.isoformat() if date_from else None,
+                "date_to": date_to.isoformat() if date_to else None,
+            },
+            "page": page,
+            "size": size,
+        },
+    )
+    await db.commit()
+
     query = select(AdminAuditLog).order_by(AdminAuditLog.created_at.desc())
+    if action_type:
+        query = query.where(AdminAuditLog.action_type == action_type)
+    if admin_user_id:
+        query = query.where(AdminAuditLog.admin_user_id == admin_user_id)
+    if target_user_id:
+        query = query.where(AdminAuditLog.target_user_id == target_user_id)
+    if date_from:
+        query = query.where(AdminAuditLog.created_at >= date_from)
+    if date_to:
+        query = query.where(AdminAuditLog.created_at <= date_to)
     logs, total = await paginate(db, query, page, size)
 
     return {
@@ -641,6 +760,8 @@ async def list_audit_logs(
             AdminAuditLogItem(
                 id=entry.id,
                 admin_user_id=entry.admin_user_id,
+                admin_email=entry.admin_email,
+                admin_role=entry.admin_role,
                 target_user_id=entry.target_user_id,
                 action_type=entry.action_type,
                 target_type=entry.target_type,
@@ -648,6 +769,11 @@ async def list_audit_logs(
                 reason=entry.reason,
                 payload_json=entry.payload_json,
                 ip_address=entry.ip_address,
+                user_agent=entry.user_agent,
+                request_method=entry.request_method,
+                request_path=entry.request_path,
+                request_id=entry.request_id,
+                success=entry.success,
                 created_at=entry.created_at,
             ).model_dump()
             for entry in logs
@@ -935,13 +1061,17 @@ async def retry_job(
     job.retry_count += 1
     job.error_message = None
 
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "job_retry",
-        request,
+        request=request,
+        action_type="job_retry",
+        admin=admin,
         target_type="job",
         target_id=job_id,
+        payload={
+            "job_type": job.job_type,
+            "retry_count": job.retry_count,
+        },
     )
     await db.commit()
 
@@ -976,13 +1106,17 @@ async def cancel_job(
     job.status = "failed"
     job.error_message = "Cancelled by admin"
 
-    await log_audit(
+    await record_admin_action(
         db,
-        admin.id,
-        "job_cancel",
-        request,
+        request=request,
+        action_type="job_cancel",
+        admin=admin,
         target_type="job",
         target_id=job_id,
+        payload={
+            "job_type": job.job_type,
+            "celery_task_id": job.celery_task_id,
+        },
     )
     await db.commit()
 
@@ -1113,6 +1247,14 @@ async def get_db_diagnostics(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_super_admin),
 ):
+    await record_admin_action(
+        db,
+        request=request,
+        action_type="view_db_diagnostics",
+        admin=admin,
+    )
+    await db.commit()
+
     tables = await _fetch_pg_table_info(db)
 
     migration_version: str | None = None
@@ -1121,8 +1263,10 @@ async def get_db_diagnostics(
             text("SELECT version_num FROM alembic_version LIMIT 1")
         )
         migration_version = version_result.scalar_one_or_none()
-    except Exception:
-        pass
+    except Exception as exc:
+        _admin_logger.warning(
+            "alembic_version lookup failed in db-diagnostics: %s", exc
+        )
 
     db_total_size = await _fetch_pg_db_size(db)
 
@@ -1198,6 +1342,9 @@ async def get_rate_limits(
     )
 
 
+CSV_EXPORT_MAX_ROWS = 10000
+
+
 @router.get("/export/users")
 async def export_users_csv(
     request: Request,
@@ -1205,8 +1352,20 @@ async def export_users_csv(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
+    await record_admin_action(
+        db,
+        request=request,
+        action_type="export_users",
+        admin=admin,
+        payload={"is_active_filter": is_active, "max_rows": CSV_EXPORT_MAX_ROWS},
+    )
+    await db.commit()
+
     query = (
-        select(User).where(User.deleted_at.is_(None)).order_by(User.created_at.desc())
+        select(User)
+        .where(User.deleted_at.is_(None))
+        .order_by(User.created_at.desc())
+        .limit(CSV_EXPORT_MAX_ROWS)
     )
     if is_active is not None:
         query = query.where(User.is_active == is_active)
@@ -1264,7 +1423,27 @@ async def export_logs_csv(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    query = select(SystemLog).order_by(SystemLog.created_at.desc())
+    await record_admin_action(
+        db,
+        request=request,
+        action_type="export_logs",
+        admin=admin,
+        payload={
+            "level": level,
+            "service_name": service_name,
+            "event_type": event_type,
+            "date_from": date_from.isoformat() if date_from else None,
+            "date_to": date_to.isoformat() if date_to else None,
+            "max_rows": CSV_EXPORT_MAX_ROWS,
+        },
+    )
+    await db.commit()
+
+    query = (
+        select(SystemLog)
+        .order_by(SystemLog.created_at.desc())
+        .limit(CSV_EXPORT_MAX_ROWS)
+    )
     if level:
         query = query.where(SystemLog.level == level)
     if service_name:
@@ -1318,8 +1497,19 @@ async def export_audit_logs_csv(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin_verified),
 ):
+    await record_admin_action(
+        db,
+        request=request,
+        action_type="export_audit_logs",
+        admin=admin,
+        payload={"max_rows": CSV_EXPORT_MAX_ROWS},
+    )
+    await db.commit()
+
     result = await db.execute(
-        select(AdminAuditLog).order_by(AdminAuditLog.created_at.desc()).limit(1000)
+        select(AdminAuditLog)
+        .order_by(AdminAuditLog.created_at.desc())
+        .limit(CSV_EXPORT_MAX_ROWS)
     )
     logs = result.scalars().all()
 
@@ -1334,11 +1524,19 @@ async def export_audit_logs_csv(
         writer.writerow(
             [
                 "created_at",
+                "success",
                 "admin_user_id",
+                "admin_email",
+                "admin_role",
                 "target_user_id",
                 "action_type",
                 "target_type",
+                "target_id",
                 "ip_address",
+                "user_agent",
+                "request_method",
+                "request_path",
+                "request_id",
             ]
         )
         yield buf.getvalue()
@@ -1349,11 +1547,19 @@ async def export_audit_logs_csv(
             writer.writerow(
                 [
                     log.created_at,
+                    log.success,
                     log.admin_user_id,
+                    log.admin_email,
+                    log.admin_role,
                     log.target_user_id,
                     log.action_type,
                     log.target_type,
+                    log.target_id,
                     log.ip_address,
+                    log.user_agent,
+                    log.request_method,
+                    log.request_path,
+                    log.request_id,
                 ]
             )
             yield buf.getvalue()
