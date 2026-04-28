@@ -38,6 +38,7 @@ class FileSourceType(str, enum.Enum):
     upload = "upload"
     url = "url"
     manual_text = "manual_text"
+    topic = "topic"
 
 
 class FileStatus(str, enum.Enum):

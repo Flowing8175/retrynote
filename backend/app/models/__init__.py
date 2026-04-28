@@ -22,7 +22,7 @@ from app.models.quiz import (
 )
 from app.models.objection import Objection, ObjectionStatus, WeakPoint
 from app.models.saved_prompt import SavedPrompt
-from app.models.admin import DashboardSnapshot, SystemLog, AdminAuditLog, Announcement
+from app.models.admin import SystemLog, AdminAuditLog, Announcement
 from app.models.search import (
     EmbeddingStore,
     PasswordResetToken,
@@ -78,7 +78,6 @@ __all__ = [
     "ObjectionStatus",
     "WeakPoint",
     "SavedPrompt",
-    "DashboardSnapshot",
     "SystemLog",
     "AdminAuditLog",
     "Announcement",
