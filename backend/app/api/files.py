@@ -98,10 +98,16 @@ def _resolve_max_upload_mb(user: User) -> int:
         return TIER_LIMITS[UserTier.free].max_upload_mb
 
 
+_VALID_TOPIC_DEPTHS = ("brief", "standard", "deep")
+_MAX_TOPIC_CHARS = 500
+
+
 async def _read_and_validate_upload(
     file: UploadFile | None,
     manual_text: str | None,
     source_url: str | None,
+    topic: str | None,
+    topic_depth: str | None,
     user: User,
 ) -> tuple[bytes | None, str | None, str | None, FileSourceType, str | None, int]:
     """Read and validate the upload input.
@@ -179,8 +185,33 @@ async def _read_and_validate_upload(
     elif source_url:
         return None, None, "url", FileSourceType.url, None, 0
 
+    elif topic:
+        topic_clean = topic.strip()
+        if not topic_clean:
+            raise HTTPException(status_code=400, detail="Topic cannot be empty")
+        if len(topic_clean) > _MAX_TOPIC_CHARS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Topic too long. Maximum is {_MAX_TOPIC_CHARS} characters.",
+            )
+        if topic_depth is not None and topic_depth not in _VALID_TOPIC_DEPTHS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid topic_depth. Must be one of: {', '.join(_VALID_TOPIC_DEPTHS)}",
+            )
+        display_name = topic_clean if len(topic_clean) <= 100 else topic_clean[:97] + "..."
+        return (
+            None,
+            f"주제: {display_name}",
+            "md",
+            FileSourceType.topic,
+            None,
+            len(topic_clean.encode("utf-8")),
+        )
+
     raise HTTPException(
-        status_code=400, detail="Must provide file, manual_text, or source_url"
+        status_code=400,
+        detail="Must provide file, manual_text, source_url, or topic",
     )
 
 
@@ -230,6 +261,8 @@ async def upload_file(
     file: UploadFile | None = FastAPIFile(default=None),
     manual_text: str | None = Form(default=None),
     source_url: str | None = Form(default=None),
+    topic: str | None = Form(default=None),
+    topic_depth: str | None = Form(default=None),
     folder_id: str | None = Form(default=None),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -254,7 +287,9 @@ async def upload_file(
         source_type,
         content_hash,
         file_size,
-    ) = await _read_and_validate_upload(file, manual_text, source_url, effective_user)
+    ) = await _read_and_validate_upload(
+        file, manual_text, source_url, topic, topic_depth, effective_user
+    )
 
     if content is not None and content_hash:
         duplicate_result = await db.execute(
@@ -301,13 +336,20 @@ async def upload_file(
     db.add(file_record)
     await db.flush()
 
+    job_payload: dict[str, str] = {}
+    if manual_text:
+        job_payload["manual_text"] = manual_text
+    if topic:
+        job_payload["topic"] = topic.strip()
+        job_payload["topic_depth"] = topic_depth or "standard"
+
     job = Job(
         id=str(uuid.uuid4()),
         job_type="file_processing",
         status="pending",
         target_type="file",
         target_id=file_record.id,
-        payload_json={"manual_text": manual_text} if manual_text else {},
+        payload_json=job_payload,
     )
     db.add(job)
     await db.commit()
@@ -454,12 +496,25 @@ async def retry_file(
     file.retry_count += 1
     file.status = FileStatus.uploaded
 
+    # Carry over payload_json from the most recent job so source-bound data
+    # (manual_text, topic, topic_depth) survives a retry — for topic and
+    # manual_text files this payload IS the source content.
+    prior_job_result = await db.execute(
+        select(Job)
+        .where(Job.target_type == "file", Job.target_id == file.id)
+        .order_by(Job.created_at.desc())
+        .limit(1)
+    )
+    prior_job = prior_job_result.scalar_one_or_none()
+    carried_payload = prior_job.payload_json if prior_job and prior_job.payload_json else {}
+
     job = Job(
         id=str(uuid.uuid4()),
         job_type="file_processing",
         status="pending",
         target_type="file",
         target_id=file.id,
+        payload_json=carried_payload,
     )
     db.add(job)
     await db.commit()
@@ -578,11 +633,29 @@ async def view_file(
     user: User = Depends(get_current_user),
 ):
     from app.services import storage as _storage
-    from fastapi.responses import StreamingResponse as _StreamingResponse
+    from fastapi.responses import StreamingResponse as _StreamingResponse, PlainTextResponse
 
     file = await get_owned_file(file_id, db, user)
+
     if not file.stored_path:
-        raise HTTPException(status_code=404, detail="File not available")
+        # Sources without a stored binary (topic, url, manual_text) serve the
+        # canonical parsed text as the "original" — this is what the rest of
+        # the pipeline (summary, flashcards, mindmap) reads from, so showing
+        # it here keeps the user's view consistent with what's being studied.
+        from app.models.file import ParsedDocument
+
+        parsed_result = await db.execute(
+            select(ParsedDocument).where(ParsedDocument.file_id == file.id)
+        )
+        parsed = parsed_result.scalar_one_or_none()
+        if not parsed or not parsed.raw_text:
+            raise HTTPException(status_code=404, detail="File not available")
+        media_type = (
+            "text/markdown; charset=utf-8"
+            if (file.file_type or "").lower() == "md"
+            else "text/plain; charset=utf-8"
+        )
+        return PlainTextResponse(parsed.raw_text, media_type=media_type)
 
     from urllib.parse import quote as _urlquote
 

@@ -159,6 +159,13 @@ async def process_file(job_id: str):
                     if not file.source_url:
                         raise ValueError("URL source missing source_url")
                     text, _ = await _fetch_url_text(file.source_url)
+                elif file.source_type.value == "topic":
+                    payload = job.payload_json or {}
+                    topic = (payload.get("topic") or "").strip()
+                    depth = payload.get("topic_depth") or "standard"
+                    if not topic:
+                        raise ValueError("Topic source missing topic text")
+                    text = await _generate_topic_content(topic, depth)
 
                 file.status = FileStatus.parsed
                 await db.commit()
@@ -745,6 +752,49 @@ async def _fetch_url_text(url: str) -> tuple[str, str | None]:
     except Exception:
         logger.exception("Unexpected error fetching URL (url=%s)", url)
         return "", None
+
+
+async def _generate_topic_content(topic: str, depth: str) -> str:
+    """Expand a user-supplied topic into a canonical learning document.
+
+    The generated text becomes the single source of truth that downstream
+    summary / flashcards / mindmap / concept-notes generators all read from,
+    so they stay consistent with each other (mirrors how uploaded files do).
+    """
+    from app.prompts import (
+        TOPIC_EXPANSION_SYSTEM_MESSAGE,
+        build_topic_expansion_prompt,
+        get_topic_expansion_max_tokens,
+        normalize_topic_depth,
+    )
+    from app.utils.ai_client import stream_ai_text
+
+    normalized_depth = normalize_topic_depth(depth)
+    user_prompt = build_topic_expansion_prompt(topic, normalized_depth)
+    max_tokens = get_topic_expansion_max_tokens(normalized_depth)
+
+    chunks: list[str] = []
+    async for chunk in stream_ai_text(
+        prompt=user_prompt,
+        system_message=TOPIC_EXPANSION_SYSTEM_MESSAGE,
+        model=cfg.balanced_generation_model,
+        temperature=0.4,
+        max_tokens=max_tokens,
+    ):
+        if chunk:
+            chunks.append(chunk)
+
+    text = "".join(chunks).strip()
+    if not text:
+        raise ValueError("Topic expansion returned empty content")
+
+    logger.info(
+        "Topic expansion ok (topic_chars=%d depth=%s output_chars=%d)",
+        len(topic),
+        normalized_depth,
+        len(text),
+    )
+    return text
 
 
 def _normalize_text(text: str) -> str:
