@@ -7,7 +7,6 @@ export { default as AdminModelsTab } from './AdminModelsTab';
 export { default as AdminAuditTab } from './AdminAuditTab';
 export { default as AdminAnnouncementsTab } from './AdminAnnouncementsTab';
 export { default as AdminImpersonationTab } from './AdminImpersonationTab';
-export { default as AdminModelSettingsTab } from './AdminModelSettingsTab';
 export { default as AdminKPIsPanel } from './AdminKPIsPanel';
 export { default as AdminJobsTab } from './AdminJobsTab';
 export { default as AdminDbTab } from './AdminDbTab';

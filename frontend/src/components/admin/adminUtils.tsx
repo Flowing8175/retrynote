@@ -85,7 +85,6 @@ export type TabKey =
   | 'audit'
   | 'announcements'
   | 'impersonation'
-  | 'model_settings'
   | 'jobs'
   | 'db'
   | 'files'
@@ -99,7 +98,6 @@ export const tabs: { key: TabKey; label: string; helper: string }[] = [
   { key: 'audit', label: '감사 로그', helper: '관리자 행위 추적' },
   { key: 'announcements', label: '공지 관리', helper: '배너/공지 생성 및 관리' },
   { key: 'impersonation', label: '가장 모드', helper: '사용자 화면으로 이동' },
-  { key: 'model_settings', label: '모델 설정', helper: 'AI 모델 변경' },
   { key: 'jobs', label: '작업 관리', helper: '백그라운드 작업 조회 및 제어' },
   { key: 'db', label: 'DB 진단', helper: '마이그레이션 버전 및 테이블 현황' },
   { key: 'files', label: '파일 파이프라인', helper: '파일 처리 상태 및 실패 현황' },
