@@ -1,15 +1,21 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
-import { ChevronRight, AlertTriangle, BookOpen, Sparkles, PenLine, History } from 'lucide-react';
+import { ChevronRight, AlertTriangle, BookOpen, Sparkles, PenLine, History, Link2 } from 'lucide-react';
 import { filesApi } from '@/api';
+import type { TopicDepth } from '@/api/files';
 import { StatusBadge, SkeletonTransition } from '@/components';
 import { StudyHistoryPanel } from '@/components/study/StudyHistoryPanel';
 import { OptionGroup } from '@/components/ui';
 import { isFileProcessingStatus } from '@/types/file';
+import { getDetailMessage } from '@/utils/errorMessages';
 import { formatFileSize, formatFileSource } from '@/utils/formatters';
 
 type UISourceMode = 'document_based' | 'no_source' | 'topic_based';
+
+const isUrl = (text: string): boolean => /^https?:\/\//i.test(text.trim());
+
+const TOPIC_MAX_CHARS = 500;
 
 function StudyListSkeleton() {
   return (
@@ -58,6 +64,27 @@ export default function StudyList() {
   const [fileError, setFileError] = useState<string | null>(null);
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [topicUrl, setTopicUrl] = useState('');
+  const [topicText, setTopicText] = useState('');
+  const [topicDepth, setTopicDepth] = useState<TopicDepth>('standard');
+  const [topicUrlError, setTopicUrlError] = useState<string | null>(null);
+  const [topicTextError, setTopicTextError] = useState<string | null>(null);
+
+  const createTopicFileMutation = useMutation({
+    mutationFn: async (): Promise<{ file_id: string }> => {
+      const trimmedUrl = topicUrl.trim();
+      const trimmedTopic = topicText.trim();
+      if (trimmedUrl) {
+        const res = await filesApi.uploadFile(null, null, trimmedUrl);
+        return { file_id: res.file_id };
+      }
+      const res = await filesApi.uploadFile(null, null, null, null, {
+        topic: trimmedTopic,
+        topicDepth,
+      });
+      return { file_id: res.file_id };
+    },
+  });
 
   const { data: foldersData } = useQuery({
     queryKey: ['folders'],
@@ -78,6 +105,8 @@ export default function StudyList() {
     setSourceMode(v);
     setFileError(null);
     setFormMessage(null);
+    setTopicUrlError(null);
+    setTopicTextError(null);
   };
 
   const handleFileToggle = (fileId: string) => {
@@ -99,6 +128,14 @@ export default function StudyList() {
   }, [allFiles, selectedFolderId]);
 
   const canSubmitDocumentBased = sourceMode === 'document_based' && selectedFileIds.length > 0;
+  const canSubmitTopicBased =
+    sourceMode === 'topic_based' &&
+    (topicUrl.trim().length > 0 || topicText.trim().length > 0) &&
+    !createTopicFileMutation.isPending;
+  const canSubmit = canSubmitDocumentBased || canSubmitTopicBased;
+  const submitLabel = createTopicFileMutation.isPending
+    ? '학습 자료 생성 중...'
+    : '학습 시작하기';
 
   const visibleReadyIds = useMemo(
     () => fileGroups.readyFiles.map((f) => f.id),
@@ -134,17 +171,54 @@ export default function StudyList() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setFormMessage(null);
-    if (sourceMode !== 'document_based') {
-      setFormMessage('학습은 업로드한 자료로만 시작할 수 있습니다. "내 자료에서 출제"를 선택해 주세요.');
+
+    if (sourceMode === 'document_based') {
+      if (selectedFileIds.length === 0) {
+        setFormMessage('최소 하나의 학습 자료를 선택해 주세요.');
+        return;
+      }
+      navigate(`/study/${selectedFileIds[0]}`);
       return;
     }
-    if (selectedFileIds.length === 0) {
-      setFormMessage('최소 하나의 학습 자료를 선택해 주세요.');
+
+    if (sourceMode === 'topic_based') {
+      const trimmedUrl = topicUrl.trim();
+      const trimmedTopic = topicText.trim();
+      setTopicUrlError(null);
+      setTopicTextError(null);
+
+      if (trimmedUrl && trimmedTopic) {
+        setFormMessage('URL과 주제 중 하나만 입력해 주세요.');
+        return;
+      }
+      if (!trimmedUrl && !trimmedTopic) {
+        setFormMessage('학습할 URL이나 주제를 입력해 주세요.');
+        return;
+      }
+      if (trimmedUrl && !isUrl(trimmedUrl)) {
+        setTopicUrlError('http:// 또는 https://로 시작하는 URL을 입력해 주세요.');
+        return;
+      }
+      if (trimmedTopic && trimmedTopic.length > TOPIC_MAX_CHARS) {
+        setTopicTextError(`주제는 최대 ${TOPIC_MAX_CHARS}자까지 입력할 수 있습니다.`);
+        return;
+      }
+
+      try {
+        const { file_id } = await createTopicFileMutation.mutateAsync();
+        navigate(`/study/${file_id}`);
+      } catch (error: unknown) {
+        const axiosError = error as { response?: { data?: { detail?: unknown } } };
+        setFormMessage(
+          getDetailMessage(axiosError.response?.data?.detail, '학습 자료 생성에 실패했습니다.')
+        );
+      }
       return;
     }
-    navigate(`/study/${selectedFileIds[0]}`);
+
+    setFormMessage('AI 배경지식 학습은 준비 중입니다. "내 자료에서 학습" 또는 "주제 직접 입력하기"를 선택해 주세요.');
   };
 
   return (
@@ -303,16 +377,92 @@ export default function StudyList() {
                 : 'opacity-0 translate-y-1 pointer-events-none absolute inset-x-0 top-0'
             }`}
           >
-            <div className="space-y-4 bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
+            <div className="space-y-6 bg-surface border border-white/[0.05] rounded-3xl p-6 md:p-8">
               <div className="flex items-start gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-300">
                   <PenLine size={20} />
                 </div>
                 <div className="flex-1 space-y-1">
-                  <h3 className="text-sm font-semibold text-white">주제 기반 학습은 준비 중입니다</h3>
+                  <h3 className="text-sm font-semibold text-white">URL 또는 주제로 학습</h3>
                   <p className="text-xs text-content-secondary leading-relaxed">
-                    현재 학습 기능은 업로드한 자료로만 제공됩니다. "내 자료에서 학습"을 선택해 주세요.
+                    참고할 웹페이지의 URL을 붙여넣거나, 학습할 주제를 직접 입력하세요. AI가 학습 자료를 먼저 생성한 뒤 요약·플래시카드·마인드맵을 모두 같은 자료에서 일관되게 만듭니다.
                   </p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label htmlFor="topic-url-input" className="flex items-center gap-2 text-xs font-medium text-content-secondary">
+                  <Link2 size={14} />
+                  웹페이지 URL
+                </label>
+                <input
+                  id="topic-url-input"
+                  type="url"
+                  value={topicUrl}
+                  onChange={(e) => {
+                    setTopicUrl(e.target.value);
+                    setTopicUrlError(null);
+                    setFormMessage(null);
+                  }}
+                  disabled={createTopicFileMutation.isPending || topicText.trim().length > 0}
+                  placeholder="https://ko.wikipedia.org/wiki/..."
+                  className={`w-full bg-surface-deep rounded-xl text-sm px-4 py-3 placeholder:text-content-muted focus:outline-none transition-shadow disabled:opacity-40 disabled:cursor-not-allowed ${
+                    topicUrlError
+                      ? 'border border-semantic-error focus:ring-2 focus:ring-semantic-error/50'
+                      : 'border border-white/[0.05] focus:ring-2 focus:ring-brand-500'
+                  }`}
+                />
+                {topicUrlError && <p className="text-xs text-semantic-error">{topicUrlError}</p>}
+              </div>
+
+              <div className="flex items-center gap-3 text-xs text-content-muted">
+                <div className="h-px flex-1 bg-white/[0.05]" />
+                <span>또는</span>
+                <div className="h-px flex-1 bg-white/[0.05]" />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <label htmlFor="topic-text-input" className="flex items-center gap-2 text-xs font-medium text-content-secondary">
+                    <PenLine size={14} />
+                    학습할 주제
+                  </label>
+                  <span className={`text-[10px] tabular-nums ${topicText.length > TOPIC_MAX_CHARS ? 'text-semantic-error' : 'text-content-muted'}`}>
+                    {topicText.length}/{TOPIC_MAX_CHARS}
+                  </span>
+                </div>
+                <textarea
+                  id="topic-text-input"
+                  value={topicText}
+                  onChange={(e) => {
+                    setTopicText(e.target.value.slice(0, TOPIC_MAX_CHARS + 50));
+                    setTopicTextError(null);
+                    setFormMessage(null);
+                  }}
+                  disabled={createTopicFileMutation.isPending || topicUrl.trim().length > 0}
+                  placeholder="예: 양자역학의 기본 원리, 머신러닝 결정트리 알고리즘, 1차 세계대전의 원인"
+                  rows={2}
+                  className={`w-full bg-surface-deep rounded-xl text-sm px-4 py-3 placeholder:text-content-muted focus:outline-none transition-shadow resize-y disabled:opacity-40 disabled:cursor-not-allowed ${
+                    topicTextError
+                      ? 'border border-semantic-error focus:ring-2 focus:ring-semantic-error/50'
+                      : 'border border-white/[0.05] focus:ring-2 focus:ring-brand-500'
+                  }`}
+                  style={{ minHeight: '64px', maxHeight: '160px' }}
+                />
+                {topicTextError && <p className="text-xs text-semantic-error">{topicTextError}</p>}
+                <div className="space-y-2 pt-1">
+                  <div className="text-xs font-medium text-content-secondary">학습 자료 분량</div>
+                  <OptionGroup
+                    options={[
+                      { value: 'brief', label: '간단', description: '핵심만 빠르게 (≈1~2분)' },
+                      { value: 'standard', label: '표준', description: '균형 잡힌 학습 자료 (≈2~4분)' },
+                      { value: 'deep', label: '상세', description: '깊이 있는 분석 (≈4~7분)' },
+                    ]}
+                    value={topicDepth}
+                    onChange={(v) => setTopicDepth(v as TopicDepth)}
+                    size="sm"
+                    layout="grid-3"
+                  />
                 </div>
               </div>
             </div>
@@ -360,12 +510,12 @@ export default function StudyList() {
           </button>
 
           <button
-            onClick={handleSubmit}
-            disabled={!canSubmitDocumentBased}
+            onClick={() => { void handleSubmit(); }}
+            disabled={!canSubmit}
             className="group relative w-full sm:w-auto bg-brand-500 text-brand-900 px-10 py-4 rounded-2xl text-base font-semibold transition-all hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
           >
             <div className="flex items-center justify-center gap-2">
-              학습 시작하기
+              {submitLabel}
               <ChevronRight size={20} className="group-hover:translate-x-1 transition-transform" />
             </div>
           </button>
