@@ -338,12 +338,11 @@ class TestQuizCreationPolicy:
         data = resp.json()
         assert data["detail"]["limit_type"] == "quiz"
 
-    async def test_eco_model_cost(
+    async def test_no_precharge_on_quiz_creation(
         self, free_auth_client: AsyncClient, free_user, db_session, free_user_ready_file
     ):
-        """ECO model should deduct TIER_ESTIMATES[MODEL_ECO] from quota."""
         from app.config import settings
-        from app.tier_config import TIER_ESTIMATES, MODEL_ECO
+        from sqlalchemy import select
 
         await free_auth_client.post(
             "/quiz-sessions",
@@ -355,7 +354,6 @@ class TestQuizCreationPolicy:
                 "preferred_model": settings.eco_generation_model,
             },
         )
-        from sqlalchemy import select
 
         result = await db_session.execute(
             select(UsageRecord).where(
@@ -364,88 +362,8 @@ class TestQuizCreationPolicy:
             )
         )
         record = result.scalar_one_or_none()
-        assert record is not None
-        assert record.consumed == TIER_ESTIMATES[MODEL_ECO]
-
-    async def test_balanced_model_cost(
-        self, free_auth_client: AsyncClient, free_user, db_session, free_user_ready_file
-    ):
-        """BALANCED model should deduct TIER_ESTIMATES[MODEL_BALANCED] from quota."""
-        from app.config import settings
-        from app.tier_config import TIER_ESTIMATES, MODEL_BALANCED
-
-        await free_auth_client.post(
-            "/quiz-sessions",
-            json={
-                "mode": "normal",
-                "selected_file_ids": [free_user_ready_file.id],
-                "question_count": 3,
-                "source_mode": "document_based",
-                "preferred_model": settings.balanced_generation_model,
-            },
-        )
-        from sqlalchemy import select
-
-        result = await db_session.execute(
-            select(UsageRecord).where(
-                UsageRecord.user_id == free_user.id,
-                UsageRecord.resource_type == "quiz",
-            )
-        )
-        record = result.scalar_one_or_none()
-        assert record is not None
-        assert record.consumed == TIER_ESTIMATES[MODEL_BALANCED]
-
-    async def test_performance_model_cost(
-        self, free_auth_client: AsyncClient, free_user, db_session, free_user_ready_file
-    ):
-        """PERFORMANCE model should deduct TIER_ESTIMATES[MODEL_PERFORMANCE] from quota."""
-        from app.config import settings
-        from app.tier_config import TIER_ESTIMATES, MODEL_PERFORMANCE
-
-        await free_auth_client.post(
-            "/quiz-sessions",
-            json={
-                "mode": "normal",
-                "selected_file_ids": [free_user_ready_file.id],
-                "question_count": 3,
-                "source_mode": "document_based",
-                "preferred_model": settings.performance_generation_model,
-            },
-        )
-        from sqlalchemy import select
-
-        result = await db_session.execute(
-            select(UsageRecord).where(
-                UsageRecord.user_id == free_user.id,
-                UsageRecord.resource_type == "quiz",
-            )
-        )
-        record = result.scalar_one_or_none()
-        assert record is not None
-        assert record.consumed == TIER_ESTIMATES[MODEL_PERFORMANCE]
-
-    async def test_max_model_exceeds_free_quota(
-        self, free_auth_client: AsyncClient, free_user_ready_file
-    ):
-        """MAX model (claude-sonnet-4-6) costs 8 credits — exceeds free tier's 5.0 quiz quota in a single call."""
-        from app.config import settings
-        from app.tier_config import TIER_ESTIMATES, TIER_LIMITS, MODEL_MAX, UserTier
-
-        assert TIER_ESTIMATES[MODEL_MAX] > TIER_LIMITS[UserTier.free].quiz_per_window
-
-        resp = await free_auth_client.post(
-            "/quiz-sessions",
-            json={
-                "mode": "normal",
-                "selected_file_ids": [free_user_ready_file.id],
-                "question_count": 3,
-                "source_mode": "document_based",
-                "preferred_model": settings.max_generation_model,
-            },
-        )
-        assert resp.status_code == 402
-        assert resp.json()["detail"]["limit_type"] == "quiz"
+        if record is not None:
+            assert record.consumed == 0
 
 
 # ---------------------------------------------------------------------------
@@ -797,86 +715,7 @@ class TestAICreditFIFOConsumption:
         assert round(batch.amount_remaining, 2) == 200.0
 
 
-@pytest.mark.asyncio
-class TestAICreditReconciliation:
-    async def test_overshoot_refunds_to_originating_batch(self, db_session):
-        from app.models.billing import AICreditBatch
-        from app.services.usage_service import UsageService
 
-        user = _make_user("free")
-        db_session.add(user)
-        await db_session.commit()
-        await db_session.refresh(user)
-
-        now = datetime.now(timezone.utc)
-        batch_a = AICreditBatch(
-            user_id=user.id,
-            amount_total=50.0,
-            amount_remaining=50.0,
-            purchased_at=now,
-            expires_at=now + timedelta(days=30),
-        )
-        db_session.add(batch_a)
-        await db_session.commit()
-        await db_session.refresh(batch_a)
-
-        batch_a.amount_remaining = 45.0
-        await db_session.commit()
-        await db_session.refresh(batch_a)
-
-        svc = UsageService()
-
-        # Refund 2 credits → 45 + 2 = 47
-        await svc.adjust_credit_ai(db_session, [batch_a.id], delta=2.0)
-        await db_session.commit()
-        await db_session.refresh(batch_a)
-        assert round(batch_a.amount_remaining, 2) == 47.0
-
-        # Attempt to refund 100 — capped at amount_total (50):
-        # restore = min(100, 50 - 47) = 3 → 47 + 3 = 50
-        await svc.adjust_credit_ai(db_session, [batch_a.id], delta=100.0)
-        await db_session.commit()
-        await db_session.refresh(batch_a)
-        assert round(batch_a.amount_remaining, 2) == 50.0
-
-    async def test_celery_retry_idempotency(self, db_session):
-        from unittest.mock import MagicMock
-        from app.models.billing import AICreditBatch
-        from app.services.quiz_service import _refund_quiz_credits_on_invalid_input
-
-        user = _make_user("free")
-        db_session.add(user)
-        await db_session.commit()
-        await db_session.refresh(user)
-
-        now = datetime.now(timezone.utc)
-        batch_a = AICreditBatch(
-            user_id=user.id,
-            amount_total=50.0,
-            amount_remaining=45.0,
-            purchased_at=now,
-            expires_at=now + timedelta(days=30),
-        )
-        db_session.add(batch_a)
-        await db_session.commit()
-        await db_session.refresh(batch_a)
-
-        job = MagicMock()
-        job.id = "mock-job-id"
-        job.payload_json = {
-            "credit_estimate": 5,
-            "credit_source": "ai_credit",
-            "credit_batch_ids": [batch_a.id],
-            "credits_refunded": True,
-        }
-        session_mock = MagicMock()
-        session_mock.user_id = user.id
-
-        error = Exception("INVALID_INPUT: some generation error")
-        await _refund_quiz_credits_on_invalid_input(db_session, job, session_mock, error)
-
-        await db_session.refresh(batch_a)
-        assert round(batch_a.amount_remaining, 2) == 45.0
 
 
 @pytest.mark.asyncio

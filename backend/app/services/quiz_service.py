@@ -1183,82 +1183,6 @@ def _persist_quiz_items(
     return items
 
 
-async def _adjust_generation_credits(
-    db: AsyncSession,
-    session: QuizSession,
-    tokens_used: int,
-    credit_estimate: float,
-    source: str = "tier",
-    batch_ids: list[str] | None = None,
-) -> None:
-    from app.tier_config import calculate_credit_cost
-    from app.services.usage_service import UsageService
-
-    actual_cost = calculate_credit_cost(
-        tokens_used,
-        session.generation_model_name or cfg.balanced_generation_model,
-    )
-    delta = actual_cost - credit_estimate
-    if abs(delta) > 0.001 and session.user_id:
-        if source == "ai_credit" and batch_ids:
-            await UsageService().adjust_credit_ai(db, batch_ids, -delta)
-        else:
-            await UsageService().adjust_credit(db, str(session.user_id), "quiz", delta)
-
-
-async def _refund_quiz_credits_on_invalid_input(
-    db: AsyncSession,
-    job: Job,
-    session: QuizSession,
-    error: Exception,
-) -> None:
-    """Refund pre-charged quiz credits when generation fails with
-    ``JobFailure("INVALID_INPUT:...")`` — i.e. user-input errors
-    (bad URL, AI rejection) rather than system errors.
-
-    Idempotent via a ``credits_refunded`` flag on ``job.payload_json``
-    so that Celery acks_late redelivery or any future retry path
-    cannot double-refund. Swallows all exceptions — a refund failure
-    must never mask the original generation failure the caller is
-    about to surface to the user.
-    """
-    try:
-        from sqlalchemy.orm.attributes import flag_modified
-
-        if not str(error).startswith("INVALID_INPUT:"):
-            return
-        payload = job.payload_json or {}
-        if payload.get("credits_refunded"):
-            return
-        estimate = float(payload.get("credit_estimate") or 0.0)
-        if estimate <= 0 or not session.user_id:
-            return
-
-        from app.services.usage_service import UsageService
-
-        credit_source = payload.get("credit_source", "tier")
-        credit_batch_ids = payload.get("credit_batch_ids") or []
-        if credit_source == "ai_credit" and credit_batch_ids:
-            await UsageService().adjust_credit_ai(db, credit_batch_ids, estimate)
-        else:
-            await UsageService().adjust_credit(db, str(session.user_id), "quiz", -estimate)
-        payload["credits_refunded"] = True
-        job.payload_json = payload
-        flag_modified(job, "payload_json")
-        logger.info(
-            "Refunded %.2f quiz credits to user %s for failed job %s",
-            estimate,
-            session.user_id,
-            job.id,
-        )
-    except Exception as exc:
-        logger.exception(
-            "Credit refund failed for job %s (original error not masked): %s",
-            job.id,
-            exc,
-        )
-
-
 def _serialize_quiz_item(item: QuizItem) -> dict:
     """Serialize QuizItem to match QuizItemResponse shape for SSE streaming."""
     return {
@@ -1392,10 +1316,13 @@ async def stream_quiz_generation(
 
         items = _persist_quiz_items(db, session, questions, ctx.difficulty)
 
-        credit_estimate = payload.get("credit_estimate", 0.0)
-        credit_source = payload.get("credit_source", "tier")
-        credit_batch_ids = payload.get("credit_batch_ids") or []
-        await _adjust_generation_credits(db, session, tokens_used, credit_estimate, credit_source, credit_batch_ids)
+        from app.tier_config import calculate_credit_cost
+        actual_cost = calculate_credit_cost(
+            tokens_used,
+            session.generation_model_name or cfg.balanced_generation_model,
+        )
+        if actual_cost > 0 and session.user_id:
+            await UsageService().consume_actual(db, str(session.user_id), "quiz", actual_cost)
 
         session.status = QuizSessionStatus.ready
         await db.commit()
@@ -1435,7 +1362,6 @@ async def stream_quiz_generation(
     except JobFailure as e:
         session.status = QuizSessionStatus.generation_failed
         job.error_message = str(e)
-        await _refund_quiz_credits_on_invalid_input(db, job, session, e)
         try:
             await db.commit()
         except Exception:
@@ -1636,22 +1562,12 @@ async def generate_quiz(job_id: str):
 
                     from app.tier_config import calculate_credit_cost
                     from app.services.usage_service import UsageService
-
                     actual_cost = calculate_credit_cost(
                         tokens_used,
                         session.generation_model_name or cfg.balanced_generation_model,
                     )
-                    _retry_payload = job.payload_json or {}
-                    estimate = _retry_payload.get("credit_estimate", 0.0)
-                    delta = actual_cost - estimate
-                    _retry_uid = session.user_id
-                    _retry_source = _retry_payload.get("credit_source", "tier")
-                    _retry_batch_ids = _retry_payload.get("credit_batch_ids") or []
-                    if abs(delta) > 0.001 and _retry_uid is not None:
-                        if _retry_source == "ai_credit" and _retry_batch_ids:
-                            await UsageService().adjust_credit_ai(db, _retry_batch_ids, -delta)
-                        else:
-                            await UsageService().adjust_credit(db, _retry_uid, "quiz", delta)
+                    if actual_cost > 0 and session.user_id is not None:
+                        await UsageService().consume_actual(db, str(session.user_id), "quiz", actual_cost)
 
                     await db.commit()
                     session.status = QuizSessionStatus.ready
@@ -1664,17 +1580,18 @@ async def generate_quiz(job_id: str):
                 ) = await _run_quiz_generation(db, session, payload)
                 _persist_quiz_items(db, session, questions, resolved_difficulty)
 
-                credit_estimate = payload.get("credit_estimate", 0.0)
-                credit_source = payload.get("credit_source", "tier")
-                credit_batch_ids = payload.get("credit_batch_ids") or []
-                await _adjust_generation_credits(
-                    db, session, tokens_used, credit_estimate, credit_source, credit_batch_ids
+                from app.tier_config import calculate_credit_cost
+                from app.services.usage_service import UsageService
+                actual_cost = calculate_credit_cost(
+                    tokens_used,
+                    session.generation_model_name or cfg.balanced_generation_model,
                 )
+                if actual_cost > 0 and session.user_id is not None:
+                    await UsageService().consume_actual(db, str(session.user_id), "quiz", actual_cost)
 
                 session.status = QuizSessionStatus.ready
 
-            except JobFailure as e:
-                await _refund_quiz_credits_on_invalid_input(db, job, session, e)
+            except JobFailure:
                 raise
             except Exception:
                 session.status = QuizSessionStatus.generation_failed
@@ -1781,23 +1698,13 @@ async def grade_exam(job_id: str):
 
                 from app.tier_config import calculate_credit_cost
                 from app.services.usage_service import UsageService
-
-                _exam_payload = job.payload_json or {}
                 _exam_total_tokens = sum(g.tokens_used for g in all_gradings)
                 _exam_actual_cost = calculate_credit_cost(
                     _exam_total_tokens,
                     session.generation_model_name or cfg.balanced_generation_model,
                 )
-                _exam_estimate = _exam_payload.get("credit_estimate", 0.0)
-                _exam_delta = _exam_actual_cost - _exam_estimate
-                _exam_uid = session.user_id
-                _exam_source = _exam_payload.get("credit_source", "tier")
-                _exam_batch_ids = _exam_payload.get("credit_batch_ids") or []
-                if abs(_exam_delta) > 0.001 and _exam_uid is not None:
-                    if _exam_source == "ai_credit" and _exam_batch_ids:
-                        await UsageService().adjust_credit_ai(db, _exam_batch_ids, -_exam_delta)
-                    else:
-                        await UsageService().adjust_credit(db, _exam_uid, "quiz", _exam_delta)
+                if _exam_actual_cost > 0 and session.user_id is not None:
+                    await UsageService().consume_actual(db, str(session.user_id), "quiz", _exam_actual_cost)
 
             except JobFailure:
                 raise
@@ -1955,21 +1862,11 @@ decision, reasoning, updated_judgement, updated_score_awarded, updated_error_typ
             )
             from app.tier_config import calculate_credit_cost
             from app.services.usage_service import UsageService
-
-            _obj_payload = job.payload_json or {}
             _obj_actual_cost = calculate_credit_cost(
                 tokens_used, cfg.balanced_generation_model
             )
-            _obj_estimate = _obj_payload.get("credit_estimate", 0.0)
-            _obj_delta = _obj_actual_cost - _obj_estimate
-            _obj_uid = answer_log.user_id
-            _obj_source = _obj_payload.get("credit_source", "tier")
-            _obj_batch_ids = _obj_payload.get("credit_batch_ids") or []
-            if abs(_obj_delta) > 0.001 and _obj_uid is not None:
-                if _obj_source == "ai_credit" and _obj_batch_ids:
-                    await UsageService().adjust_credit_ai(db, _obj_batch_ids, -_obj_delta)
-                else:
-                    await UsageService().adjust_credit(db, _obj_uid, "quiz", _obj_delta)
+            if _obj_actual_cost > 0 and answer_log.user_id is not None:
+                await UsageService().consume_actual(db, str(answer_log.user_id), "quiz", _obj_actual_cost)
 
 
 async def _update_weak_point(

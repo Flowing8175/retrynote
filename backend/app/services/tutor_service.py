@@ -63,9 +63,6 @@ async def stream_tutor_response(
     page_context: int | None,
     db: AsyncSession,
     user_id: str = "",
-    credit_estimate: float = 0,
-    credit_source: str = "tier",
-    credit_batch_ids: list[str] | None = None,
 ) -> AsyncGenerator[str, None]:
     try:
         parsed_result = await db.execute(
@@ -210,14 +207,10 @@ async def stream_tutor_response(
         )
         db.add(assistant_msg)
 
-        if user_id and credit_estimate:
+        if user_id:
             actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
-            delta = actual_cost - credit_estimate
-            if abs(delta) > 0.001:
-                if credit_source == "ai_credit" and credit_batch_ids:
-                    await UsageService().adjust_credit_ai(db, credit_batch_ids, -delta)
-                else:
-                    await UsageService().adjust_credit(db, user_id, "quiz", delta)
+            if actual_cost > 0:
+                await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
 
         await db.commit()
 
@@ -227,12 +220,6 @@ async def stream_tutor_response(
         logger.exception("stream_tutor_response error for file_id=%s: %s", file_id, exc)
         try:
             await db.rollback()
-            if user_id and credit_estimate:
-                if credit_source == "ai_credit" and credit_batch_ids:
-                    await UsageService().adjust_credit_ai(db, credit_batch_ids, credit_estimate)
-                else:
-                    await UsageService().adjust_credit(db, user_id, "quiz", -credit_estimate)
-                await db.commit()
         except Exception:
             pass
         yield sse_error(str(exc))

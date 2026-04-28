@@ -143,25 +143,6 @@ async def _collect_ai_response(
     return "".join(chunks).strip(), total_tokens
 
 
-async def _reconcile_credit(
-    db: AsyncSession,
-    user_id: str,
-    credit_estimate: float,
-    total_tokens: int,
-    source: str = "tier",
-    batch_ids: list[str] | None = None,
-) -> None:
-    if not user_id:
-        return
-    actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
-    delta = actual_cost - credit_estimate
-    if abs(delta) > 0.001:
-        if source == "ai_credit" and batch_ids:
-            await UsageService().adjust_credit_ai(db, batch_ids, -delta)
-        else:
-            await UsageService().adjust_credit(db, user_id, "quiz", delta)
-
-
 def _compute_tree_layout(nodes: list[dict], edges: list[dict]) -> list[dict]:
     node_ids = {n["id"] for n in nodes}
     children: dict[str, list[str]] = {nid: [] for nid in node_ids}
@@ -269,9 +250,6 @@ async def generate_summary(
     db: AsyncSession,
     *,
     user_id: str = "",
-    credit_estimate: float = 0,
-    credit_source: str = "tier",
-    credit_batch_ids: list[str] | None = None,
 ) -> None:
     summary = await _get_or_create_summary(db, file_id)
 
@@ -342,7 +320,9 @@ async def generate_summary(
         summary.status = ContentStatus.completed
         summary.generated_at = datetime.now(timezone.utc)
         summary.model_used = STUDY_MODEL
-        await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+        actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+        if actual_cost > 0 and user_id:
+            await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
         await db.commit()
 
         logger.info(
@@ -367,9 +347,6 @@ async def generate_flashcards(
     force_regenerate: bool = False,
     *,
     user_id: str = "",
-    credit_estimate: float = 0,
-    credit_source: str = "tier",
-    credit_batch_ids: list[str] | None = None,
 ) -> None:
     result = await db.execute(
         select(StudyFlashcardSet).where(
@@ -448,7 +425,9 @@ async def generate_flashcards(
                     file_id,
                 )
                 flashcard_set.status = ContentStatus.failed
-                await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+                actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+                if actual_cost > 0 and user_id:
+                    await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
                 await db.commit()
                 return
 
@@ -490,7 +469,9 @@ async def generate_flashcards(
         flashcard_set.status = ContentStatus.completed
         flashcard_set.generated_at = datetime.now(timezone.utc)
         flashcard_set.model_used = STUDY_MODEL
-        await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+        actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+        if actual_cost > 0 and user_id:
+            await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
         await db.commit()
 
         logger.info(
@@ -514,9 +495,6 @@ async def generate_mindmap(
     force_regenerate: bool = False,
     *,
     user_id: str = "",
-    credit_estimate: float = 0,
-    credit_source: str = "tier",
-    credit_batch_ids: list[str] | None = None,
 ) -> None:
     result = await db.execute(
         select(StudyMindmap).where(
@@ -594,7 +572,9 @@ async def generate_mindmap(
                     exc,
                 )
                 mindmap.status = ContentStatus.failed
-                await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+                actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+                if actual_cost > 0 and user_id:
+                    await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
                 await db.commit()
                 return
 
@@ -637,7 +617,9 @@ async def generate_mindmap(
         mindmap.status = ContentStatus.completed
         mindmap.generated_at = datetime.now(timezone.utc)
         mindmap.model_used = STUDY_MODEL
-        await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+        actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+        if actual_cost > 0 and user_id:
+            await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
         await db.commit()
 
         logger.info(
@@ -739,9 +721,6 @@ async def generate_node_explanation(
     redis_client,
     *,
     user_id: str = "",
-    credit_estimate: float = 0,
-    credit_source: str = "tier",
-    credit_batch_ids: list[str] | None = None,
 ) -> tuple[str, str, bool]:
     mindmap_result = await db.execute(
         select(StudyMindmap).where(
@@ -768,7 +747,6 @@ async def generate_node_explanation(
             if cached is not None:
                 text = cached.decode("utf-8") if isinstance(cached, bytes) else cached
                 if text:
-                    await _reconcile_credit(db, user_id, credit_estimate, 0, credit_source, credit_batch_ids)
                     await db.commit()
                     return label, text, True
         except Exception as exc:
@@ -801,7 +779,9 @@ async def generate_node_explanation(
     if not explanation:
         raise ValueError("Empty explanation from model")
 
-    await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+    actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+    if actual_cost > 0 and user_id:
+        await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
     await db.commit()
 
     if redis_client is not None:
@@ -919,9 +899,6 @@ async def generate_study_items(
     language: str = "auto",
     force_regenerate: bool = False,
     user_id: str = "",
-    credit_estimate: float = 0,
-    credit_source: str = "tier",
-    credit_batch_ids: list[str] | None = None,
 ) -> None:
     if item_type not in _VALID_ITEM_TYPES:
         raise ValueError(f"invalid item_type: {item_type}")
@@ -1026,7 +1003,9 @@ async def generate_study_items(
                     file_id,
                 )
                 item_set.status = ContentStatus.failed
-                await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+                actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+                if actual_cost > 0 and user_id:
+                    await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
                 await db.commit()
                 return
 
@@ -1040,7 +1019,9 @@ async def generate_study_items(
             item_set.status = ContentStatus.failed
             item_set.error_code = str(error_code) if error_code else None
             item_set.error_message = str(error_message) if error_message else None
-            await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+            actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+            if actual_cost > 0 and user_id:
+                await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
             await db.commit()
             return
 
@@ -1061,7 +1042,9 @@ async def generate_study_items(
             item_set.error_message = (
                 str(error_message) if error_message else None
             )
-            await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+            actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+            if actual_cost > 0 and user_id:
+                await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
             await db.commit()
             return
 
@@ -1074,7 +1057,9 @@ async def generate_study_items(
             item_set.status = ContentStatus.failed
             item_set.error_code = str(error_code) if error_code else None
             item_set.error_message = str(error_message) if error_message else None
-            await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+            actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+            if actual_cost > 0 and user_id:
+                await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
             await db.commit()
             return
 
@@ -1087,7 +1072,9 @@ async def generate_study_items(
         item_set.model_used = STUDY_MODEL
         item_set.error_code = str(error_code) if error_code else None
         item_set.error_message = str(error_message) if error_message else None
-        await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+        actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+        if actual_cost > 0 and user_id:
+            await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
         await db.commit()
 
         logger.info(
@@ -1118,9 +1105,6 @@ async def generate_concept_notes(
     db: AsyncSession,
     *,
     user_id: str = "",
-    credit_estimate: float = 0,
-    credit_source: str = "tier",
-    credit_batch_ids: list[str] | None = None,
 ) -> None:
     concept_note = await _get_or_create_concept_note(db, file_id)
 
@@ -1172,7 +1156,9 @@ async def generate_concept_notes(
             except json.JSONDecodeError as exc:
                 logger.error("generate_concept_notes: JSON parse failed on retry for file %s: %s", file_id, exc)
                 concept_note.status = ContentStatus.failed
-                await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+                actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+                if actual_cost > 0 and user_id:
+                    await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
                 await db.commit()
                 return
 
@@ -1180,7 +1166,9 @@ async def generate_concept_notes(
         if not isinstance(raw_concepts, list):
             logger.error("generate_concept_notes: concepts field not a list for file %s", file_id)
             concept_note.status = ContentStatus.failed
-            await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+            actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+            if actual_cost > 0 and user_id:
+                await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
             await db.commit()
             return
 
@@ -1219,7 +1207,9 @@ async def generate_concept_notes(
         if not concepts:
             logger.error("generate_concept_notes: no valid concepts parsed for file %s", file_id)
             concept_note.status = ContentStatus.failed
-            await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+            actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+            if actual_cost > 0 and user_id:
+                await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
             await db.commit()
             return
 
@@ -1227,7 +1217,9 @@ async def generate_concept_notes(
         concept_note.status = ContentStatus.completed
         concept_note.generated_at = datetime.now(timezone.utc)
         concept_note.model_used = STUDY_MODEL
-        await _reconcile_credit(db, user_id, credit_estimate, total_tokens, credit_source, credit_batch_ids)
+        actual_cost = calculate_credit_cost(total_tokens, STUDY_MODEL)
+        if actual_cost > 0 and user_id:
+            await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
         await db.commit()
 
         logger.info(
@@ -1263,9 +1255,6 @@ async def stream_study_content(
     prompt: str,
     schema: dict,
     system_message: str,
-    credit_estimate: float,
-    credit_source: str,
-    credit_batch_ids: list[str],
     persist_fn,
     celery_task_name: str,
     celery_args: list,
@@ -1321,7 +1310,9 @@ async def stream_study_content(
 
         await persist_fn(db, content_record, ai_result)
 
-        await _reconcile_credit(db, user_id, credit_estimate, tokens_used, credit_source, credit_batch_ids)
+        actual_cost = calculate_credit_cost(tokens_used, primary_model)
+        if actual_cost > 0 and user_id:
+            await UsageService().consume_actual(db, user_id, "quiz", actual_cost)
 
         content_record.status = ContentStatus.completed
         content_record.generated_at = datetime.now(timezone.utc)

@@ -102,6 +102,31 @@ class UsageService:
 
         return (consumed_total, batch_ids)
 
+    async def has_quota(
+        self,
+        db: AsyncSession,
+        user: User,
+        resource_type: str,
+    ) -> bool:
+        tier = UserTier(user.tier)
+        limits = TIER_LIMITS[tier]
+
+        if resource_type == "quiz":
+            batches = await self._get_active_ai_batches(db, user.id)
+            if batches and sum(b.amount_remaining for b in batches) > 0:
+                return True
+
+        limit = (
+            limits.quiz_per_window
+            if resource_type == "quiz"
+            else limits.ocr_pages_per_window
+        )
+        if limit == -1:
+            return True
+
+        record = await self._get_or_create_window(db, user.id, resource_type)
+        return record.consumed < limit
+
     async def check_and_consume(
         self,
         db: AsyncSession,
@@ -201,58 +226,37 @@ class UsageService:
         soonest_expiry = _ensure_aware(batches[0].expires_at)
         return (total_remaining, soonest_expiry)
 
-    async def adjust_credit(
+    async def consume_actual(
         self,
         db: AsyncSession,
         user_id: str,
         resource_type: str,
-        delta: float,
-    ) -> None:
-        """Adjust consumed credits by delta (positive = charge more, negative = refund).
-        Used by workers to reconcile pre-charged estimates with actual token costs.
-        """
-        record = await self._get_or_create_window(db, user_id, resource_type)
-        record.consumed = round(record.consumed + delta, 2)
+        amount: float,
+    ) -> tuple[str, list[str]]:
+        """Charge actual usage after AI generation completes.
 
-    async def adjust_credit_ai(
-        self,
-        db: AsyncSession,
-        batch_ids: list[str],
-        delta: float,
-    ) -> None:
-        """Adjust AI credit batches by delta.
-
-        delta > 0  → refund (restore amount_remaining, capped at amount_total)
-        delta < 0  → additional charge (deduct further)
-
-        LIFO order: batch_ids[-1] is touched first.
-        Skips expired batches (expires_at < now) — no refund possible.
-        Rounds to 2 decimal places.
+        Tries AI credit batches first (FIFO by expiry), remainder
+        falls through to the rolling-window tier quota.
+        Returns (source, batch_ids) for logging/tracking.
         Does NOT call db.commit() — caller owns the transaction.
         """
-        now = datetime.now(timezone.utc)
-        for batch_id in reversed(batch_ids):
-            if delta == 0:
-                break
-            batch = await db.get(AICreditBatch, batch_id, with_for_update=True)
-            if batch is None:
-                continue
-            if _ensure_aware(batch.expires_at) < now:
-                continue
-            if delta > 0:
-                restore = min(delta, batch.amount_total - batch.amount_remaining)
-                batch.amount_remaining = round(batch.amount_remaining + restore, 2)
-                delta -= restore
-            else:
-                take = min(-delta, batch.amount_remaining)
-                batch.amount_remaining = round(batch.amount_remaining - take, 2)
-                delta += take
-        if delta != 0:
-            logger.warning(
-                "adjust_credit_ai: residual delta=%s remaining batch_ids=%s",
-                delta,
-                batch_ids,
-            )
+        if amount <= 0:
+            return ("tier", [])
+
+        batch_ids: list[str] = []
+
+        if resource_type == "quiz":
+            batches = await self._get_active_ai_batches(db, user_id)
+            if batches:
+                consumed, batch_ids = self._consume_from_batches(batches, amount)
+                if consumed >= amount:
+                    return ("ai_credit", batch_ids)
+                amount -= consumed
+
+        record = await self._get_or_create_window(db, user_id, resource_type)
+        record.consumed = round(record.consumed + amount, 2)
+        source = "ai_credit" if batch_ids else "tier"
+        return (source, batch_ids)
 
     async def get_usage_status(
         self, db: AsyncSession, user: User

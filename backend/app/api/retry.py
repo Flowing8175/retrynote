@@ -9,11 +9,6 @@ from app.services.usage_service import UsageService
 from app.tier_config import (
     TIER_LIMITS,
     UserTier,
-    TIER_ESTIMATES,
-    MODEL_ECO,
-    MODEL_BALANCED,
-    MODEL_PERFORMANCE,
-    MODEL_MAX,
 )
 from app.models.quiz import (
     QuizSession,
@@ -140,20 +135,10 @@ async def create_retry_set(
     from app.config import settings as cfg
 
     preferred = req.preferred_model or cfg.balanced_generation_model
-    model_tier_label = None
-    if preferred == cfg.eco_generation_model:
-        model_tier_label = MODEL_ECO
-    elif preferred == cfg.balanced_generation_model:
-        model_tier_label = MODEL_BALANCED
-    elif preferred == cfg.performance_generation_model:
-        model_tier_label = MODEL_PERFORMANCE
-    elif preferred == cfg.max_generation_model:
-        model_tier_label = MODEL_MAX
-    estimate = TIER_ESTIMATES.get(model_tier_label, 1.0) if model_tier_label else 1.0
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _retry_source, _retry_batch_ids = await usage_svc.check_and_consume(db, user, "quiz", estimate)
+    allowed = await usage_svc.has_quota(db, user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -194,9 +179,6 @@ async def create_retry_set(
             "source": req.source,
             "difficulty": req.difficulty,
             "question_types": req.question_types,
-            "credit_estimate": estimate,
-            "credit_source": _retry_source,
-            "credit_batch_ids": _retry_batch_ids,
             "user_instruction": req.user_instruction,
         },
     )

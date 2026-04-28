@@ -65,18 +65,6 @@ MODEL_CREDIT_RATES: dict[str, float] = {
     MODEL_MAX: 1.20,  # claude-sonnet-4-6 — top-tier reasoning
 }
 
-# Pre-charge estimates for async operations (quiz gen, retry, objection).
-# Actual cost is reconciled in the worker after the AI call completes.
-TIER_ESTIMATES: dict[str, float] = {
-    MODEL_ECO: 1.0,
-    MODEL_BALANCED: 3.5,
-    MODEL_PERFORMANCE: 6.5,
-    MODEL_MAX: 12.0,
-}
-
-# Pre-charge estimate for study AI calls (summary, flashcards, mindmap, chat).
-STUDY_CREDIT_ESTIMATE = 0.5
-
 
 def get_model_tier(model_name: str) -> str:
     """Map a concrete model name to its tier label."""

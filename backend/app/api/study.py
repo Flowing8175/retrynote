@@ -78,7 +78,7 @@ from app.services.tutor_service import (
     stream_tutor_response,
 )
 from app.services.usage_service import UsageService
-from app.tier_config import STUDY_CREDIT_ESTIMATE, TIER_LIMITS, UserTier
+from app.tier_config import TIER_LIMITS, UserTier
 from app.utils.sse import get_current_user_from_query_token, sse_stream
 from app.workers.celery_app import dispatch_task
 
@@ -199,9 +199,7 @@ async def chat_stream(
 
     usage_svc = UsageService()
     tier = UserTier(current_user.tier)
-    allowed, _, _tutor_source, _tutor_batch_ids = await usage_svc.check_and_consume(
-        db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, current_user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -221,9 +219,6 @@ async def chat_stream(
             page_context=page_context,
             db=db,
             user_id=current_user.id,
-            credit_estimate=STUDY_CREDIT_ESTIMATE,
-            credit_source=_tutor_source,
-            credit_batch_ids=_tutor_batch_ids,
         )
     )
 
@@ -365,9 +360,7 @@ async def generate_summary_endpoint(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _summary_source, _summary_batch_ids = await usage_svc.check_and_consume(
-        db, user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -387,7 +380,7 @@ async def generate_summary_endpoint(
     db.add(new_summary)
     await db.commit()
 
-    dispatch_task("generate_study_summary", [file_id, user.id, STUDY_CREDIT_ESTIMATE, _summary_source, _summary_batch_ids or []])
+    dispatch_task("generate_study_summary", [file_id, user.id])
     return {"status": "dispatched"}
 
 
@@ -474,9 +467,7 @@ async def generate_flashcards_endpoint(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _flash_source, _flash_batch_ids = await usage_svc.check_and_consume(
-        db, user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -499,7 +490,7 @@ async def generate_flashcards_endpoint(
     await db.commit()
 
     dispatch_task(
-        "generate_study_flashcards", [file_id, user.id, STUDY_CREDIT_ESTIMATE, _flash_source, _flash_batch_ids or []]
+        "generate_study_flashcards", [file_id, user.id]
     )
     return {"status": "dispatched"}
 
@@ -574,9 +565,7 @@ async def generate_mindmap_endpoint(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _mindmap_source, _mindmap_batch_ids = await usage_svc.check_and_consume(
-        db, user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -596,7 +585,7 @@ async def generate_mindmap_endpoint(
     db.add(new_mindmap)
     await db.commit()
 
-    dispatch_task("generate_study_mindmap", [file_id, user.id, STUDY_CREDIT_ESTIMATE, _mindmap_source, _mindmap_batch_ids or []])
+    dispatch_task("generate_study_mindmap", [file_id, user.id])
     return {"status": "dispatched"}
 
 
@@ -617,9 +606,7 @@ async def get_mindmap_node_explanation(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _node_source, _node_batch_ids = await usage_svc.check_and_consume(
-        db, user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -639,9 +626,6 @@ async def get_mindmap_node_explanation(
             db=db,
             redis_client=redis_client,
             user_id=user.id,
-            credit_estimate=STUDY_CREDIT_ESTIMATE,
-            credit_source=_node_source,
-            credit_batch_ids=_node_batch_ids,
         )
     except MindmapNotReadyError as exc:
         raise HTTPException(
@@ -750,9 +734,7 @@ async def generate_concept_notes_endpoint(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _cn_source, _cn_batch_ids = await usage_svc.check_and_consume(
-        db, user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -772,7 +754,7 @@ async def generate_concept_notes_endpoint(
     db.add(new_concept_note)
     await db.commit()
 
-    dispatch_task("generate_concept_notes", [file_id, user.id, STUDY_CREDIT_ESTIMATE, _cn_source, _cn_batch_ids or []])
+    dispatch_task("generate_concept_notes", [file_id, user.id])
     return {"status": "dispatched"}
 
 
@@ -795,9 +777,7 @@ async def stream_summary_generation(
 
     usage_svc = UsageService()
     tier = UserTier(current_user.tier)
-    allowed, _, credit_source, credit_batch_ids = await usage_svc.check_and_consume(
-        db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, current_user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -827,12 +807,9 @@ async def stream_summary_generation(
             prompt=SUMMARY_PROMPT,
             schema=SUMMARY_SCHEMA,
             system_message=SUMMARY_SYSTEM_MESSAGE,
-            credit_estimate=STUDY_CREDIT_ESTIMATE,
-            credit_source=credit_source,
-            credit_batch_ids=credit_batch_ids or [],
             persist_fn=persist_stream_summary,
             celery_task_name="generate_study_summary",
-            celery_args=[file_id, current_user.id, STUDY_CREDIT_ESTIMATE, credit_source, credit_batch_ids or []],
+            celery_args=[file_id, current_user.id],
         )
     )
 
@@ -856,9 +833,7 @@ async def stream_flashcards_generation(
 
     usage_svc = UsageService()
     tier = UserTier(current_user.tier)
-    allowed, _, credit_source, credit_batch_ids = await usage_svc.check_and_consume(
-        db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, current_user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -888,12 +863,9 @@ async def stream_flashcards_generation(
             prompt=FLASHCARD_PROMPT,
             schema=FLASHCARD_SCHEMA,
             system_message=FLASHCARD_SYSTEM_MESSAGE,
-            credit_estimate=STUDY_CREDIT_ESTIMATE,
-            credit_source=credit_source,
-            credit_batch_ids=credit_batch_ids or [],
             persist_fn=persist_stream_flashcards,
             celery_task_name="generate_study_flashcards",
-            celery_args=[file_id, current_user.id, STUDY_CREDIT_ESTIMATE, credit_source, credit_batch_ids or []],
+            celery_args=[file_id, current_user.id],
         )
     )
 
@@ -917,9 +889,7 @@ async def stream_mindmap_generation(
 
     usage_svc = UsageService()
     tier = UserTier(current_user.tier)
-    allowed, _, credit_source, credit_batch_ids = await usage_svc.check_and_consume(
-        db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, current_user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -949,12 +919,9 @@ async def stream_mindmap_generation(
             prompt=MINDMAP_PROMPT,
             schema=MINDMAP_SCHEMA,
             system_message=MINDMAP_SYSTEM_MESSAGE,
-            credit_estimate=STUDY_CREDIT_ESTIMATE,
-            credit_source=credit_source,
-            credit_batch_ids=credit_batch_ids or [],
             persist_fn=persist_stream_mindmap,
             celery_task_name="generate_study_mindmap",
-            celery_args=[file_id, current_user.id, STUDY_CREDIT_ESTIMATE, credit_source, credit_batch_ids or []],
+            celery_args=[file_id, current_user.id],
         )
     )
 
@@ -978,9 +945,7 @@ async def stream_concept_notes_generation(
 
     usage_svc = UsageService()
     tier = UserTier(current_user.tier)
-    allowed, _, credit_source, credit_batch_ids = await usage_svc.check_and_consume(
-        db, current_user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, current_user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -1010,12 +975,9 @@ async def stream_concept_notes_generation(
             prompt=CONCEPT_NOTES_PROMPT,
             schema=CONCEPT_NOTES_SCHEMA,
             system_message=CONCEPT_NOTES_SYSTEM_MESSAGE,
-            credit_estimate=STUDY_CREDIT_ESTIMATE,
-            credit_source=credit_source,
-            credit_batch_ids=credit_batch_ids or [],
             persist_fn=persist_stream_concept_notes,
             celery_task_name="generate_concept_notes",
-            celery_args=[file_id, current_user.id, STUDY_CREDIT_ESTIMATE, credit_source, credit_batch_ids or []],
+            celery_args=[file_id, current_user.id],
         )
     )
 
@@ -1151,9 +1113,7 @@ async def generate_study_items_endpoint(
 
     usage_svc = UsageService()
     tier = UserTier(user.tier)
-    allowed, _, _items_source, _items_batch_ids = await usage_svc.check_and_consume(
-        db, user, "quiz", STUDY_CREDIT_ESTIMATE
-    )
+    allowed = await usage_svc.has_quota(db, user, "quiz")
     if not allowed:
         raise HTTPException(
             status_code=402,
@@ -1193,14 +1153,11 @@ async def generate_study_items_endpoint(
         [
             file_id,
             user.id,
-            STUDY_CREDIT_ESTIMATE,
             req.item_type,
             req.difficulty,
             req.count,
             req.language,
             req.force_regenerate,
-            _items_source,
-            _items_batch_ids or [],
         ],
     )
     return {"status": "dispatched"}
