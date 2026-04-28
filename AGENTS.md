@@ -121,7 +121,14 @@ SHELL
 Master password verification: `POST /admin/login/verify-master`
 - If no hash in DB and `ADMIN_MASTER_PASSWORD` env is set → auto-initializes hash from env, then verifies
 - If no hash and no env var → only `super_admin` role can set it on first use
-- On success → returns `admin_token` (JWT, 30 min), stored as `X-Admin-Token` header
+- On success → returns `admin_token` (JWT, 30 min, includes `iat` + `jti` claims), stored as `X-Admin-Token` header
+- Every attempt (success / failure / denied) is recorded in `admin_audit_logs` with action types `admin_login_success` / `admin_login_failed` / `admin_login_denied`
+
+## Admin Audit Logging
+
+All admin-mutating endpoints AND sensitive read endpoints (audit-log views, DB diagnostics, CSV exports) write to `admin_audit_logs` via `app.utils.admin_audit.record_admin_action(...)`. Each row captures: actor (id/email/role snapshot), target (user/job/announcement/etc.), action_type, IP, user-agent, request method+path, X-Request-ID, success flag, and a payload_json with before/after values where relevant. Use this helper from new admin code instead of writing `AdminAuditLog` rows by hand. The `GET /admin/audit-logs` endpoint accepts `action_type`, `admin_user_id`, `target_user_id`, `date_from`, `date_to` query params for filtering.
+
+Cross-log correlation: every request gets an `X-Request-ID` header (auto-generated if absent) attached by middleware in `app/main.py`. The same id is recorded in audit rows.
 
 ## Direct DB Modification
 
