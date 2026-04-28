@@ -267,9 +267,10 @@ export function TutorTab({ fileId, currentPage }: Props) {
     if (isStreaming) return;
     await apiClient.post(`/study/${fileId}/chat/new`);
     clearMessages();
-    setShouldSyncHistory(true);
-    void queryClient.invalidateQueries({ queryKey: ['study', 'chat', 'history', fileId] });
-    await refetchHistory();
+    const { data } = await refetchHistory();
+    if (data?.messages) {
+      setChatMessages(data.messages);
+    }
   };
 
   const handleLasso = () => {
