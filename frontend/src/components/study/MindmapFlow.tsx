@@ -116,7 +116,7 @@ function MindmapNode({ id, data }: NodeProps<MindmapFlowNode>) {
       style={{ ...getNodeStyle(depth, isCollapsed), animationDelay: enterDelay }}
       className="mindmap-node-inner cursor-pointer hover:brightness-110 active:scale-[0.98] transition-[filter,transform] duration-150 ease-out-expo"
     >
-      <Handle type="target" position={Position.Top} style={HANDLE_STYLE} />
+      <Handle type="target" position={Position.Left} style={HANDLE_STYLE} />
       <span style={{ wordBreak: 'break-word' }}>
         {label}
         {isCollapsed && hiddenCount > 0 && (
@@ -125,7 +125,7 @@ function MindmapNode({ id, data }: NodeProps<MindmapFlowNode>) {
           </span>
         )}
       </span>
-      <Handle type="source" position={Position.Bottom} style={HANDLE_STYLE} />
+      <Handle type="source" position={Position.Right} style={HANDLE_STYLE} />
       {hasChildren && (
         <button
           type="button"
@@ -137,7 +137,7 @@ function MindmapNode({ id, data }: NodeProps<MindmapFlowNode>) {
           <ChevronDown
             size={12}
             style={{
-              transform: isCollapsed ? 'rotate(-90deg)' : 'rotate(0deg)',
+              transform: isCollapsed ? 'rotate(0deg)' : 'rotate(-90deg)',
               transition: `transform 260ms ${EASE_OUT_EXPO}`,
             }}
           />

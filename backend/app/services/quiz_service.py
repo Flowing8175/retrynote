@@ -23,6 +23,8 @@ from app.models.quiz import (
     ErrorType,
 )
 from app.models.search import Job, DraftAnswer
+from app.models.user import User
+from app.services.usage_service import UsageService
 from app.prompts import (
     SYSTEM_PROMPT_DIFFICULTY_SELECTION,
     SYSTEM_PROMPT_OBJECTION_REVIEW,
@@ -113,6 +115,11 @@ async def process_file(job_id: str):
             if not file:
                 raise JobFailure("File not found")
 
+            _owner_result = await db.execute(
+                select(User).where(User.id == file.user_id)
+            )
+            _file_owner = _owner_result.scalar_one_or_none()
+
             try:
                 file.status = FileStatus.parsing
                 file.processing_started_at = datetime.now(timezone.utc)
@@ -139,6 +146,10 @@ async def process_file(job_id: str):
                     image_data = await _storage.download_file(stored_path)
                     ocr_result = await extract_text_from_image(image_data)
                     text = ocr_result.text
+                    if _file_owner:
+                        await UsageService().check_and_consume(
+                            db, _file_owner, "ocr", 1
+                        )
                 elif file.source_type.value == "manual_text":
                     payload = job.payload_json or {}
                     text = payload.get("manual_text", "")
@@ -195,6 +206,10 @@ async def process_file(job_id: str):
                                 )
                         if ocr_texts:
                             text = "\n".join(ocr_texts)
+                            if _file_owner:
+                                await UsageService().check_and_consume(
+                                    db, _file_owner, "ocr", len(ocr_texts)
+                                )
                         ocr_required = True
 
                         file.status = FileStatus.parsed

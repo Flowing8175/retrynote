@@ -323,8 +323,8 @@ textarea:focus-visible,
 }
 
 @keyframes mindmap-badge-press {
-  0%, 100% { transform: translateX(-50%) scale(1); }
-  45%      { transform: translateX(-50%) scale(0.82); }
+  0%, 100% { transform: translateY(-50%) scale(1); }
+  45%      { transform: translateY(-50%) scale(0.82); }
 }
 
 .mindmap-animated .react-flow__node {
@@ -348,9 +348,9 @@ textarea:focus-visible,
 
 .mindmap-toggle-badge {
   position: absolute;
-  bottom: -10px;
-  left: 50%;
-  transform: translateX(-50%);
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 20px;
   height: 20px;
   border-radius: 9999px;
