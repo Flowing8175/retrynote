@@ -265,7 +265,7 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
               </div>
             }
           >
-            <div className="flex flex-col gap-2 py-4 px-2">
+            <div className="flex flex-col gap-2 py-4 px-2 min-w-fit">
               {numPages && Array.from({ length: numPages }, (_, i) => i + 1).map((pageNum) => (
                 <div key={pageNum} ref={setPageRef(pageNum)} className="shadow-lg mx-auto">
                   {activated.current.has(pageNum) ? (

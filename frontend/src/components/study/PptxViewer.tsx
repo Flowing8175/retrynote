@@ -355,7 +355,7 @@ export function PptxViewer({ url }: { url: string }) {
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-auto bg-background">
-          <div className="flex flex-col gap-2 py-4 px-2">
+          <div className="flex flex-col gap-2 py-4 px-2 min-w-fit">
             {numSlides &&
               Array.from({ length: numSlides }, (_, i) => i + 1).map((idx) => {
                 const w = slideWidth.current * scale;
