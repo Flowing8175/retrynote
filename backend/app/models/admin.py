@@ -12,25 +12,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.database import Base, CommonMixin
 
 
-class DashboardSnapshot(CommonMixin, Base):
-    __tablename__ = "dashboard_snapshots"
-
-    user_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
-    )
-    snapshot_date: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    range_type: Mapped[str] = mapped_column(
-        String(10), nullable=False
-    )  # 7d | 30d | all
-    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
-    generated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    status: Mapped[str] = mapped_column(String(50), default="active")
-
-
 class SystemLog(Base):
     __tablename__ = "system_logs"
 
@@ -53,17 +34,28 @@ class AdminAuditLog(Base):
     admin_user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # Snapshot of admin identity at the time of the action. Captured even if
+    # the admin user is later deleted (admin_user_id FK becomes NULL).
+    admin_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    admin_role: Mapped[str | None] = mapped_column(String(20), nullable=True)
     target_user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
-    action_type: Mapped[str] = mapped_column(String(100), nullable=False)
+    action_type: Mapped[str] = mapped_column(
+        String(100), nullable=False, index=True
+    )
     target_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
     target_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    request_method: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    request_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    success: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        DateTime(timezone=True), server_default=func.now(), index=True
     )
 
 

@@ -35,16 +35,6 @@ class AdminStatusResponse(BaseModel):
     status: str
 
 
-class AdminLogQuery(BaseModel):
-    page: int = 1
-    size: int = 20
-    level: str | None = None
-    service_name: str | None = None
-    event_type: str | None = None
-    date_from: datetime | None = None
-    date_to: datetime | None = None
-
-
 class AdminLogItem(BaseModel):
     id: str
     level: str
@@ -66,8 +56,6 @@ class ModelUsageItem(BaseModel):
     request_count: int
     input_tokens: int
     output_tokens: int
-    failure_count: int
-    fallback_count: int
 
 
 class ModelUsageResponse(BaseModel):
@@ -120,7 +108,9 @@ class AnnouncementResponse(BaseModel):
 
 class AdminAuditLogItem(BaseModel):
     id: str
-    admin_user_id: str
+    admin_user_id: str | None
+    admin_email: str | None = None
+    admin_role: str | None = None
     target_user_id: str | None
     action_type: str
     target_type: str | None
@@ -128,6 +118,11 @@ class AdminAuditLogItem(BaseModel):
     reason: str | None
     payload_json: dict | None
     ip_address: str | None
+    user_agent: str | None = None
+    request_method: str | None = None
+    request_path: str | None = None
+    request_id: str | None = None
+    success: bool = True
     created_at: datetime
 
 
