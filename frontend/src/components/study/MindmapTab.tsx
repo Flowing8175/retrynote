@@ -169,7 +169,7 @@ function enrichWithDepth(
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      type: edge.type,
+      type: 'smoothstep',
       style: { stroke, strokeWidth },
     });
   }
