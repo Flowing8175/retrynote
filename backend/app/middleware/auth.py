@@ -61,11 +61,17 @@ def create_refresh_token(user_id: str, role: str, jti: str | None = None) -> str
 
 
 def create_admin_token(user_id: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.admin_session_expire_minutes
-    )
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=settings.admin_session_expire_minutes)
     return _jwt.encode(
-        {"sub": user_id, "role": "admin_verified", "exp": expire, "type": "admin"},
+        {
+            "sub": user_id,
+            "role": "admin_verified",
+            "exp": expire,
+            "iat": now,
+            "jti": str(uuid.uuid4()),
+            "type": "admin",
+        },
         settings.jwt_secret_key,
         algorithm=settings.jwt_algorithm,
     )
