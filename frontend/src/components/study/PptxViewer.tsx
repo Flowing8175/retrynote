@@ -61,8 +61,9 @@ export function PptxViewer({ url }: { url: string }) {
         rendered.current.add(slideIndex);
 
         if (!dimsCaptured.current && canvas.width > 0 && canvas.height > 0) {
-          slideWidth.current = canvas.width;
-          slideHeight.current = canvas.height;
+          const dpr = window.devicePixelRatio || 1;
+          slideWidth.current = canvas.width / dpr;
+          slideHeight.current = canvas.height / dpr;
           dimsCaptured.current = true;
           zoomFit();
         }
@@ -371,8 +372,8 @@ export function PptxViewer({ url }: { url: string }) {
                       <canvas
                         ref={setCanvasRef(idx)}
                         style={{
-                          width: '100%',
-                          height: '100%',
+                          width: w,
+                          height: h,
                           display: 'block',
                         }}
                       />
