@@ -16,9 +16,13 @@ const decodeDownloadName = (value: string): string => {
   }
 };
 
+export type TopicDepth = 'brief' | 'standard' | 'deep';
+
 export interface UploadFileOptions {
   onUploadProgress?: (percent: number, loaded: number, total: number) => void;
   signal?: AbortSignal;
+  topic?: string | null;
+  topicDepth?: TopicDepth | null;
 }
 
 export const filesApi = {
@@ -38,6 +42,12 @@ export const filesApi = {
     }
     if (sourceUrl) {
       formData.append('source_url', sourceUrl);
+    }
+    if (options.topic) {
+      formData.append('topic', options.topic);
+    }
+    if (options.topicDepth) {
+      formData.append('topic_depth', options.topicDepth);
     }
     if (folderId) {
       formData.append('folder_id', folderId);

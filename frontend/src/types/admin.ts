@@ -17,16 +17,6 @@ export interface AdminUserListResponse {
   total: number;
 }
 
-export interface AdminLogQuery {
-  page: number;
-  size: number;
-  level: string | null;
-  service_name: string | null;
-  event_type: string | null;
-  date_from: string | null;
-  date_to: string | null;
-}
-
 export interface AdminLogItem {
   id: string;
   level: string;
@@ -48,8 +38,6 @@ export interface ModelUsageItem {
   request_count: number;
   input_tokens: number;
   output_tokens: number;
-  failure_count: number;
-  fallback_count: number;
 }
 
 export interface ModelUsageResponse {
@@ -100,7 +88,9 @@ export interface AnnouncementResponse {
 
 export interface AdminAuditLogItem {
   id: string;
-  admin_user_id: string;
+  admin_user_id: string | null;
+  admin_email: string | null;
+  admin_role: string | null;
   target_user_id: string | null;
   action_type: string;
   target_type: string | null;
@@ -108,7 +98,20 @@ export interface AdminAuditLogItem {
   reason: string | null;
   payload_json: Record<string, unknown> | null;
   ip_address: string | null;
+  user_agent: string | null;
+  request_method: string | null;
+  request_path: string | null;
+  request_id: string | null;
+  success: boolean;
   created_at: string;
+}
+
+export interface AdminAuditLogFilters {
+  action_type?: string | null;
+  admin_user_id?: string | null;
+  target_user_id?: string | null;
+  date_from?: string | null;
+  date_to?: string | null;
 }
 
 export interface SystemHealthComponent {

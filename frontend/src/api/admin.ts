@@ -106,9 +106,22 @@ export const adminApi = {
 
   getAuditLogs: async (
     page: number = 1,
-    size: number = 20
+    size: number = 20,
+    filters?: {
+      action_type?: string | null;
+      admin_user_id?: string | null;
+      target_user_id?: string | null;
+      date_from?: string | null;
+      date_to?: string | null;
+    }
   ): Promise<{ logs: AdminAuditLogItem[]; total: number }> => {
-    const response = await apiClient.get<{ logs: AdminAuditLogItem[]; total: number }>('/admin/audit-logs', { params: { page, size } });
+    const params: Record<string, string | number> = { page, size };
+    if (filters?.action_type) params.action_type = filters.action_type;
+    if (filters?.admin_user_id) params.admin_user_id = filters.admin_user_id;
+    if (filters?.target_user_id) params.target_user_id = filters.target_user_id;
+    if (filters?.date_from) params.date_from = filters.date_from;
+    if (filters?.date_to) params.date_to = filters.date_to;
+    const response = await apiClient.get<{ logs: AdminAuditLogItem[]; total: number }>('/admin/audit-logs', { params });
     return response.data;
   },
 
