@@ -70,15 +70,23 @@ async def get_current_user_from_query_token(
     token: str = Query(...),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """JWT auth for SSE endpoints — EventSource cannot set Authorization headers,
-    so the access token is passed as a query parameter instead."""
+    """JWT auth for SSE endpoints.
+
+    EventSource cannot set Authorization headers, so the token is passed as a
+    query parameter, which means it ends up in nginx access logs, browser
+    history, referrer headers, and any intermediate proxy. To bound that
+    exposure, ONLY tokens minted by ``create_stream_token`` (``type=stream``,
+    ~60s TTL) are accepted here. Long-lived access tokens are rejected even
+    if otherwise valid — the frontend must call ``POST /auth/stream-token``
+    immediately before opening the stream.
+    """
     try:
         payload = _jwt.decode(
             token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
         )
         user_id = payload.get("sub")
         token_type = payload.get("type")
-        if not isinstance(user_id, str) or token_type != "access":
+        if not isinstance(user_id, str) or token_type != "stream":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
             )

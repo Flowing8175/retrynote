@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuthStore } from '@/stores/authStore';
 import { API_BASE_URL } from '@/api/createApiClient';
+import { authApi } from '@/api/auth';
 
 export type SSEStatus = 'connecting' | 'connected' | 'error' | 'closed';
 
@@ -63,17 +63,29 @@ export function useSSE(url: string, options: SSEOptions = {}): SSEResult {
     closedManuallyRef.current = false;
     retryCountRef.current = 0;
 
-    function connect() {
-      const token = useAuthStore.getState().accessToken;
-      if (!token) {
+    async function connect() {
+      // Mint a fresh short-lived stream token immediately before opening the
+      // EventSource. The native EventSource API forces the credential into the
+      // URL (no header support), so we mint one with a ~60s TTL and a unique
+      // jti instead of leaking the long-lived access token into nginx logs,
+      // browser history, and referrer headers.
+      setSseStatus('connecting');
+      let streamToken: string;
+      try {
+        const res = await authApi.getStreamToken();
+        streamToken = res.stream_token;
+      } catch {
+        if (closedManuallyRef.current) return;
+        const msg = 'Failed to obtain stream token';
         setSseStatus('error');
-        setError('No auth token available');
+        setError(msg);
+        onErrorRef.current?.(msg);
         return;
       }
+      if (closedManuallyRef.current) return;
 
       const separator = url.includes('?') ? '&' : '?';
-      const fullUrl = `${API_BASE_URL}${url}${separator}token=${encodeURIComponent(token)}`;
-      setSseStatus('connecting');
+      const fullUrl = `${API_BASE_URL}${url}${separator}token=${encodeURIComponent(streamToken)}`;
 
       const es = new EventSource(fullUrl);
       esRef.current = es;
@@ -117,7 +129,9 @@ export function useSSE(url: string, options: SSEOptions = {}): SSEResult {
           const delay = BACKOFF_BASE_MS * 2 ** retryCountRef.current;
           retryCountRef.current += 1;
           setSseStatus('connecting');
-          retryTimerRef.current = setTimeout(connect, delay);
+          retryTimerRef.current = setTimeout(() => {
+            void connect();
+          }, delay);
         } else {
           const msg = 'Connection failed after maximum retries';
           setSseStatus('error');
@@ -134,7 +148,7 @@ export function useSSE(url: string, options: SSEOptions = {}): SSEResult {
       });
     }
 
-    connect();
+    void connect();
 
     return () => {
       closedManuallyRef.current = true;

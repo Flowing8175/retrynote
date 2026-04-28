@@ -46,6 +46,11 @@ export const authApi = {
     return response.data;
   },
 
+  getStreamToken: async (): Promise<{ stream_token: string; expires_in: number }> => {
+    const response = await apiClient.post<{ stream_token: string; expires_in: number }>('/auth/stream-token');
+    return response.data;
+  },
+
   getMe: async (): Promise<UserProfile> => {
     const response = await apiClient.get<UserProfile>('/auth/me');
     return response.data;

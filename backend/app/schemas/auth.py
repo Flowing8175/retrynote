@@ -65,11 +65,16 @@ class TokenPayload(BaseModel):
     sub: str
     role: str
     exp: int
-    type: str  # access | refresh | admin
+    type: str  # access | refresh | admin | stream
 
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str = Field(min_length=1, max_length=4096)
+
+
+class StreamTokenResponse(BaseModel):
+    stream_token: str
+    expires_in: int
 
 
 class ConvertGuestRequest(BaseModel):
