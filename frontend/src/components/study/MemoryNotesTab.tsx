@@ -117,54 +117,56 @@ function ConceptItem({
       </button>
 
       <div
-        className={`overflow-hidden transition-[max-height] duration-300 ease-out ${
-          effectiveOpen ? 'max-h-[2000px]' : 'max-h-0'
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+          effectiveOpen ? '[grid-template-rows:1fr]' : '[grid-template-rows:0fr]'
         }`}
       >
-        <div className="px-4 pb-4 pt-2 border-t border-surface-border">
-          <div
-            style={{
-              filter: isBlurred ? 'blur(5px)' : 'none',
-              userSelect: isBlurred ? 'none' : 'text',
-              transition: 'filter 0.2s ease-out',
-            }}
-          >
-            <p className="text-sm leading-7 text-content-secondary">
-              {concept.explanation}
-            </p>
-            {concept.key_points.length > 0 && (
-              <ul className="mt-2 list-disc pl-5 space-y-1.5">
-                {concept.key_points.map((point, idx) => (
-                  <li
-                    key={idx}
-                    className="text-sm text-content-secondary leading-relaxed"
-                  >
-                    {point}
-                  </li>
-                ))}
-              </ul>
+        <div className="overflow-hidden min-h-0">
+          <div className="px-4 pb-4 pt-2 border-t border-surface-border">
+            <div
+              style={{
+                filter: isBlurred ? 'blur(5px)' : 'none',
+                userSelect: isBlurred ? 'none' : 'text',
+                transition: 'filter 0.2s ease-out',
+              }}
+            >
+              <p className="text-sm leading-7 text-content-secondary">
+                {concept.explanation}
+              </p>
+              {concept.key_points.length > 0 && (
+                <ul className="mt-2 list-disc pl-5 space-y-1.5">
+                  {concept.key_points.map((point, idx) => (
+                    <li
+                      key={idx}
+                      className="text-sm text-content-secondary leading-relaxed"
+                    >
+                      {point}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {hideMode && (
+              <button
+                type="button"
+                onClick={onReveal}
+                className="mt-3 flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:text-content-primary bg-surface-raised hover:bg-surface-hover border border-surface-border rounded-lg transition-all"
+              >
+                {isRevealed ? (
+                  <>
+                    <EyeOff className="w-3.5 h-3.5" />
+                    가리기
+                  </>
+                ) : (
+                  <>
+                    <Eye className="w-3.5 h-3.5" />
+                    보이기
+                  </>
+                )}
+              </button>
             )}
           </div>
-
-          {hideMode && (
-            <button
-              type="button"
-              onClick={onReveal}
-              className="mt-3 flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-content-secondary hover:text-content-primary bg-surface-raised hover:bg-surface-hover border border-surface-border rounded-lg transition-all"
-            >
-              {isRevealed ? (
-                <>
-                  <EyeOff className="w-3.5 h-3.5" />
-                  가리기
-                </>
-              ) : (
-                <>
-                  <Eye className="w-3.5 h-3.5" />
-                  보이기
-                </>
-              )}
-            </button>
-          )}
         </div>
       </div>
     </div>
