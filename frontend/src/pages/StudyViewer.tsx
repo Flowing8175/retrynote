@@ -99,8 +99,12 @@ export default function StudyViewer() {
       const container = document.getElementById('study-split-container');
       if (!container) return;
       const rect = container.getBoundingClientRect();
-      const pct = ((ev.clientX - rect.left) / rect.width) * 100;
-      setLeftWidth(Math.max(20, Math.min(80, pct)));
+      const MIN_PANEL_PX = 320;
+      const minPanelPct = (MIN_PANEL_PX / rect.width) * 100;
+      const lowerBound = Math.max(20, minPanelPct);
+      const upperBound = Math.min(80, 100 - minPanelPct);
+      const requestedPct = ((ev.clientX - rect.left) / rect.width) * 100;
+      setLeftWidth(Math.max(lowerBound, Math.min(upperBound, requestedPct)));
     }
 
     function onMouseUp() {
@@ -169,7 +173,7 @@ export default function StudyViewer() {
         {hasPreview && (
           <>
             <div
-              className="hidden lg:block min-h-0 overflow-hidden shrink-0"
+              className="hidden lg:block min-h-0 min-w-0 overflow-hidden shrink-0"
               style={{ width: `${leftWidth}%` }}
             >
               <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-2 border-surface-raised border-t-brand-500 rounded-full animate-spin" /></div>}>
@@ -180,51 +184,57 @@ export default function StudyViewer() {
             <div
               className="hidden lg:flex items-center justify-center w-2 bg-white/[0.03] hover:bg-brand-500/30 active:bg-brand-500/50 transition-colors shrink-0 cursor-col-resize group"
               onMouseDown={handleDividerMouseDown}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="패널 크기 조절"
             >
               <div className="w-1 h-8 rounded-full bg-white/[0.15] group-hover:bg-brand-400/60 transition-colors" />
             </div>
           </>
         )}
 
-        <div className="flex flex-col min-h-0 flex-1">
-          <div className="bg-surface/80 backdrop-blur-sm border-b border-white/[0.05] shrink-0 overflow-x-auto">
-            <div className="flex items-center gap-2 px-3 py-2 whitespace-nowrap">
-              {TABS.map((tab) => {
-                const s = tabStatus(tab, status);
-                const isActive = activeTab === tab;
-                const isTabDisabled = isShortDocument && tab !== 'AI 튜터';
-                return (
-                  <button
-                    key={tab}
-                    onClick={() => { if (!isTabDisabled) setActiveTab(tab); }}
-                    disabled={isTabDisabled}
-                    className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all shrink-0 ${
-                      isActive
-                        ? 'bg-brand-500/5 text-brand-300 border border-brand-500/10'
-                        : 'text-content-secondary hover:text-white border border-transparent hover:bg-surface-hover'
-                    } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-content-secondary`}
-                  >
-                    {tab}
-                    {tab !== 'AI 튜터' && (
-                      <span className={`${STATUS_COLOR[s]}`}>
-                        {STATUS_ICON[s]}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-              <div className="flex-1" />
+        <div className="flex flex-col min-h-0 flex-1 min-w-0">
+          <div className="bg-surface/80 backdrop-blur-sm border-b border-white/[0.05] shrink-0">
+            <div className="flex items-center gap-2 px-3 py-2 min-w-0">
+              <div className="flex items-center gap-2 overflow-x-auto whitespace-nowrap min-w-0 flex-1">
+                {TABS.map((tab) => {
+                  const s = tabStatus(tab, status);
+                  const isActive = activeTab === tab;
+                  const isTabDisabled = isShortDocument && tab !== 'AI 튜터';
+                  return (
+                    <button
+                      key={tab}
+                      onClick={() => { if (!isTabDisabled) setActiveTab(tab); }}
+                      disabled={isTabDisabled}
+                      className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all shrink-0 ${
+                        isActive
+                          ? 'bg-brand-500/5 text-brand-300 border border-brand-500/10'
+                          : 'text-content-secondary hover:text-white border border-transparent hover:bg-surface-hover'
+                      } disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-content-secondary`}
+                    >
+                      {tab}
+                      {tab !== 'AI 튜터' && (
+                        <span className={`${STATUS_COLOR[s]}`}>
+                          {STATUS_ICON[s]}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
               <button
                 onClick={() => navigate('/quiz/new', { state: { preSelectedFileId: fileId } })}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-300 hover:text-white bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 rounded-lg transition-colors shrink-0"
+                className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-brand-300 hover:text-white bg-brand-500/10 hover:bg-brand-500/20 border border-brand-500/20 rounded-lg transition-colors shrink-0"
+                title="퀴즈 만들러 가기"
+                aria-label="퀴즈 만들러 가기"
               >
                 <Pencil size={12} />
-                퀴즈 만들러 가기
+                <span className="hidden sm:inline">퀴즈 만들러 가기</span>
               </button>
             </div>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-auto bg-background p-4">
+          <div className="flex-1 min-h-0 overflow-auto bg-background p-3 sm:p-4">
             {isShortDocument && activeTab !== 'AI 튜터' ? (
               <div className="flex flex-col items-center justify-center h-full text-center gap-3">
                 <span className="text-4xl">📄</span>

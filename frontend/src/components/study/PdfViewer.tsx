@@ -38,6 +38,8 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
   const activated = useRef(new Set<number>());
   const pageWidth = useRef(PLACEHOLDER_W);
   const pageHeight = useRef(PLACEHOLDER_H);
+  const userZoomedManually = useRef(false);
+  const lastFittedWidth = useRef(0);
 
   const fileOptions = useMemo(() => ({
     url,
@@ -158,22 +160,50 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
   }
 
   function zoomIn() {
+    userZoomedManually.current = true;
     setScale((s) => Math.min(2.0, parseFloat((s + 0.25).toFixed(2))));
   }
   function zoomOut() {
+    userZoomedManually.current = true;
     setScale((s) => Math.max(0.5, parseFloat((s - 0.25).toFixed(2))));
   }
-  function zoomFit() {
+  const zoomFit = useCallback(() => {
     const container = scrollRef.current;
     if (!container) return;
     const origOverflowY = container.style.overflowY;
     container.style.overflowY = 'scroll';
     const availableWidth = container.clientWidth;
     container.style.overflowY = origOverflowY;
-    const padding = 16; // px-2 on inner wrapper = 8px each side
-    const fitted = parseFloat(((availableWidth - padding) / pageWidth.current).toFixed(2));
+    if (availableWidth <= 0) return;
+    const HORIZONTAL_PADDING = 16;
+    const fitted = parseFloat(((availableWidth - HORIZONTAL_PADDING) / pageWidth.current).toFixed(2));
+    lastFittedWidth.current = availableWidth;
     setScale(Math.max(0.5, Math.min(2.0, fitted)));
+  }, []);
+
+  function handleManualFit() {
+    userZoomedManually.current = false;
+    zoomFit();
   }
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      const width = entry.contentRect.width;
+      if (width <= 0) return;
+      if (Math.abs(width - lastFittedWidth.current) < 2) return;
+      if (userZoomedManually.current) {
+        lastFittedWidth.current = width;
+        return;
+      }
+      zoomFit();
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [zoomFit]);
 
   const setPageRef = useCallback((pageNum: number) => (el: HTMLDivElement | null) => {
     if (el) pageRefs.current.set(pageNum, el);
@@ -202,11 +232,11 @@ export function PdfViewer({ url, onPageChange }: PdfViewerProps) {
           <button onClick={zoomOut} disabled={scale <= 0.5} className="p-1.5 rounded-lg hover:bg-surface-raised disabled:opacity-40 disabled:cursor-not-allowed text-content-secondary transition-colors" aria-label="축소">
             <ZoomOut size={16} />
           </button>
-          <button onClick={zoomFit} className="text-xs text-content-muted w-12 text-center select-none hover:text-white transition-colors" title="화면 맞춤">{Math.round(scale * 100)}%</button>
+          <button onClick={handleManualFit} className="text-xs text-content-muted w-12 text-center select-none hover:text-white transition-colors" title="화면 맞춤">{Math.round(scale * 100)}%</button>
           <button onClick={zoomIn} disabled={scale >= 2.0} className="p-1.5 rounded-lg hover:bg-surface-raised disabled:opacity-40 disabled:cursor-not-allowed text-content-secondary transition-colors" aria-label="확대">
             <ZoomIn size={16} />
           </button>
-          <button onClick={zoomFit} className="p-1.5 rounded-lg hover:bg-surface-raised text-content-secondary transition-colors" aria-label="맞춤" title="100%로 초기화">
+          <button onClick={handleManualFit} className="p-1.5 rounded-lg hover:bg-surface-raised text-content-secondary transition-colors" aria-label="화면 맞춤" title="화면 맞춤">
             <Maximize size={16} />
           </button>
         </div>
