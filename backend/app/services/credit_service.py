@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from dateutil.relativedelta import relativedelta
@@ -65,7 +65,7 @@ class CreditService:
             )
 
         if ai_count > 0:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             expires_at = now + relativedelta(months=3)
             batch = AICreditBatch(
                 user_id=user_id,

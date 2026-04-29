@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useReducer } from 'react';
 import Markdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -158,46 +158,50 @@ export function MarkdownViewer({ url }: { url: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tooLarge, setTooLarge] = useState(false);
+  const [retryCount, retry] = useReducer((c: number) => c + 1, 0);
 
-  const fetchContent = useCallback(async () => {
+  useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     setContent('');
     setTooLarge(false);
 
-    try {
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+    (async () => {
+      try {
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
 
-      const response = await fetch(url, { headers });
+        const response = await fetch(url, { headers, signal: controller.signal });
 
-      if (!response.ok) {
+        if (!response.ok) {
+          setError('마크다운을 불러오지 못했습니다');
+          setLoading(false);
+          return;
+        }
+
+        const contentLength = response.headers.get('content-length');
+        if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE) {
+          setTooLarge(true);
+          setLoading(false);
+          return;
+        }
+
+        const text = await response.text();
+        if (controller.signal.aborted) return;
+        setContent(text);
+        setLoading(false);
+      } catch (err) {
+        if (controller.signal.aborted) return;
         setError('마크다운을 불러오지 못했습니다');
         setLoading(false);
-        return;
       }
+    })();
 
-      const contentLength = response.headers.get('content-length');
-      if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE) {
-        setTooLarge(true);
-        setLoading(false);
-        return;
-      }
-
-      const text = await response.text();
-      setContent(text);
-      setLoading(false);
-    } catch {
-      setError('마크다운을 불러오지 못했습니다');
-      setLoading(false);
-    }
-  }, [url, token]);
-
-  useEffect(() => {
-    fetchContent();
-  }, [fetchContent]);
+    return () => controller.abort();
+  }, [url, token, retryCount]);
 
   return (
     <div
@@ -234,7 +238,7 @@ export function MarkdownViewer({ url }: { url: string }) {
             </div>
             <button
               type="button"
-              onClick={fetchContent}
+              onClick={retry}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-content-inverse bg-brand-500 hover:bg-brand-400 rounded-lg transition-colors"
             >
               다시 시도

@@ -799,8 +799,9 @@ async def get_system_health(
             latency_ms=round((time.monotonic() - t0) * 1000, 2),
         )
     except Exception as exc:
+        _admin_logger.exception("Health check: database probe failed")
         overall_ok = False
-        components["database"] = SystemHealthComponent(status="down", detail=str(exc))
+        components["database"] = SystemHealthComponent(status="down", detail=type(exc).__name__)
 
     redis_client = getattr(request.app.state, "redis", None)
     if redis_client is not None:
@@ -812,8 +813,9 @@ async def get_system_health(
                 latency_ms=round((time.monotonic() - t0) * 1000, 2),
             )
         except Exception as exc:
+            _admin_logger.exception("Health check: redis probe failed")
             overall_ok = False
-            components["redis"] = SystemHealthComponent(status="down", detail=str(exc))
+            components["redis"] = SystemHealthComponent(status="down", detail=type(exc).__name__)
     else:
         components["redis"] = SystemHealthComponent(
             status="degraded", detail="not configured"

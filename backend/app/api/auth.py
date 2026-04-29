@@ -593,7 +593,9 @@ async def refresh_token(req: RefreshTokenRequest, db: AsyncSession = Depends(get
 
 
 @router.post("/stream-token", response_model=StreamTokenResponse)
+@limiter.limit("30/minute")
 async def issue_stream_token(
+    request: Request,
     user: User = Depends(get_current_user),
 ):
     return StreamTokenResponse(
