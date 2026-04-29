@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useReducer } from 'react';
 import { AlertCircle, Download } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 
@@ -17,6 +17,7 @@ export function TextViewer({ url }: TextViewerProps) {
   const [error, setError] = useState<string | null>(null);
   const [fontSize, setFontSize] = useState<FontSize>('md');
   const [tooLarge, setTooLarge] = useState(false);
+  const [retryCount, retry] = useReducer((c: number) => c + 1, 0);
 
   const fontSizeMap: Record<FontSize, string> = {
     sm: 'text-sm',
@@ -24,45 +25,48 @@ export function TextViewer({ url }: TextViewerProps) {
     lg: 'text-lg',
   };
 
-  const fetchContent = useCallback(async () => {
+  useEffect(() => {
+    const controller = new AbortController();
     setLoading(true);
     setError(null);
     setContent('');
     setTooLarge(false);
 
-    try {
-      const headers: Record<string, string> = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+    (async () => {
+      try {
+        const headers: Record<string, string> = {};
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
 
-      const response = await fetch(url, { headers });
+        const response = await fetch(url, { headers, signal: controller.signal });
 
-      if (!response.ok) {
+        if (!response.ok) {
+          setError('텍스트를 불러오지 못했습니다');
+          setLoading(false);
+          return;
+        }
+
+        const contentLength = response.headers.get('content-length');
+        if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE) {
+          setTooLarge(true);
+          setLoading(false);
+          return;
+        }
+
+        const text = await response.text();
+        if (controller.signal.aborted) return;
+        setContent(text);
+        setLoading(false);
+      } catch {
+        if (controller.signal.aborted) return;
         setError('텍스트를 불러오지 못했습니다');
         setLoading(false);
-        return;
       }
+    })();
 
-      const contentLength = response.headers.get('content-length');
-      if (contentLength && parseInt(contentLength, 10) > MAX_FILE_SIZE) {
-        setTooLarge(true);
-        setLoading(false);
-        return;
-      }
-
-      const text = await response.text();
-      setContent(text);
-      setLoading(false);
-    } catch (err) {
-      setError('텍스트를 불러오지 못했습니다');
-      setLoading(false);
-    }
-  }, [url, token]);
-
-  useEffect(() => {
-    fetchContent();
-  }, [fetchContent]);
+    return () => controller.abort();
+  }, [url, token, retryCount]);
 
   return (
     <div className="flex flex-col h-full bg-background overflow-hidden" data-testid="text-viewer">
@@ -124,7 +128,7 @@ export function TextViewer({ url }: TextViewerProps) {
               <p className="text-xs text-content-muted">잠시 후 다시 시도해주세요</p>
             </div>
             <button
-              onClick={fetchContent}
+              onClick={retry}
               className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-content-inverse bg-brand-500 hover:bg-brand-400 rounded-lg transition-colors"
             >
               다시 시도

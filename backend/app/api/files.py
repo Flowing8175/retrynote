@@ -408,7 +408,8 @@ async def upload_file(
                 background_tasks.add_task(
                     dispatch_task, "file_cleanup", [cleanup_job.id]
                 )
-            await db.flush()
+            await db.commit()
+            await db.refresh(effective_user)
 
     await _check_storage_quota(db, effective_user, file_size)
 

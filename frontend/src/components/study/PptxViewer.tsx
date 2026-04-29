@@ -92,11 +92,12 @@ export function PptxViewer({ url }: { url: string }) {
     slideHeight.current = PLACEHOLDER_H;
     renderQueue.current = Promise.resolve();
 
+    const abortController = new AbortController();
     const init = async () => {
       try {
         const headers: HeadersInit = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        const res = await fetch(url, { headers });
+        const res = await fetch(url, { headers, signal: abortController.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const buf = await res.arrayBuffer();
         if (cancelled) return;
@@ -126,6 +127,8 @@ export function PptxViewer({ url }: { url: string }) {
 
     return () => {
       cancelled = true;
+      abortController.abort();
+      renderQueue.current = Promise.resolve();
       const viewer = viewerRef.current;
       viewerRef.current = null;
       try {
