@@ -1,6 +1,6 @@
 """Throwaway test harness for backend/app/prompts/study_items.py against gpt-5.4-nano.
 
-Runs locally (NOT on server — AGENTS.md constrains the 1GB prod box).
+Runs locally (not on the prod box — keeps prompt experiments off the live AI keys / live DB).
 Loads OPENAI_API_KEY from the project-root .env, calls the ECO model with each
 of the 5 item-type prompts against 2 sample documents, validates JSON shape and
 spot-checks per-type rubric adherence, then prints a per-run PASS/FAIL report.

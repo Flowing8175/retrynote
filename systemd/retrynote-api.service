@@ -8,8 +8,9 @@ Type=exec
 User=retrynote
 Group=retrynote
 WorkingDirectory=/home/retrynote/app/backend
+EnvironmentFile=/home/retrynote/.doppler/service-token
 Environment=PYTHONPATH=/home/retrynote/app/backend
-ExecStart=/usr/local/bin/doppler run -- /home/retrynote/app/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 1
+ExecStart=/usr/bin/doppler run -- /home/retrynote/app/backend/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --workers 8
 Restart=always
 RestartSec=5
 

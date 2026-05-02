@@ -25,12 +25,14 @@ Update the relevant sections only (don't rewrite the whole file). Sections most 
 4. SSH: pulls latest code, runs `uv sync`, runs `alembic upgrade head`, restarts services
 5. Health-checks `http://127.0.0.1:8001/health`, then reloads nginx
 
-Server: `ubuntu@134.185.101.134` (SSH key: `~/.ssh/oracle.key`)
-**Hardware: Oracle Cloud Always-Free — 2 vCPU, 1 GB RAM. Extremely constrained. Never run memory-heavy operations (large builds, multiple concurrent processes, heavy DB queries) on the server. Build frontend locally and rsync the dist.**
+Server: `ubuntu@161.33.181.97` (SSH key: `~/.ssh/oracle.key`)
+**Hardware: Oracle Cloud — 4 OCPU (8 vCPU), 24 GB RAM.** Comfortable headroom for backend + worker + Postgres + Redis on a single box. Frontend is still built in CI (faster, deterministic) and rsynced to the server.
 App dir on server: `/home/retrynote/app`
-Services: `retrynote-api` (uvicorn, port 8001, **1 worker**), `retrynote-worker` (celery)
+Services: `retrynote-api` (uvicorn, port 8001, **8 workers**), `retrynote-worker` (celery, **concurrency 8**)
 
-**Critical: uvicorn MUST run with `--workers 1`.** With 2 workers, AI API calls (Gemini/OpenAI SDK imports + HTTP) cause memory pressure on the 1GB server, and the kernel SIGKILL-s worker processes silently. The systemd service file (`/etc/systemd/system/retrynote-api.service`) controls this — the deploy workflow does NOT overwrite it.
+**Worker sizing rationale.** Each uvicorn/celery worker imports the OpenAI/Gemini/Anthropic SDKs and resolves to ~150-200 MB resident. 8 + 8 workers ≈ 3 GB, leaving >20 GB for OS, Postgres, Redis, OCR, and request buffers. Worker counts are pinned to vCPU count (8) — bumping further yields no throughput on this mostly-async workload and just burns RAM. The systemd service files (`/etc/systemd/system/retrynote-api.service`, `retrynote-worker.service`) control this — the deploy workflow does NOT overwrite them.
+
+> **History note.** Pre-2026-05 the box was Always-Free (2 vCPU / 1 GB) and uvicorn was hard-pinned to `--workers 1` because AI SDK memory caused silent SIGKILLs. That constraint no longer applies; see `git log -- systemd/` for the bump.
 
 ## Secrets & Environment
 
@@ -43,7 +45,7 @@ To execute Python scripts or commands on the server that need Doppler secrets:
 
 ```bash
 # SSH to server
-ssh -i ~/.ssh/oracle.key ubuntu@134.185.101.134
+ssh -i ~/.ssh/oracle.key ubuntu@161.33.181.97
 
 # Run as retrynote user with Doppler secrets
 sudo -u retrynote bash << 'SHELL'
@@ -96,7 +98,7 @@ SHELL
 Alembic CLI (`alembic upgrade head`) fails on the server due to a DB password parsing issue in `env.py`'s separate engine creation. **Use the app's own engine instead:**
 
 ```bash
-ssh -i ~/.ssh/oracle.key ubuntu@134.185.101.134
+ssh -i ~/.ssh/oracle.key ubuntu@161.33.181.97
 sudo -u retrynote bash << 'SHELL'
 cd /home/retrynote/app/backend
 TOKEN=$(cat /home/retrynote/.doppler/service-token | sed 's/DOPPLER_TOKEN=//')
@@ -168,7 +170,7 @@ pro      → 21_474_836_480  (20 GB)
 Both `users` **and** `subscriptions` must be updated — the app reads `users.tier` for quota enforcement and `subscriptions` for billing display.
 
 ```bash
-ssh -i ~/.ssh/oracle.key ubuntu@134.185.101.134
+ssh -i ~/.ssh/oracle.key ubuntu@161.33.181.97
 sudo -u retrynote bash << 'SHELL'
 cd /home/retrynote/app/backend
 TOKEN=$(cat /home/retrynote/.doppler/service-token | sed 's/DOPPLER_TOKEN=//')
